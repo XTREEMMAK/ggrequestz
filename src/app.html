@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.webp" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3182ce" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="GG.Requestz" />
+    <meta name="application-name" content="GG.Requestz" />
+    <meta name="msapplication-TileColor" content="#1a202c" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+
+    <!-- PWA Icons -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/GGR_icon.webp" />
+    <link rel="mask-icon" href="/favicon.webp" color="#3182ce" />
+
+    <!-- Social Media Meta Tags -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GG.Requestz" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@ggrequestz" />
+    <meta name="twitter:creator" content="@ggrequestz" />
+
+    <!-- SEO Keywords -->
+    <meta
+      name="keywords"
+      content="games, gaming, game requests, game discovery, IGDB, game library, video games, PC games, console games, indie games, AAA games, game search, watchlist, gaming community"
+    />
+    <meta name="author" content="GG.Requestz" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="English" />
+
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+
+    <!-- Service Worker Registration Disabled -->
+    <!-- <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("SW registered: ", registration);
+            })
+            .catch((registrationError) => {
+              console.log("SW registration failed: ", registrationError);
+            });
+        });
+      }
+    </script> -->
+  </body>
+</html>

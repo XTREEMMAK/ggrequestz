@@ -1,0 +1,49 @@
+# Development override for GameRequest
+# Usage: docker compose -f docker-compose.yml -f docker-compose.development.yml up
+
+version: '3.8'
+
+services:
+  ggrequestz:
+    build:
+      context: .
+      target: builder  # Use builder stage for development
+    volumes:
+      # Mount source code for development
+      - ./src:/app/src:ro
+      - ./static:/app/static:ro
+      - ggrequestz-node-modules:/app/node_modules
+    environment:
+      NODE_ENV: development
+      PM2_INSTANCES: 1  # Single instance for development
+    ports:
+      - "${DEV_PORT:-3000}:3000"
+    command: ["npm", "run", "dev"]  # Use dev server instead of PM2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      typesense:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  # Always include development services
+  postgres:
+    profiles: []  # Remove profile to always include
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ggrequestz_dev}
+    ports:
+      - "${DEV_POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    profiles: []  # Remove profile to always include
+    ports:
+      - "${DEV_REDIS_PORT:-6379}:6379"
+
+  typesense:
+    profiles: []  # Remove profile to always include
+    ports:
+      - "${DEV_TYPESENSE_PORT:-8108}:8108"
+
+volumes:
+  ggrequestz-node-modules:

@@ -1,0 +1,208 @@
+services:
+  # GameRequest Application
+  ggrequestz:
+    build: .
+    container_name: ggrequestz-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      # Database Configuration (supports external database)
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-ggrequestz}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+      
+      # Authentication (required)
+      AUTH_METHOD: ${AUTH_METHOD:-authentik}
+      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID}
+      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET}
+      AUTHENTIK_ISSUER: ${AUTHENTIK_ISSUER}
+      SESSION_SECRET: ${SESSION_SECRET}
+      
+      # IGDB API (required)
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
+      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
+      
+      # Search Engine (supports external Typesense)
+      TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
+      TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz123}
+      
+      # Redis Cache (supports external Redis, optional - falls back to memory)
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      
+      # Optional External Services
+      GOTIFY_URL: ${GOTIFY_URL:-}
+      GOTIFY_TOKEN: ${GOTIFY_TOKEN:-}
+      ROMM_SERVER_URL: ${ROMM_SERVER_URL:-}
+      ROMM_USERNAME: ${ROMM_USERNAME:-}
+      ROMM_PASSWORD: ${ROMM_PASSWORD:-}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
+      
+      # Application Configuration
+      PM2_INSTANCES: ${PM2_INSTANCES:-max}
+      NODE_ENV: ${NODE_ENV:-production}
+      
+      # Database Migration
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+    volumes:
+      - ggrequestz-logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      typesense:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - ggrequestz-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ggrequestz-postgres
+    restart: unless-stopped
+    # Local PostgreSQL for testing
+    environment:
+      POSTGRES_DB: ggrequestz
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
+    networks:
+      - ggrequestz-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ggrequestz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ggrequestz-redis
+    restart: unless-stopped
+    # Local Redis cache for testing
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      REDIS_REPLICATION_MODE: master
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_EXTERNAL_PORT:-6379}:6379"
+    networks:
+      - ggrequestz-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Typesense Search Engine
+  typesense:
+    image: typesense/typesense:0.25.2
+    container_name: ggrequestz-typesense
+    restart: unless-stopped
+    # Local Typesense search for testing
+    environment:
+      TYPESENSE_DATA_DIR: /data
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz123}
+      TYPESENSE_ENABLE_CORS: "true"
+    volumes:
+      - typesense-data:/data
+    ports:
+      - "${TYPESENSE_EXTERNAL_PORT:-8108}:8108"
+    networks:
+      - ggrequestz-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8108/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Optional: Gotify Notification Server
+  gotify:
+    image: gotify/server
+    container_name: ggrequestz-gotify
+    restart: unless-stopped
+    environment:
+      GOTIFY_DEFAULTUSER_NAME: admin
+      GOTIFY_DEFAULTUSER_PASS: ${GOTIFY_ADMIN_PASSWORD:-admin123}
+    volumes:
+      - gotify-data:/app/data
+    ports:
+      - "${GOTIFY_EXTERNAL_PORT:-8080}:80"
+    networks:
+      - ggrequestz-network
+    profiles:
+      - notifications
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Reverse Proxy (Traefik)
+  traefik:
+    image: traefik:v3.0
+    container_name: ggrequestz-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8090:8080" # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+    networks:
+      - ggrequestz-network
+    profiles:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  typesense-data:
+    driver: local
+  gotify-data:
+    driver: local
+  ggrequestz-logs:
+    driver: local
+  traefik-letsencrypt:
+    driver: local
+
+networks:
+  ggrequestz-network:
+    driver: bridge
+    name: ggrequestz-network

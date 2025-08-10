@@ -1,0 +1,68 @@
+{
+  "name": "GG Requestz",
+  "short_name": "GG Requestz",
+  "description": "Discover and request your favorite games",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a202c",
+  "theme_color": "#3182ce",
+  "orientation": "portrait-primary",
+  "categories": ["games", "entertainment"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/GGR_icon.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/GGR_icon.webp", 
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "maskable any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-wide.png",
+      "sizes": "2880x1800",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/screenshot-narrow.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Search Games",
+      "short_name": "Search",
+      "description": "Search for games in our library",
+      "url": "/search",
+      "icons": [
+        {
+          "src": "/GGR_icon.webp",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Make Request",
+      "short_name": "Request",
+      "description": "Request a new game",
+      "url": "/request",
+      "icons": [
+        {
+          "src": "/GGR_icon.webp",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
