@@ -428,7 +428,19 @@ CREATE INDEX IF NOT EXISTS idx_events_created ON ggr_system_events(created_at DE
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.updated_at = CURRENT_TIMESTAMP;
+  -- For tables with updated_at column
+  IF TG_TABLE_NAME != 'ggr_games_cache' THEN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+  END IF;
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Separate trigger function for games cache table
+CREATE OR REPLACE FUNCTION update_games_cache_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.last_updated = CURRENT_TIMESTAMP;
   RETURN NEW;
 END;
 $$ language 'plpgsql';
@@ -448,7 +460,7 @@ CREATE TRIGGER update_system_settings_updated_at
 
 CREATE TRIGGER update_games_cache_updated_at 
   BEFORE UPDATE ON ggr_games_cache 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION update_games_cache_timestamp();
 
 CREATE TRIGGER update_requests_updated_at 
   BEFORE UPDATE ON ggr_game_requests 

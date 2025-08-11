@@ -140,6 +140,7 @@ export async function load({ url, parent }) {
 
     return {
       requests,
+      userPermissions,
       currentPage: page,
       totalPages,
       totalRequests,
@@ -156,6 +157,7 @@ export async function load({ url, parent }) {
     console.error("Requests page load error:", error);
     return {
       requests: [],
+      userPermissions: [],
       currentPage: 1,
       totalPages: 1,
       totalRequests: 0,

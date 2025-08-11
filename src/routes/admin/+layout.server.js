@@ -70,7 +70,8 @@ export async function load({ parent }) {
           'request.manage',
           'request.edit',
           'request.approve',
-          'request.reject'
+          'request.reject',
+          'request.delete'
         ], // Grant full admin permissions for basic auth admins
         localUserId,
         pendingRequestsCount,
@@ -127,7 +128,8 @@ export async function load({ parent }) {
             'request.manage',
             'request.edit',
             'request.approve',
-            'request.reject'
+            'request.reject',
+            'request.delete'
           ], // Grant full admin permissions for direct admin flag
           localUserId,
           pendingRequestsCount,
