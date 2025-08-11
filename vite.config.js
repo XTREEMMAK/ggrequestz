@@ -7,7 +7,12 @@ export default defineConfig({
   server: {
     host: true, // Allow external access when --host flag is used
     port: 5174,
-    allowedHosts: ["ggr.keyjaycompound.com", "localhost", "127.0.0.1"],
+    allowedHosts: [
+      process.env.DOMAIN || "localhost",
+      process.env.GGREQUESTZ_HOST || "localhost", 
+      "localhost", 
+      "127.0.0.1"
+    ],
   },
   build: {
     rollupOptions: {
