@@ -302,7 +302,8 @@ export const actions = {
         console.warn("Failed to log analytics:", analyticsError);
       }
 
-        `✅ User ${targetUserId} profile updated by admin ${user.name || user.email}`,
+      console.log(
+      `✅ User ${targetUserId} profile updated by admin ${user.name || user.email}`
       );
 
       return { success: true, message: "User profile updated successfully" };
@@ -414,7 +415,8 @@ export const actions = {
         console.warn("Failed to log analytics:", analyticsError);
       }
 
-        `✅ Role ${roleId} assigned to user ${targetUserId} by admin ${user.name || user.email}`,
+       console.log(
+        `✅ Role ${roleId} assigned to user ${targetUserId} by admin ${user.name || user.email}`
       );
 
       return { success: true, message: "Role assigned successfully" };
@@ -539,9 +541,9 @@ export const actions = {
       } catch (analyticsError) {
         console.warn("Failed to log analytics:", analyticsError);
       }
-
+      console.log(
         `✅ Role ${roleId} removed from user ${targetUserId} by admin ${user.name || user.email}`,
-      );
+     );
 
       return { success: true, message: "Role removed successfully" };
     } catch (err) {
@@ -679,7 +681,7 @@ export const actions = {
       } catch (analyticsError) {
         console.warn("Failed to log analytics:", analyticsError);
       }
-
+        console.log(
         `✅ Password updated for user ${targetUserId} by admin ${user.name || user.email}. Force change: ${forceChange}`
       );
 

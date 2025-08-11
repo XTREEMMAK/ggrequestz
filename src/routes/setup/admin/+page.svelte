@@ -5,6 +5,7 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { invalidateAll } from '$app/navigation';
   import Icon from '@iconify/svelte';
 
   let { data } = $props();

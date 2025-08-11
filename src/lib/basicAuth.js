@@ -6,6 +6,7 @@
 import bcrypt from 'bcrypt';
 import { query } from '$lib/database.js';
 import { generateId } from '$lib/utils.js';
+import { assignAdminRole } from '$lib/userProfile.js';
 
 const SALT_ROUNDS = 12;
 
@@ -79,6 +80,14 @@ export async function createInitialAdmin(username, email, password) {
     `, [username, email, username, username, passwordHash]);
 
     const admin = result.rows[0];
+
+    // Assign the Administrator role to the new admin user
+    const roleAssigned = await assignAdminRole(admin.id);
+    if (!roleAssigned) {
+      console.warn('⚠️ Failed to assign Administrator role to initial admin user');
+    } else {
+      console.log('✅ Administrator role assigned to initial admin user');
+    }
 
     return admin;
   } catch (error) {

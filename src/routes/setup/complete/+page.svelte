@@ -5,6 +5,7 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { invalidateAll } from '$app/navigation';
   import Icon from '@iconify/svelte';
 
   let { data } = $props();
@@ -42,7 +43,8 @@
     }
   });
 
-  function goToLogin() {
+  async function goToLogin() {
+    await invalidateAll();
     goto('/login');
   }
 </script>

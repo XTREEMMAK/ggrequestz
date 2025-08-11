@@ -84,11 +84,11 @@
         <div class="mx-auto w-32 h-32 mb-6 flex items-center justify-center rounded-full shadow-2xl overflow-hidden">
           <img 
             src="/GGR_Logo.webp" 
-            alt="GameRequest Logo" 
+            alt="GGR Logo" 
             class="w-full h-full object-contain"
           />
         </div>
-        <h1 class="text-4xl font-bold text-white mb-4">Welcome to GameRequest!</h1>
+        <h1 class="text-4xl font-bold text-white mb-4">Welcome to G.G Requestz!</h1>
         <p class="text-xl text-blue-100/90 mb-2">Game Discovery & Request Platform</p>
         <p class="text-sm text-blue-200/70">First-time setup wizard</p>
       </div>
@@ -96,9 +96,9 @@
       <!-- Welcome Content -->
       <div class="space-y-6 mb-8 text-left">
         <div class="bg-white/5 rounded-xl p-6 border border-white/10">
-          <h2 class="text-2xl font-semibold text-white mb-4 text-center">🎮 What is GameRequest?</h2>
+          <h2 class="text-2xl font-semibold text-white mb-4 text-center">🎮 What is G.G Requestz?</h2>
           <p class="text-blue-100/80 leading-relaxed mb-4">
-            GameRequest is your ultimate game discovery and request platform, designed to help you find, 
+            G.G Requestz is your ultimate game discovery and request platform, designed to help you find, 
             track, and request your favorite games with ease.
           </p>
           

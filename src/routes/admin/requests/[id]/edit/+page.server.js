@@ -222,7 +222,7 @@ export const actions = {
       } catch (analyticsError) {
         console.warn("Failed to log analytics:", analyticsError);
       }
-
+console.log(
         `✅ Request ${requestId} updated by admin ${user.name || user.email}`,
       );
 

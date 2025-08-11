@@ -190,17 +190,25 @@ export class BaseApiHandler {
    * @param {Object} details - Additional details
    */
   async logActivity(action, user = null, details = {}) {
-    try {
-      // This would integrate with the activity logging system
-        user_id: user?.id,
-        user_email: user?.email,
-        details,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Failed to log activity:', error);
-    }
+  try {
+    // This would integrate with the activity logging system
+    const activity = {
+      action,
+      user_id: user?.id,
+      user_email: user?.email,
+      details,
+      timestamp: new Date().toISOString(),
+    };
+
+    console.log("Activity:", activity);
+    // You could replace the above with a DB insert or API call
+    // await activityLogger.save(activity);
+
+  } catch (error) {
+    console.error("Failed to log activity:", error);
   }
+}
+
 
   /**
    * Rate limiting check (placeholder for future implementation)

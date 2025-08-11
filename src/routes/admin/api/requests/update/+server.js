@@ -6,21 +6,30 @@ import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.js";
 import { userHasPermission } from "$lib/userProfile.js";
+import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { sendRequestStatusNotification } from "$lib/gotify.js";
 import { invalidateCache } from "$lib/cache.js";
 
 export async function POST({ request, cookies }) {
   try {
-    // Verify authentication
+    // Verify authentication - support both auth types
     const sessionCookie = cookies.get("session");
-    if (!sessionCookie) {
+    const basicAuthSessionCookie = cookies.get("basic_auth_session");
+    
+    if (!sessionCookie && !basicAuthSessionCookie) {
       return json(
         { success: false, error: "Authentication required" },
         { status: 401 },
       );
     }
 
-    const user = await verifySessionToken(sessionCookie);
+    let user = null;
+    if (sessionCookie) {
+      user = await verifySessionToken(sessionCookie);
+    } else if (basicAuthSessionCookie) {
+      user = getBasicAuthUser(basicAuthSessionCookie);
+    }
+    
     if (!user) {
       return json(
         { success: false, error: "Invalid session" },
@@ -187,7 +196,7 @@ export async function POST({ request, cookies }) {
         // Don't fail the request if notification fails
       });
     }
-
+    console.log(
       `✅ Request ${request_id} updated to ${status} by admin ${user.name || user.email}`,
     );
 

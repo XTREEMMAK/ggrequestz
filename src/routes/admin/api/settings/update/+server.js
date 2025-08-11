@@ -6,6 +6,7 @@ import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.js";
 import { userHasPermission } from "$lib/userProfile.js";
+import { getBasicAuthUser } from "$lib/basicAuth.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -24,7 +25,6 @@ export async function POST({ request, cookies }) {
     if (sessionCookie) {
       user = await verifySessionToken(sessionCookie);
     } else if (basicAuthSessionCookie) {
-      const { getBasicAuthUser } = await import('$lib/basicAuth.js');
       user = getBasicAuthUser(basicAuthSessionCookie);
     }
     
@@ -61,6 +61,7 @@ export async function POST({ request, cookies }) {
       localUserId,
       "system.settings",
     );
+    
     if (!hasPermission) {
       return json(
         { success: false, error: "Insufficient permissions" },
@@ -123,7 +124,8 @@ export async function POST({ request, cookies }) {
       console.warn("Failed to log analytics:", analyticsError);
     }
 
-      `✅ Settings updated by admin ${user.name || user.email}: ${updatedSettings.join(", ")}`,
+    console.log(
+      `✅ Settings updated by admin ${user.name || user.email}: ${updatedSettings.join(", ")}`
     );
 
     return json({

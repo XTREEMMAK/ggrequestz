@@ -133,422 +133,369 @@ async function initializeDatabase() {
 
     // Consolidated database schema - all tables, indexes, and data in one place
     const consolidatedSQL = `
--- GG Requestz Database Schema - Consolidated
+-- GG Requestz Database Schema - Unified
 -- Complete database setup with all tables, indexes, triggers, and initial data
+-- Supports both OIDC and Basic Authentication
 
--- Enable UUID extension
+-- Create extensions if they don't exist
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
--- ============================================================================
+-- =======================================
 -- CORE TABLES
--- ============================================================================
+-- =======================================
 
--- Games cache table - stores IGDB game data locally
+-- Migration tracking table
+CREATE TABLE IF NOT EXISTS ggr_migrations (
+  id SERIAL PRIMARY KEY,
+  migration_name VARCHAR(255) NOT NULL UNIQUE,
+  version INTEGER NOT NULL,
+  executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  execution_time INTEGER, -- milliseconds
+  success BOOLEAN DEFAULT TRUE,
+  error_message TEXT,
+  checksum VARCHAR(64) -- SHA256 of migration content
+);
+
+-- Unified users table (supports both basic auth and OIDC)
+CREATE TABLE IF NOT EXISTS ggr_users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  username VARCHAR(255), -- For basic auth users
+  name VARCHAR(255),
+  preferred_username VARCHAR(255),
+  avatar_url TEXT,
+  
+  -- Basic auth specific fields (null for OIDC users)
+  password_hash TEXT,
+  password_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  force_password_change BOOLEAN DEFAULT false,
+  
+  -- OIDC specific fields (null for basic auth users)
+  authentik_sub VARCHAR(255) UNIQUE,
+  
+  -- Common fields
+  is_active BOOLEAN DEFAULT TRUE,
+  is_admin BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_login TIMESTAMP
+);
+
+-- Roles table
+CREATE TABLE IF NOT EXISTS ggr_roles (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(50) UNIQUE NOT NULL,
+  display_name VARCHAR(100) NOT NULL,
+  description TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  is_system BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Permissions table
+CREATE TABLE IF NOT EXISTS ggr_permissions (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) UNIQUE NOT NULL,
+  display_name VARCHAR(150) NOT NULL,
+  description TEXT,
+  category VARCHAR(50),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Role-Permission mapping
+CREATE TABLE IF NOT EXISTS ggr_role_permissions (
+  id SERIAL PRIMARY KEY,
+  role_id INTEGER NOT NULL REFERENCES ggr_roles(id) ON DELETE CASCADE,
+  permission_id INTEGER NOT NULL REFERENCES ggr_permissions(id) ON DELETE CASCADE,
+  granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(role_id, permission_id)
+);
+
+-- User-Role mapping
+CREATE TABLE IF NOT EXISTS ggr_user_roles (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES ggr_users(id) ON DELETE CASCADE,
+  role_id INTEGER NOT NULL REFERENCES ggr_roles(id) ON DELETE CASCADE,
+  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  assigned_by INTEGER REFERENCES ggr_users(id),
+  is_active BOOLEAN DEFAULT TRUE,
+  expires_at TIMESTAMP,
+  UNIQUE(user_id, role_id)
+);
+
+-- =======================================
+-- GAMES AND REQUESTS
+-- =======================================
+
+-- Games cache table
 CREATE TABLE IF NOT EXISTS ggr_games_cache (
-    igdb_id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    summary TEXT,
-    cover_url TEXT,
-    rating DECIMAL,
-    release_date TIMESTAMP,
-    platforms JSONB DEFAULT '[]'::jsonb,
-    genres JSONB DEFAULT '[]'::jsonb,
-    screenshots JSONB DEFAULT '[]'::jsonb,
-    videos JSONB DEFAULT '[]'::jsonb,
-    companies JSONB DEFAULT '[]'::jsonb,
-    game_modes JSONB DEFAULT '[]'::jsonb,
-    popularity_score INTEGER DEFAULT 0,
-    cached_at TIMESTAMP DEFAULT NOW(),
-    last_updated TIMESTAMP DEFAULT NOW(),
-    needs_refresh BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW()
+  id SERIAL PRIMARY KEY,
+  igdb_id VARCHAR(50) UNIQUE NOT NULL,
+  title VARCHAR(500) NOT NULL,
+  summary TEXT,
+  cover_url TEXT,
+  rating DECIMAL(5,2),
+  release_date DATE,
+  platforms JSONB DEFAULT '[]'::jsonb,
+  genres JSONB DEFAULT '[]'::jsonb,
+  screenshots JSONB DEFAULT '[]'::jsonb,
+  videos JSONB DEFAULT '[]'::jsonb,
+  companies JSONB DEFAULT '[]'::jsonb,
+  game_modes JSONB DEFAULT '[]'::jsonb,
+  popularity_score DECIMAL(10,2) DEFAULT 0,
+  needs_refresh BOOLEAN DEFAULT false,
+  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Game requests table
 CREATE TABLE IF NOT EXISTS ggr_game_requests (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id TEXT NOT NULL,
-    user_name TEXT,
-    request_type TEXT NOT NULL CHECK (request_type IN ('game', 'update', 'fix')),
-    title TEXT NOT NULL,
-    igdb_id TEXT,
-    platforms JSONB DEFAULT '[]'::jsonb,
-    priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
-    description TEXT,
-    reason TEXT,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'fulfilled', 'cancelled')),
-    admin_notes TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  reason TEXT,
+  platforms JSONB DEFAULT '[]'::jsonb,
+  priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+  request_type VARCHAR(20) DEFAULT 'game' CHECK (request_type IN ('game', 'update', 'fix')),
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'fulfilled', 'rejected', 'cancelled')),
+  user_id INTEGER NOT NULL REFERENCES ggr_users(id), -- Updated to reference ggr_users
+  user_name VARCHAR(255),
+  igdb_id VARCHAR(50), -- Links to games cache
+  admin_notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  fulfilled_at TIMESTAMP
 );
 
 -- User watchlist table
 CREATE TABLE IF NOT EXISTS ggr_user_watchlist (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id TEXT NOT NULL,
-    igdb_id TEXT NOT NULL,
-    added_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(user_id, igdb_id)
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES ggr_users(id) ON DELETE CASCADE,
+  igdb_id VARCHAR(50) NOT NULL,
+  added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  notes TEXT,
+  UNIQUE(user_id, igdb_id)
+);
+
+-- =======================================
+-- CUSTOM NAVIGATION
+-- =======================================
+
+-- Custom navigation table
+CREATE TABLE IF NOT EXISTS ggr_custom_navigation (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  href VARCHAR(500) NOT NULL,
+  icon VARCHAR(100) DEFAULT 'heroicons:link',
+  position INTEGER DEFAULT 100,
+  is_external BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
+  
+  -- Role-based visibility features
+  visible_to_all BOOLEAN DEFAULT true,
+  visible_to_guests BOOLEAN DEFAULT true,
+  allowed_roles JSONB DEFAULT '[]'::jsonb,
+  minimum_role VARCHAR(20) DEFAULT 'viewer', -- Hierarchical role system
+  
+  -- Audit fields
+  created_by INTEGER REFERENCES ggr_users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =======================================
+-- SYSTEM TABLES
+-- =======================================
+
+-- System settings table
+CREATE TABLE IF NOT EXISTS ggr_system_settings (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT,
+  category VARCHAR(50) DEFAULT 'general',
+  description TEXT,
+  is_sensitive BOOLEAN DEFAULT FALSE,
+  updated_by INTEGER REFERENCES ggr_users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- User analytics table
 CREATE TABLE IF NOT EXISTS ggr_user_analytics (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id TEXT NOT NULL,
-    action TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    timestamp TIMESTAMP DEFAULT NOW()
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL, -- Flexible to handle different ID formats
+  action VARCHAR(100) NOT NULL,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Users table - stores user profiles from Authentik authentication
-CREATE TABLE IF NOT EXISTS ggr_users (
-    id SERIAL PRIMARY KEY,
-    authentik_sub TEXT UNIQUE NOT NULL,
-    email TEXT NOT NULL,
-    name TEXT,
-    preferred_username TEXT,
-    avatar_url TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    is_admin BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    last_login TIMESTAMP DEFAULT NOW()
+-- Audit log table
+CREATE TABLE IF NOT EXISTS ggr_audit_log (
+  id BIGSERIAL PRIMARY KEY,
+  table_name VARCHAR(100) NOT NULL,
+  record_id VARCHAR(255) NOT NULL,
+  action VARCHAR(20) NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
+  old_values JSONB,
+  new_values JSONB,
+  changed_fields TEXT[],
+  user_id INTEGER REFERENCES ggr_users(id),
+  user_email VARCHAR(255),
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- ROLES AND PERMISSIONS SYSTEM
--- ============================================================================
-
--- Roles table - predefined roles with descriptions
-CREATE TABLE IF NOT EXISTS ggr_roles (
-    id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    display_name TEXT NOT NULL,
-    description TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+-- System events log
+CREATE TABLE IF NOT EXISTS ggr_system_events (
+  id BIGSERIAL PRIMARY KEY,
+  event_type VARCHAR(100) NOT NULL,
+  severity VARCHAR(20) DEFAULT 'info' CHECK (severity IN ('debug', 'info', 'warning', 'error', 'critical')),
+  message TEXT NOT NULL,
+  context JSONB,
+  source VARCHAR(100),
+  stack_trace TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Permissions table - granular permissions
-CREATE TABLE IF NOT EXISTS ggr_permissions (
-    id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    display_name TEXT NOT NULL,
-    description TEXT,
-    category TEXT DEFAULT 'general',
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+-- =======================================
+-- INDEXES
+-- =======================================
 
--- Role-Permission junction table
-CREATE TABLE IF NOT EXISTS ggr_role_permissions (
-    id SERIAL PRIMARY KEY,
-    role_id INTEGER NOT NULL REFERENCES ggr_roles(id) ON DELETE CASCADE,
-    permission_id INTEGER NOT NULL REFERENCES ggr_permissions(id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(role_id, permission_id)
-);
+-- Users indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON ggr_users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON ggr_users(username);
+CREATE INDEX IF NOT EXISTS idx_users_authentik_sub ON ggr_users(authentik_sub);
+CREATE INDEX IF NOT EXISTS idx_users_active ON ggr_users(is_active);
+CREATE INDEX IF NOT EXISTS idx_users_password_changed ON ggr_users(password_changed_at);
+CREATE INDEX IF NOT EXISTS idx_users_force_change ON ggr_users(force_password_change);
 
--- User-Role junction table (users can have multiple roles)
-CREATE TABLE IF NOT EXISTS ggr_user_roles (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES ggr_users(id) ON DELETE CASCADE,
-    role_id INTEGER NOT NULL REFERENCES ggr_roles(id) ON DELETE CASCADE,
-    assigned_by INTEGER REFERENCES ggr_users(id),
-    assigned_at TIMESTAMP DEFAULT NOW(),
-    expires_at TIMESTAMP NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    UNIQUE(user_id, role_id)
-);
+-- Roles and permissions indexes
+CREATE INDEX IF NOT EXISTS idx_roles_name ON ggr_roles(name);
+CREATE INDEX IF NOT EXISTS idx_roles_active ON ggr_roles(is_active);
+CREATE INDEX IF NOT EXISTS idx_permissions_name ON ggr_permissions(name);
+CREATE INDEX IF NOT EXISTS idx_permissions_category ON ggr_permissions(category);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON ggr_role_permissions(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON ggr_role_permissions(permission_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON ggr_user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON ggr_user_roles(role_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_active ON ggr_user_roles(is_active);
 
--- System settings table for admin configurable settings
-CREATE TABLE IF NOT EXISTS ggr_system_settings (
-    id SERIAL PRIMARY KEY,
-    key TEXT UNIQUE NOT NULL,
-    value TEXT,
-    category TEXT DEFAULT 'general',
-    description TEXT,
-    is_sensitive BOOLEAN DEFAULT FALSE,
-    updated_by INTEGER REFERENCES ggr_users(id),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
+-- Games cache indexes
+CREATE INDEX IF NOT EXISTS idx_games_cache_igdb_id ON ggr_games_cache(igdb_id);
+CREATE INDEX IF NOT EXISTS idx_games_cache_title ON ggr_games_cache USING gin(title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_games_cache_popularity ON ggr_games_cache(popularity_score DESC);
+CREATE INDEX IF NOT EXISTS idx_games_cache_rating ON ggr_games_cache(rating DESC);
+CREATE INDEX IF NOT EXISTS idx_games_cache_release_date ON ggr_games_cache(release_date DESC);
 
--- ============================================================================
--- PLATFORM LINKS SYSTEM
--- ============================================================================
+-- Game requests indexes
+CREATE INDEX IF NOT EXISTS idx_requests_user ON ggr_game_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON ggr_game_requests(status);
+CREATE INDEX IF NOT EXISTS idx_requests_priority ON ggr_game_requests(priority);
+CREATE INDEX IF NOT EXISTS idx_requests_created ON ggr_game_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_title ON ggr_game_requests USING gin(title gin_trgm_ops);
 
--- Platform links table - stores platform-specific store URLs and metadata
-CREATE TABLE IF NOT EXISTS ggr_platform_links (
-    id SERIAL PRIMARY KEY,
-    platform_name TEXT NOT NULL,
-    platform_display_name TEXT NOT NULL,
-    store_name TEXT NOT NULL,
-    base_url TEXT NOT NULL,
-    search_url_template TEXT,
-    direct_url_template TEXT,
-    icon_name TEXT,
-    icon_color TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    priority INTEGER DEFAULT 0,
-    supports_search BOOLEAN DEFAULT TRUE,
-    supports_direct_links BOOLEAN DEFAULT FALSE,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(platform_name, store_name)
-);
+-- Watchlist indexes
+CREATE INDEX IF NOT EXISTS idx_user_watchlist_user_id ON ggr_user_watchlist(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_watchlist_igdb_id ON ggr_user_watchlist(igdb_id);
+CREATE INDEX IF NOT EXISTS idx_user_watchlist_added ON ggr_user_watchlist(added_at DESC);
 
--- Game-specific platform links - for storing actual discovered store URLs
-CREATE TABLE IF NOT EXISTS ggr_game_platform_links (
-    id SERIAL PRIMARY KEY,
-    igdb_id TEXT NOT NULL,
-    platform_name TEXT NOT NULL,
-    store_name TEXT NOT NULL,
-    store_url TEXT NOT NULL,
-    store_id TEXT,
-    price_info JSONB,
-    is_verified BOOLEAN DEFAULT FALSE,
-    last_checked TIMESTAMP,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(igdb_id, platform_name, store_name)
-);
+-- Custom navigation indexes
+CREATE INDEX IF NOT EXISTS idx_custom_nav_active ON ggr_custom_navigation(is_active);
+CREATE INDEX IF NOT EXISTS idx_custom_nav_position ON ggr_custom_navigation(position);
+CREATE INDEX IF NOT EXISTS idx_custom_nav_visibility ON ggr_custom_navigation(visible_to_all, visible_to_guests);
+CREATE INDEX IF NOT EXISTS idx_custom_nav_roles ON ggr_custom_navigation USING gin(allowed_roles);
 
--- Custom navigation links table - admin-controlled navigation items
-CREATE TABLE IF NOT EXISTS ggr_custom_navigation (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    href TEXT NOT NULL,
-    icon TEXT NOT NULL DEFAULT 'heroicons:link',
-    position INTEGER DEFAULT 100,
-    is_external BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_by INTEGER REFERENCES ggr_users(id),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
+-- System indexes
+CREATE INDEX IF NOT EXISTS idx_system_settings_category ON ggr_system_settings(category);
+CREATE INDEX IF NOT EXISTS idx_system_settings_updated_by ON ggr_system_settings(updated_by);
+CREATE INDEX IF NOT EXISTS idx_user_analytics_user_id ON ggr_user_analytics(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_analytics_action ON ggr_user_analytics(action);
+CREATE INDEX IF NOT EXISTS idx_user_analytics_timestamp ON ggr_user_analytics(timestamp DESC);
 
--- ============================================================================
--- TRIGGERS AND FUNCTIONS
--- ============================================================================
+-- Audit indexes
+CREATE INDEX IF NOT EXISTS idx_audit_table_record ON ggr_audit_log(table_name, record_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON ggr_audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON ggr_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_type ON ggr_system_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created ON ggr_system_events(created_at DESC);
 
--- Update trigger for updated_at fields
+-- =======================================
+-- FUNCTIONS AND TRIGGERS
+-- =======================================
+
+-- Update timestamps trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
 END;
 $$ language 'plpgsql';
 
--- Create triggers
-DO $$ BEGIN
-    -- Game requests trigger
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ggr_game_requests_updated_at') THEN
-        CREATE TRIGGER update_ggr_game_requests_updated_at 
-            BEFORE UPDATE ON ggr_game_requests 
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-    
-    -- Users trigger
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ggr_users_updated_at') THEN
-        CREATE TRIGGER update_ggr_users_updated_at 
-            BEFORE UPDATE ON ggr_users 
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-    
-    -- Roles trigger
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ggr_roles_updated_at') THEN
-        CREATE TRIGGER update_ggr_roles_updated_at 
-            BEFORE UPDATE ON ggr_roles 
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-    
-    -- System settings trigger
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ggr_system_settings_updated_at') THEN
-        CREATE TRIGGER update_ggr_system_settings_updated_at 
-            BEFORE UPDATE ON ggr_system_settings 
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-    
-    -- Platform links triggers
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ggr_platform_links_updated_at') THEN
-        CREATE TRIGGER update_ggr_platform_links_updated_at 
-            BEFORE UPDATE ON ggr_platform_links 
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ggr_game_platform_links_updated_at') THEN
-        CREATE TRIGGER update_ggr_game_platform_links_updated_at 
-            BEFORE UPDATE ON ggr_game_platform_links 
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-    
-    -- Custom navigation trigger
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ggr_custom_navigation_updated_at') THEN
-        CREATE TRIGGER update_ggr_custom_navigation_updated_at 
-            BEFORE UPDATE ON ggr_custom_navigation 
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-END $$;
+-- Add update triggers
+CREATE TRIGGER update_users_updated_at 
+  BEFORE UPDATE ON ggr_users 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- ============================================================================
--- PERFORMANCE INDEXES
--- ============================================================================
+CREATE TRIGGER update_custom_navigation_updated_at 
+  BEFORE UPDATE ON ggr_custom_navigation 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Games cache indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_games_cache_title ON ggr_games_cache(title);
-CREATE INDEX IF NOT EXISTS idx_ggr_games_cache_popularity ON ggr_games_cache(popularity_score DESC);
-CREATE INDEX IF NOT EXISTS idx_ggr_games_cache_release_date ON ggr_games_cache(release_date DESC);
-CREATE INDEX IF NOT EXISTS idx_ggr_games_cache_needs_refresh ON ggr_games_cache(needs_refresh) WHERE needs_refresh = TRUE;
-CREATE INDEX IF NOT EXISTS idx_ggr_games_cache_cached_at ON ggr_games_cache(cached_at);
-CREATE INDEX IF NOT EXISTS idx_ggr_games_cache_search ON ggr_games_cache USING gin(to_tsvector('english', title || ' ' || COALESCE(summary, '')));
-CREATE INDEX IF NOT EXISTS idx_games_cache_title_gin ON ggr_games_cache USING gin(to_tsvector('english', title));
-CREATE INDEX IF NOT EXISTS idx_games_cache_summary_gin ON ggr_games_cache USING gin(to_tsvector('english', summary));
-CREATE INDEX IF NOT EXISTS idx_games_cache_popularity ON ggr_games_cache (popularity_score DESC) WHERE popularity_score IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_games_cache_release_date ON ggr_games_cache (release_date DESC) WHERE release_date IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_games_cache_updated ON ggr_games_cache (last_updated DESC);
-CREATE INDEX IF NOT EXISTS idx_games_cache_composite ON ggr_games_cache (popularity_score DESC, last_updated DESC) WHERE popularity_score IS NOT NULL;
+CREATE TRIGGER update_system_settings_updated_at 
+  BEFORE UPDATE ON ggr_system_settings 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Game requests indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_game_requests_user_id ON ggr_game_requests(user_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_game_requests_status ON ggr_game_requests(status);
-CREATE INDEX IF NOT EXISTS idx_ggr_game_requests_created_at ON ggr_game_requests(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_ggr_game_requests_igdb_id ON ggr_game_requests(igdb_id);
+CREATE TRIGGER update_games_cache_updated_at 
+  BEFORE UPDATE ON ggr_games_cache 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- User watchlist indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_user_watchlist_user_id ON ggr_user_watchlist(user_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_user_watchlist_igdb_id ON ggr_user_watchlist(igdb_id);
-CREATE INDEX IF NOT EXISTS idx_user_watchlist_added_at ON ggr_user_watchlist (added_at DESC);
+CREATE TRIGGER update_requests_updated_at 
+  BEFORE UPDATE ON ggr_game_requests 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- User analytics indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_user_analytics_user_id ON ggr_user_analytics(user_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_user_analytics_action ON ggr_user_analytics(action);
-CREATE INDEX IF NOT EXISTS idx_ggr_user_analytics_timestamp ON ggr_user_analytics(timestamp DESC);
+CREATE TRIGGER update_roles_updated_at 
+  BEFORE UPDATE ON ggr_roles 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Users table indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_users_authentik_sub ON ggr_users(authentik_sub);
-CREATE INDEX IF NOT EXISTS idx_ggr_users_email ON ggr_users(email);
-CREATE INDEX IF NOT EXISTS idx_ggr_users_last_login ON ggr_users(last_login DESC);
-CREATE INDEX IF NOT EXISTS idx_ggr_users_is_active ON ggr_users(is_active) WHERE is_active = TRUE;
-
--- Roles and permissions indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_role_permissions_role_id ON ggr_role_permissions(role_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_role_permissions_permission_id ON ggr_role_permissions(permission_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_user_roles_user_id ON ggr_user_roles(user_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_user_roles_role_id ON ggr_user_roles(role_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_user_roles_active ON ggr_user_roles(is_active) WHERE is_active = TRUE;
-CREATE INDEX IF NOT EXISTS idx_ggr_system_settings_key ON ggr_system_settings(key);
-CREATE INDEX IF NOT EXISTS idx_ggr_system_settings_category ON ggr_system_settings(category);
-
--- Platform links indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_platform_links_platform_name ON ggr_platform_links(platform_name);
-CREATE INDEX IF NOT EXISTS idx_ggr_platform_links_active ON ggr_platform_links(is_active) WHERE is_active = TRUE;
-CREATE INDEX IF NOT EXISTS idx_ggr_platform_links_priority ON ggr_platform_links(priority DESC);
-CREATE INDEX IF NOT EXISTS idx_ggr_game_platform_links_igdb_id ON ggr_game_platform_links(igdb_id);
-CREATE INDEX IF NOT EXISTS idx_ggr_game_platform_links_platform ON ggr_game_platform_links(platform_name);
-CREATE INDEX IF NOT EXISTS idx_ggr_game_platform_links_verified ON ggr_game_platform_links(is_verified) WHERE is_verified = TRUE;
-CREATE INDEX IF NOT EXISTS idx_ggr_game_platform_links_last_checked ON ggr_game_platform_links(last_checked);
-
--- Custom navigation indexes
-CREATE INDEX IF NOT EXISTS idx_ggr_custom_navigation_active_position ON ggr_custom_navigation(is_active, position) WHERE is_active = TRUE;
-CREATE INDEX IF NOT EXISTS idx_ggr_custom_navigation_created_by ON ggr_custom_navigation(created_by);
-
--- ============================================================================
--- HELPER FUNCTIONS AND VIEWS
--- ============================================================================
-
--- Helper function to get platform links for a game
-CREATE OR REPLACE FUNCTION get_game_platform_links(game_igdb_id TEXT, game_platforms TEXT[])
-RETURNS TABLE (
-    platform_name TEXT,
-    platform_display_name TEXT,
-    store_name TEXT,
-    store_url TEXT,
-    icon_name TEXT,
-    icon_color TEXT,
-    is_direct_link BOOLEAN
-) AS $$
+-- System logging function
+CREATE OR REPLACE FUNCTION log_system_event(
+  event_type_param VARCHAR(100),
+  message_param TEXT,
+  severity_param VARCHAR(20) DEFAULT 'info',
+  context_param JSONB DEFAULT NULL,
+  source_param VARCHAR(100) DEFAULT NULL,
+  stack_trace_param TEXT DEFAULT NULL
+)
+RETURNS VOID AS $$
 BEGIN
-    RETURN QUERY
-    -- First, return any direct game links we have stored
-    SELECT 
-        gpl.platform_name,
-        pl.platform_display_name,
-        gpl.store_name,
-        gpl.store_url,
-        pl.icon_name,
-        pl.icon_color,
-        TRUE as is_direct_link
-    FROM ggr_game_platform_links gpl
-    JOIN ggr_platform_links pl ON gpl.platform_name = pl.platform_name AND gpl.store_name = pl.store_name
-    WHERE gpl.igdb_id = game_igdb_id 
-    AND gpl.store_url IS NOT NULL 
-    AND pl.is_active = TRUE
-    
-    UNION ALL
-    
-    -- Then, return search links for platforms that match the game's platforms
-    SELECT 
-        pl.platform_name,
-        pl.platform_display_name,
-        pl.store_name,
-        pl.search_url_template,
-        pl.icon_name,
-        pl.icon_color,
-        FALSE as is_direct_link
-    FROM ggr_platform_links pl
-    WHERE pl.is_active = TRUE 
-    AND pl.supports_search = TRUE
-    AND pl.search_url_template IS NOT NULL
-    AND (
-        -- Match platform names (case insensitive, partial matches)
-        EXISTS (
-            SELECT 1 FROM unnest(game_platforms) as gp
-            WHERE LOWER(gp) LIKE '%' || LOWER(pl.platform_name) || '%'
-               OR LOWER(pl.platform_display_name) LIKE '%' || LOWER(gp) || '%'
-        )
-        -- Always include major PC platforms for PC games
-        OR (pl.platform_name IN ('steam', 'epic', 'gog') AND 'PC' = ANY(game_platforms))
-    )
-    -- Avoid duplicates from direct links
-    AND NOT EXISTS (
-        SELECT 1 FROM ggr_game_platform_links gpl2 
-        WHERE gpl2.igdb_id = game_igdb_id 
-        AND gpl2.platform_name = pl.platform_name 
-        AND gpl2.store_name = pl.store_name
-    )
-    
-    ORDER BY is_direct_link DESC, 
-             (CASE 
-                WHEN pl.platform_name IN ('steam', 'playstation', 'xbox', 'nintendo') THEN 100
-                WHEN pl.platform_name IN ('epic', 'gog') THEN 90
-                ELSE 50 
-              END) DESC,
-             pl.platform_display_name;
+  INSERT INTO ggr_system_events (
+    event_type, severity, message, context, source, stack_trace
+  ) VALUES (
+    event_type_param, severity_param, message_param, 
+    context_param, source_param, stack_trace_param
+  );
 END;
 $$ LANGUAGE plpgsql;
 
--- User permissions helper view
+-- =======================================
+-- VIEWS
+-- =======================================
+
+-- User permissions view
 CREATE OR REPLACE VIEW ggr_user_permissions AS
-SELECT DISTINCT
-    u.id as user_id,
-    u.authentik_sub,
-    u.email,
-    r.name as role_name,
-    p.name as permission_name,
-    p.display_name as permission_display_name,
-    p.category as permission_category
+SELECT DISTINCT 
+  u.id as user_id,
+  u.email,
+  r.name as role_name,
+  p.name as permission_name
 FROM ggr_users u
-JOIN ggr_user_roles ur ON u.id = ur.user_id
-JOIN ggr_roles r ON ur.role_id = r.id  
+JOIN ggr_user_roles ur ON u.id = ur.user_id AND ur.is_active = true
+JOIN ggr_roles r ON ur.role_id = r.id AND r.is_active = true  
 JOIN ggr_role_permissions rp ON r.id = rp.role_id
-JOIN ggr_permissions p ON rp.permission_id = p.id
-WHERE ur.is_active = TRUE 
-AND r.is_active = TRUE 
-AND p.is_active = TRUE
-AND (ur.expires_at IS NULL OR ur.expires_at > NOW());
+JOIN ggr_permissions p ON rp.permission_id = p.id AND p.is_active = true
+WHERE u.is_active = true
+  AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP);
 `;
 
     // Split the consolidated SQL into statements
@@ -581,95 +528,126 @@ AND (ur.expires_at IS NULL OR ur.expires_at > NOW());
     console.log("📄 Inserting initial data...");
     
     try {
-      // Insert default roles (ignore duplicates)
+      // Insert default roles
       await client.query(`
-        INSERT INTO ggr_roles (name, display_name, description) VALUES
-        ('admin', 'Administrator', 'Full system access with all permissions'),
-        ('manager', 'Manager', 'Can manage requests and users with limited system access'),
-        ('viewer', 'Viewer', 'Read-only access to most content')
+        INSERT INTO ggr_roles (name, display_name, description, is_system) VALUES 
+        ('admin', 'Administrator', 'Full system access with all permissions', true),
+        ('manager', 'Manager', 'Manage requests, users, and system settings', true),
+        ('moderator', 'Moderator', 'Moderate requests and user content', true),
+        ('user', 'User', 'Standard user with basic permissions', true),
+        ('viewer', 'Viewer', 'Read-only access to public content', true)
+        ON CONFLICT (name) DO UPDATE SET is_system = EXCLUDED.is_system;
+      `);
+
+      // Insert default permissions
+      await client.query(`
+        INSERT INTO ggr_permissions (name, display_name, description, category) VALUES 
+        -- User Management
+        ('user.view', 'View Users', 'View user profiles and information', 'user_management'),
+        ('user.create', 'Create Users', 'Create new user accounts', 'user_management'),
+        ('user.edit', 'Edit Users', 'Edit user profiles and information', 'user_management'),
+        ('user.delete', 'Delete Users', 'Delete user accounts', 'user_management'),
+        ('user.ban', 'Ban Users', 'Ban or suspend user accounts', 'user_management'),
+        ('user.manage', 'Manage Users', 'Full user management including password resets', 'user_management'),
+        
+        -- Request Management
+        ('request.view_own', 'View Own Requests', 'View own submitted requests', 'request_management'),
+        ('request.view_all', 'View All Requests', 'View all user requests', 'request_management'),
+        ('request.create', 'Create Requests', 'Submit new game requests', 'request_management'),
+        ('request.edit_own', 'Edit Own Requests', 'Edit own submitted requests', 'request_management'),
+        ('request.edit', 'Edit Requests', 'Edit game requests', 'request_management'),
+        ('request.manage', 'Manage Requests', 'Full request management capabilities', 'request_management'),
+        ('request.approve', 'Approve Requests', 'Approve or reject requests', 'request_management'),
+        ('request.reject', 'Reject Requests', 'Reject requests', 'request_management'),
+        
+        -- Game Management
+        ('game.view', 'View Games', 'View game information', 'game_management'),
+        ('game.search', 'Search Games', 'Search for games', 'game_management'),
+        ('game.add_to_watchlist', 'Add to Watchlist', 'Add games to personal watchlist', 'game_management'),
+        
+        -- System Management
+        ('admin.panel', 'Access Admin Panel', 'Access to administration panel', 'system_management'),
+        ('system.settings', 'System Settings', 'Manage system configuration', 'system_management'),
+        ('analytics.view', 'View Analytics', 'View usage analytics and reports', 'analytics'),
+        ('navigation.manage', 'Manage Navigation', 'Manage custom navigation links', 'system_management')
         ON CONFLICT (name) DO NOTHING;
       `);
-      
-      // Insert default permissions (ignore duplicates)
+
+      // Assign permissions to roles using the complex mapping from docker-init.sql
       await client.query(`
-        INSERT INTO ggr_permissions (name, display_name, description, category) VALUES
-        ('request.create', 'Create Requests', 'Can submit new game requests', 'requests'),
-        ('request.edit', 'Edit Requests', 'Can edit existing requests', 'requests'),
-        ('request.delete', 'Delete Requests', 'Can remove/cancel requests', 'requests'),
-        ('request.approve', 'Approve Requests', 'Can approve pending requests', 'requests'),
-        ('request.view_all', 'View All Requests', 'Can view all user requests', 'requests'),
-        ('user.view', 'View Users', 'Can view user list and profiles', 'users'),
-        ('user.edit', 'Edit Users', 'Can modify user information and roles', 'users'),
-        ('user.ban', 'Ban Users', 'Can ban/suspend user accounts', 'users'),
-        ('user.delete', 'Delete Users', 'Can permanently remove users', 'users'),
-        ('system.settings', 'System Settings', 'Can modify system configuration', 'system'),
-        ('admin.panel', 'Admin Panel Access', 'Can access administrative interface', 'system'),
-        ('analytics.view', 'View Analytics', 'Can view system analytics and reports', 'system')
-        ON CONFLICT (name) DO NOTHING;
-      `);
-      
-      // Assign permissions to roles (admin gets all)
-      await client.query(`
+        WITH role_permission_mapping AS (
+          SELECT 
+            r.id as role_id, 
+            p.id as permission_id
+          FROM ggr_roles r
+          CROSS JOIN ggr_permissions p
+          WHERE 
+            -- Admin gets all permissions
+            (r.name = 'admin') OR
+            
+            -- Manager gets most permissions
+            (r.name = 'manager' AND p.name NOT IN ('user.delete', 'user.ban')) OR
+            
+            -- Moderator gets content and request management permissions
+            (r.name = 'moderator' AND p.category IN ('request_management') 
+             AND p.name NOT IN ('request.manage')) OR
+            
+            -- User gets basic permissions
+            (r.name = 'user' AND p.name IN (
+              'request.view_own', 'request.create', 'request.edit_own',
+              'game.view', 'game.search', 'game.add_to_watchlist'
+            )) OR
+            
+            -- Viewer gets read-only permissions
+            (r.name = 'viewer' AND p.name IN ('game.view', 'game.search', 'request.view_own'))
+        )
         INSERT INTO ggr_role_permissions (role_id, permission_id)
-        SELECT r.id, p.id 
-        FROM ggr_roles r, ggr_permissions p 
-        WHERE r.name = 'admin'
+        SELECT role_id, permission_id FROM role_permission_mapping
         ON CONFLICT (role_id, permission_id) DO NOTHING;
       `);
-      
-      // Manager gets most permissions except system settings and user deletion
-      await client.query(`
-        INSERT INTO ggr_role_permissions (role_id, permission_id)
-        SELECT r.id, p.id 
-        FROM ggr_roles r, ggr_permissions p 
-        WHERE r.name = 'manager' 
-        AND p.name NOT IN ('system.settings', 'user.delete')
-        ON CONFLICT (role_id, permission_id) DO NOTHING;
-      `);
-      
-      // Viewer gets basic permissions
-      await client.query(`
-        INSERT INTO ggr_role_permissions (role_id, permission_id)
-        SELECT r.id, p.id 
-        FROM ggr_roles r, ggr_permissions p 
-        WHERE r.name = 'viewer' 
-        AND p.name IN ('request.create', 'request.view_all', 'user.view')
-        ON CONFLICT (role_id, permission_id) DO NOTHING;
-      `);
-      
+
       // Insert default system settings
       await client.query(`
-        INSERT INTO ggr_system_settings (key, value, category, description, is_sensitive) VALUES
+        INSERT INTO ggr_system_settings (key, value, category, description, is_sensitive) VALUES 
+        ('site_title', 'G.G Requestz', 'general', 'Website title displayed in navigation', FALSE),
+        ('site_description', 'Game Request Management System', 'general', 'Website description', FALSE),
+        ('max_requests_per_user', '50', 'requests', 'Maximum number of requests per user', FALSE),
+        ('enable_user_registration', 'false', 'authentication', 'Allow new user registration', FALSE),
+        ('require_admin_approval', 'true', 'requests', 'Require admin approval for new requests', FALSE),
+        ('default_user_role', 'viewer', 'authentication', 'Default role assigned to new users', FALSE),
+        ('maintenance_mode', 'false', 'system', 'Enable maintenance mode', FALSE),
+        ('analytics_enabled', 'true', 'system', 'Enable user analytics tracking', FALSE),
+        ('cache_ttl_hours', '24', 'system', 'Cache time-to-live in hours', FALSE),
+        ('gotify.notifications.new_requests', 'true', 'notifications', 'Send notifications for new game requests', FALSE),
+        ('gotify.notifications.status_changes', 'true', 'notifications', 'Send notifications for request status changes', FALSE),
+        ('gotify.notifications.admin_actions', 'false', 'notifications', 'Send notifications for admin actions', FALSE),
         ('gotify.url', '', 'notifications', 'Gotify server URL for push notifications', FALSE),
         ('gotify.token', '', 'notifications', 'Gotify application token for sending notifications', TRUE),
         ('romm.server_url', '', 'integrations', 'ROMM server URL for game library integration', FALSE),
         ('romm.username', '', 'integrations', 'ROMM username for authentication', FALSE),
-        ('romm.password', '', 'integrations', 'ROMM password for authentication', TRUE),
-        ('request.auto_approve', 'false', 'requests', 'Automatically approve all new requests', FALSE),
-        ('request.require_approval', 'true', 'requests', 'Require admin approval for requests', FALSE),
-        ('system.maintenance_mode', 'false', 'system', 'Enable maintenance mode to restrict access', FALSE),
-        ('system.registration_enabled', 'true', 'system', 'Allow new user registration', FALSE)
+        ('romm.password', '', 'integrations', 'ROMM password for authentication', TRUE)
         ON CONFLICT (key) DO NOTHING;
       `);
-      
-      // Insert default platform links
+
+      // Log initialization completion
       await client.query(`
-        INSERT INTO ggr_platform_links (platform_name, platform_display_name, store_name, base_url, search_url_template, icon_name, icon_color, priority, supports_search, supports_direct_links) VALUES
-        ('steam', 'Steam', 'Steam Store', 'https://store.steampowered.com', 'https://store.steampowered.com/search/?term={query}', 'simple-icons:steam', 'text-blue-600 hover:text-blue-700', 100, TRUE, TRUE),
-        ('epic', 'Epic Games', 'Epic Games Store', 'https://store.epicgames.com', 'https://store.epicgames.com/en-US/browse?q={query}', 'simple-icons:epicgames', 'text-gray-800 hover:text-gray-900', 90, TRUE, FALSE),
-        ('gog', 'GOG', 'GOG.com', 'https://www.gog.com', 'https://www.gog.com/games?search={query}', 'simple-icons:gog-dot-com', 'text-purple-600 hover:text-purple-700', 85, TRUE, FALSE),
-        ('playstation', 'PlayStation', 'PlayStation Store', 'https://store.playstation.com', 'https://store.playstation.com/en-us/search/{query}', 'simple-icons:playstation', 'text-blue-700 hover:text-blue-800', 95, TRUE, FALSE),
-        ('xbox', 'Xbox', 'Xbox Store', 'https://www.xbox.com', 'https://www.xbox.com/en-us/games/store/search?q={query}', 'simple-icons:xbox', 'text-green-600 hover:text-green-700', 95, TRUE, FALSE),
-        ('nintendo', 'Nintendo Switch', 'Nintendo eShop', 'https://www.nintendo.com', 'https://www.nintendo.com/us/search/?q={query}', 'simple-icons:nintendo', 'text-red-600 hover:text-red-700', 95, TRUE, FALSE)
-        ON CONFLICT (platform_name, store_name) DO NOTHING;
+        SELECT log_system_event(
+          'database_initialized',
+          'Complete database schema initialized for unified deployment',
+          'info',
+          jsonb_build_object('version', 'unified-init-v1.0'),
+          'database_initialization'
+        );
       `);
-      
-      // Insert sample custom navigation (disabled by default)
+
+      // Record the initialization and mark migrations as completed for fresh install
       await client.query(`
-        INSERT INTO ggr_custom_navigation (name, href, icon, position, is_external, is_active) VALUES
-        ('Documentation', 'https://docs.example.com', 'heroicons:book-open', 90, TRUE, FALSE),
-        ('Support', 'https://support.example.com', 'heroicons:question-mark-circle', 95, TRUE, FALSE)
-        ON CONFLICT DO NOTHING;
+        INSERT INTO ggr_migrations (migration_name, version, executed_at, execution_time, success, checksum) VALUES
+        ('unified_initialization', 0, CURRENT_TIMESTAMP, 0, true, 'init'),
+        ('001_complete_schema', 1, CURRENT_TIMESTAMP, 0, true, 'init'),
+        ('002_additional_features', 2, CURRENT_TIMESTAMP, 0, true, 'init'),
+        ('003_hierarchical_navigation', 3, CURRENT_TIMESTAMP, 0, true, 'init')
+        ON CONFLICT (migration_name) DO NOTHING;
       `);
       
       console.log("✅ Initial data inserted successfully");
@@ -681,19 +659,20 @@ AND (ur.expires_at IS NULL OR ur.expires_at > NOW());
     console.log("🔍 Verifying table creation...");
 
     const tables = [
-      "ggr_games_cache",
-      "ggr_game_requests", 
-      "ggr_user_watchlist",
-      "ggr_user_analytics",
+      "ggr_migrations",
       "ggr_users",
       "ggr_roles",
       "ggr_permissions",
       "ggr_role_permissions",
       "ggr_user_roles",
+      "ggr_games_cache",
+      "ggr_game_requests", 
+      "ggr_user_watchlist",
+      "ggr_custom_navigation",
       "ggr_system_settings",
-      "ggr_platform_links",
-      "ggr_game_platform_links",
-      "ggr_custom_navigation"
+      "ggr_user_analytics",
+      "ggr_audit_log",
+      "ggr_system_events"
     ];
 
     for (const table of tables) {

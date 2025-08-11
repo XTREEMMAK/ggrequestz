@@ -110,7 +110,69 @@ async function runMigrations() {
     }
   }
   
-  // Check if new migration manager exists, fallback to old script
+  // Check if database schema exists by testing for ggr_users table
+  console.log('🔍 Checking if database schema exists...');
+  let schemaExists = false;
+  
+  try {
+    await runCommand('node', ['-e', `
+      const { Client } = require('pg');
+      
+      const client = new Client({
+        host: process.env.POSTGRES_HOST || 'localhost',
+        port: process.env.POSTGRES_PORT || 5432,
+        database: process.env.POSTGRES_DB || 'postgres',
+        user: process.env.POSTGRES_USER || 'postgres',
+        password: process.env.POSTGRES_PASSWORD
+      });
+      
+      client.connect()
+        .then(() => client.query("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'ggr_users')"))
+        .then((result) => {
+          if (result.rows[0].exists) {
+            console.log('Schema exists - will run migrations');
+            process.exit(0);
+          } else {
+            console.log('Schema missing - will initialize database');
+            process.exit(1);
+          }
+        })
+        .catch((err) => {
+          console.error('Schema check failed:', err.message);
+          process.exit(2);
+        })
+        .finally(() => client.end());
+    `]);
+    
+    schemaExists = true;
+  } catch (error) {
+    // Exit code 1 means schema doesn't exist, exit code 2 means check failed
+    if (error.message.includes('code 1')) {
+      schemaExists = false;
+    } else {
+      console.error('❌ Failed to check database schema:', error.message);
+      process.exit(1);
+    }
+  }
+  
+  if (!schemaExists) {
+    // Fresh install - use init-database.js
+    console.log('🆕 Fresh database detected, initializing schema...');
+    try {
+      await runCommand('node', ['scripts/init-database.js', 'init']);
+      console.log('✅ Database initialization completed successfully');
+      return;
+    } catch (error) {
+      console.error('❌ Database initialization failed:', error.message);
+      console.error('❌ Stopping startup due to initialization failure');
+      process.exit(1);
+    }
+  }
+  
+  // Existing database - run migrations
+  console.log('📅 Existing database detected, checking for migrations...');
+  
+  // Check if migration manager exists, fallback to old script
   const migrationScript = existsSync('./scripts/migration-manager.js') 
     ? 'scripts/migration-manager.js'
     : existsSync('./scripts/run-migrations.js') 

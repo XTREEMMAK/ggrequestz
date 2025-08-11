@@ -2,7 +2,7 @@
   <img src="static/GGR_Logo.webp" alt="G.G Requestz Logo" width="400">
 </p>
 
-# 🎮 GameRequest - Game Discovery & Request Platform
+# 🎮 G.G Requestz - Game Discovery & Request Platform
 
 A comprehensive game discovery and request application built with **SvelteKit 5**, featuring intelligent search, user authentication, and automated workflows.
 
@@ -65,7 +65,6 @@ A comprehensive game discovery and request application built with **SvelteKit 5*
 ### **Integration**
 
 - **Gotify**: Self-hosted notification server
-- **n8n**: Workflow automation platform
 - **Webhooks**: Event-driven architecture for real-time updates
 
 ## 🚀 Quick Start

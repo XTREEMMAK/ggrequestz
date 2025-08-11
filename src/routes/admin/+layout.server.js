@@ -77,7 +77,6 @@ export async function load({ parent }) {
       };
       
     } else {
-      
       // Handle Authentik users - query the ggr_users table including is_admin flag
       userResult = await query(
         "SELECT id, is_admin FROM ggr_users WHERE authentik_sub = $1 AND is_active = TRUE",

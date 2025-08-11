@@ -523,7 +523,7 @@
                     {request.user_name}
                   </p>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
-                    ID: {request.user_id.slice(0, 8)}...
+                    ID: {String(request.user_id)}
                   </p>
                 </td>
                 
