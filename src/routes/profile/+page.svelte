@@ -8,7 +8,7 @@
   import StatusBadge from '../../components/StatusBadge.svelte';
   import LoadingSpinner from '../../components/LoadingSpinner.svelte';
   import { formatDate } from '$lib/utils.js';
-  import { removeFromWatchlist, igdbRequest } from '$lib/api.client.js';
+  import { removeFromWatchlist, igdbRequest, rescindRequest } from '$lib/api.client.js';
   
   let { data } = $props();
   
@@ -70,14 +70,14 @@
     }
   }
   
-  async function removeFromWatchlistHandler(watchlistId) {
+  async function removeFromWatchlistHandler(igdbId) {
     loading = true;
     try {
-      const result = await removeFromWatchlist(watchlistId);
+      const result = await removeFromWatchlist(igdbId);
       
       if (result.success) {
         // Remove from local list
-        userWatchlist = userWatchlist.filter(item => item.id !== watchlistId);
+        userWatchlist = userWatchlist.filter(item => item.igdb_id !== igdbId);
       } else {
         throw new Error(result.error || 'Failed to remove from watchlist');
       }
@@ -95,12 +95,39 @@
   
   function handleWatchlistRemove({ detail }) {
     if (confirm('Are you sure you want to remove this game from your watchlist?')) {
-      removeFromWatchlistHandler(detail.game.id);
+      removeFromWatchlistHandler(detail.game.igdb_id);
     }
   }
   
   function handleViewDetails({ detail }) {
     goto(`/game/${detail.game.igdb_id || detail.game.id}`);
+  }
+
+  async function handleRescindRequest(request) {
+    if (!confirm(`Are you sure you want to remove your request for "${request.title}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    loading = true;
+    try {
+      const result = await rescindRequest(request.id);
+      
+      if (result.success) {
+        // Update local state
+        userRequests = userRequests.map(req => 
+          req.id === request.id 
+            ? { ...req, status: 'cancelled', updated_at: result.request.updated_at }
+            : req
+        );
+      } else {
+        throw new Error(result.error || 'Failed to remove request');
+      }
+    } catch (error) {
+      console.error('Remove request error:', error);
+      alert('Failed to remove request. Please try again.');
+    } finally {
+      loading = false;
+    }
   }
   
   function getRequestStatusColor(status) {
@@ -108,7 +135,8 @@
       'pending': 'text-yellow-600',
       'approved': 'text-blue-600', 
       'fulfilled': 'text-green-600',
-      'rejected': 'text-red-600'
+      'rejected': 'text-red-600',
+      'cancelled': 'text-gray-600'
     };
     return colorMap[status] || 'text-gray-600';
   }
@@ -317,9 +345,21 @@
                       {/if}
                     </div>
                     
-                    <!-- Priority Badge -->
-                    {#if request.priority && request.priority !== 'medium'}
-                      <div class="ml-4">
+                    <!-- Actions and Priority Badge -->
+                    <div class="ml-4 flex flex-col items-end gap-2">
+                      <!-- Rescind Button -->
+                      {#if ['pending', 'approved'].includes(request.status)}
+                        <button
+                          onclick={() => handleRescindRequest(request)}
+                          class="text-xs px-3 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900 dark:hover:bg-red-800 text-red-700 dark:text-red-300 rounded-md transition-colors font-medium"
+                          disabled={loading}
+                        >
+                          Remove Request
+                        </button>
+                      {/if}
+
+                      <!-- Priority Badge -->
+                      {#if request.priority && request.priority !== 'medium'}
                         <span class="text-xs font-medium px-2 py-1 rounded-full"
                               class:bg-red-100={request.priority === 'high'}
                               class:text-red-800={request.priority === 'high'}
@@ -332,8 +372,8 @@
                         >
                           {request.priority} priority
                         </span>
-                      </div>
-                    {/if}
+                      {/if}
+                    </div>
                   </div>
                   </div>
               {/each}

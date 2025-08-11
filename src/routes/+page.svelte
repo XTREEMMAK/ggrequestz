@@ -14,6 +14,7 @@
   import { beforeNavigate, afterNavigate } from '$app/navigation';
   import { browser } from '$app/environment';
   import { onMount, onDestroy } from 'svelte';
+  import { addToWatchlist, removeFromWatchlist } from '$lib/api.client.js';
   
   let { data } = $props();
   
@@ -22,6 +23,7 @@
   let newReleases = $state(data?.newReleases || []);
   let popularGames = $state(data?.popularGames || []);
   let recentRequests = $derived(data?.recentRequests || []);
+  let userWatchlist = $state(data?.userWatchlist || []);
   let rommAvailable = $derived(data?.rommAvailable || false);
   let genres = $state(data?.genres || []);
   let publishers = $state(data?.publishers || []);
@@ -32,6 +34,12 @@
   let loadingROMMs = $state(false);
   let loadingNewReleases = $state(false);
   let loadingPopular = $state(false);
+
+  // Helper function to check if game is in watchlist
+  function isGameInWatchlist(game) {
+    const gameId = game.igdb_id || game.id;
+    return userWatchlist.some(w => w.igdb_id === gameId);
+  }
   
   // Pagination tracking
   let newInLibraryPage = $state(1);
@@ -192,12 +200,47 @@
     goto(`/request?game=${detail.game.igdb_id || detail.game.id}`);
   }
   
-  function handleWatchlist({ detail }) {
+  async function handleWatchlist({ detail }) {
     if (!user) {
       goto('/api/auth/login');
       return;
     }
-    // This would typically make an API call to add/remove from watchlist
+
+    const game = detail.game;
+    const gameId = game.igdb_id || game.id;
+    const isCurrentlyInWatchlist = userWatchlist.some(w => w.igdb_id === gameId);
+
+    try {
+      if (isCurrentlyInWatchlist) {
+        // Remove from watchlist
+        const result = await removeFromWatchlist(gameId);
+        if (result.success) {
+          userWatchlist = userWatchlist.filter(w => w.igdb_id !== gameId);
+        } else {
+          throw new Error(result.error || 'Failed to remove from watchlist');
+        }
+      } else {
+        // Add to watchlist
+        const gameData = {
+          title: game.title,
+          cover_url: game.cover_url,
+          platforms: game.platforms,
+          genres: game.genres,
+          rating: game.rating,
+          release_date: game.release_date
+        };
+        
+        const result = await addToWatchlist(gameId, gameData);
+        if (result.success) {
+          userWatchlist = [...userWatchlist, { ...gameData, igdb_id: gameId }];
+        } else {
+          throw new Error(result.error || 'Failed to add to watchlist');
+        }
+      }
+    } catch (error) {
+      console.error('Watchlist error:', error);
+      alert('Failed to update watchlist. Please try again.');
+    }
   }
   
   function handleViewDetails({ detail }) {
@@ -555,7 +598,7 @@
                 <GameCard 
                   {game} 
                   {user}
-                  isInWatchlist={false}
+                  isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                   on:view-details={handleViewDetails}
@@ -576,7 +619,7 @@
                 <GameCard 
                   {game} 
                   {user}
-                  isInWatchlist={false}
+                  isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                   on:view-details={handleViewDetails}
@@ -654,7 +697,7 @@
                 <GameCard 
                   {game} 
                   {user}
-                  isInWatchlist={false}
+                  isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                   on:view-details={handleViewDetails}
@@ -675,7 +718,7 @@
                 <GameCard 
                   {game} 
                   {user}
-                  isInWatchlist={false}
+                  isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                   on:view-details={handleViewDetails}

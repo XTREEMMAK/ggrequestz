@@ -402,7 +402,7 @@ export async function isGameInWatchlist(userId, igdbId) {
 export async function getUserRequests(userId) {
   try {
     const result = await query(
-      "SELECT * FROM ggr_game_requests WHERE user_id = $1 ORDER BY created_at DESC",
+      "SELECT * FROM ggr_game_requests WHERE user_id = $1 AND status != 'cancelled' ORDER BY created_at DESC",
       [userId.toString()],
     );
 

@@ -40,6 +40,7 @@
   "dependencies": {
     "@iconify/svelte": "^5.0.1",
     "bcrypt": "^5.1.1",
+    "canvas-confetti": "^1.9.3",
     "cookie": "^0.6.0",
     "dotenv": "^17.2.1",
     "jose": "^5.10.0",

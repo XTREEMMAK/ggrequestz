@@ -4,6 +4,7 @@
 
 <script>
   import RequestForm from '../../components/RequestForm.svelte';
+  import { requestSubmittedConfetti } from '$lib/confetti.js';
   
   let { data } = $props();
   
@@ -12,6 +13,9 @@
   
   function handleRequestSuccess({ detail }) {
     // Handle successful request submission
+    
+    // Trigger celebration confetti
+    requestSubmittedConfetti();
     
     // Could add analytics tracking here
     if (user) {

@@ -16,6 +16,9 @@
   let releaseDate = $derived(game.release_date ? formatDate(game.release_date) : null);
   let gameStatus = $derived(getGameStatus(game));
   
+  // Ghost click effect state
+  let isClicked = $state(false);
+  
   function getGameStatus(game) {
     if (game.status) return game.status;
     if (game.popularity > 80) return 'popular';
@@ -34,11 +37,20 @@
   }
   
   function handleViewDetails() {
+    triggerGhostClick();
     dispatch('view-details', { game });
   }
   
   function handleShowModal() {
+    triggerGhostClick();
     dispatch('show-modal', { game });
+  }
+  
+  function triggerGhostClick() {
+    isClicked = true;
+    setTimeout(() => {
+      isClicked = false;
+    }, 300);
   }
   
   // Check if game has additional screenshots (more than just cover)
@@ -176,7 +188,7 @@
 </script>
 
 <div 
-  class="poster-card group relative rounded-xl overflow-hidden cursor-pointer aspect-[2/3] bg-gray-800 w-full"
+  class="poster-card group relative rounded-xl overflow-hidden cursor-pointer aspect-[2/3] bg-gray-800 w-full {isClicked ? 'ghost-click' : ''}"
   onclick={() => handleViewDetails()}
   onmouseenter={() => handleMouseEnter()}
   onmouseleave={() => handleMouseLeave()}
@@ -249,8 +261,31 @@
       {/if}
     </div>
     
-    <!-- Watchlist indicator -->
-    {#if isInWatchlist}
+    <!-- Watchlist actions -->
+    {#if showActions && showWatchlist}
+      <div class="absolute bottom-2 right-2 flex gap-2">
+        {#if isInWatchlist}
+          <!-- Remove from watchlist button -->
+          <button
+            onclick={(e) => { e.stopPropagation(); handleWatchlist(); }}
+            class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors opacity-90 hover:opacity-100"
+            title="Remove from watchlist"
+          >
+            <Icon icon="heroicons:heart-solid" class="w-4 h-4" />
+          </button>
+        {:else}
+          <!-- Add to watchlist button -->
+          <button
+            onclick={(e) => { e.stopPropagation(); handleWatchlist(); }}
+            class="bg-gray-800 bg-opacity-70 hover:bg-green-600 text-white p-2 rounded-full transition-all opacity-90 hover:opacity-100"
+            title="Add to watchlist"
+          >
+            <Icon icon="heroicons:heart" class="w-4 h-4" />
+          </button>
+        {/if}
+      </div>
+    {:else if isInWatchlist}
+      <!-- Just the indicator when actions are disabled -->
       <div class="absolute bottom-2 right-2">
         <div class="bg-green-600 text-white p-1 rounded-full">
           <Icon icon="heroicons:heart-solid" class="w-4 h-4" />

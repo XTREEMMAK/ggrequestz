@@ -4,14 +4,16 @@
  */
 
 import {
-  ROMM_SERVER_URL as ROMM_SERVER_URL_RAW,
-  ROMM_USERNAME,
-  ROMM_PASSWORD,
+  ROMM_SERVER_URL as ENV_ROMM_SERVER_URL,
+  ROMM_USERNAME as ENV_ROMM_USERNAME,
+  ROMM_PASSWORD as ENV_ROMM_PASSWORD,
 } from "$env/static/private";
 import { getGameById } from "./gameCache.js";
 
-// Environment variables for ROMM configuration - no fallbacks
-const ROMM_SERVER_URL = ROMM_SERVER_URL_RAW;
+// Hybrid approach: use SvelteKit env vars first, fall back to process.env for Docker
+const ROMM_SERVER_URL = ENV_ROMM_SERVER_URL || process.env.ROMM_SERVER_URL;
+const ROMM_USERNAME = ENV_ROMM_USERNAME || process.env.ROMM_USERNAME;
+const ROMM_PASSWORD = ENV_ROMM_PASSWORD || process.env.ROMM_PASSWORD;
 
 // Session token storage for authenticated requests
 let sessionToken = null;

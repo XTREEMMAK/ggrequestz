@@ -3,7 +3,7 @@
  */
 
 import { getRecentGames, getPopularGames, warmUpCache } from "$lib/gameCache.js";
-import { gameRequests } from "$lib/database.js";
+import { gameRequests, watchlist } from "$lib/database.js";
 import {
   getRecentlyAddedROMs,
   isRommAvailable,
@@ -55,6 +55,7 @@ export async function load({ parent, cookies, url }) {
       newReleases,
       popularGames,
       recentRequests,
+      userWatchlist,
     ] = await Promise.all([
       // Get top 16 newest ROMs from ROMM library (with caching)
       rommAvailable
@@ -94,6 +95,12 @@ export async function load({ parent, cookies, url }) {
         console.error("Error loading recent requests:", err);
         return [];
       }),
+
+      // Get user's watchlist
+      watchlist.get(user.sub).catch((err) => {
+        console.error("Error loading user watchlist:", err);
+        return [];
+      }),
     ]);
 
 
@@ -110,6 +117,7 @@ export async function load({ parent, cookies, url }) {
       newReleases,
       popularGames,
       recentRequests,
+      userWatchlist,
       rommAvailable,
       loading: false,
     };
@@ -121,6 +129,7 @@ export async function load({ parent, cookies, url }) {
       newReleases: [],
       popularGames: [],
       recentRequests: [],
+      userWatchlist: [],
       rommAvailable: false,
       loading: false,
       error: error.message,

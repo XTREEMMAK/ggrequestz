@@ -7,7 +7,7 @@ import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
-import { sendRequestStatusNotification } from "$lib/gotify.js";
+import { sendRequestStatusNotification, sendRequestCancelledDeletedNotification } from "$lib/gotify.js";
 import { invalidateCache } from "$lib/cache.js";
 
 export async function POST({ request, cookies }) {
@@ -184,17 +184,33 @@ export async function POST({ request, cookies }) {
 
     // Send Gotify notification for status change (asynchronously)
     if (oldStatus !== status) {
-      sendRequestStatusNotification({
-        id: updatedRequest.id,
-        title: requestTitle,
-        old_status: oldStatus,
-        new_status: status,
-        user_name: requestUserName,
-        admin_notes: admin_notes,
-      }).catch((error) => {
-        console.warn('Failed to send Gotify status notification:', error);
-        // Don't fail the request if notification fails
-      });
+      if (status === 'cancelled') {
+        // Use specific notification function for cancelled requests
+        sendRequestCancelledDeletedNotification({
+          id: updatedRequest.id,
+          title: requestTitle,
+          user_name: requestUserName,
+          action: 'cancelled',
+          reason: admin_notes || '',
+          admin_name: user.name || user.email,
+        }).catch((error) => {
+          console.warn('Failed to send Gotify cancellation notification:', error);
+          // Don't fail the request if notification fails
+        });
+      } else {
+        // Use general status notification for other status changes
+        sendRequestStatusNotification({
+          id: updatedRequest.id,
+          title: requestTitle,
+          old_status: oldStatus,
+          new_status: status,
+          user_name: requestUserName,
+          admin_notes: admin_notes,
+        }).catch((error) => {
+          console.warn('Failed to send Gotify status notification:', error);
+          // Don't fail the request if notification fails
+        });
+      }
     }
     console.log(
       `✅ Request ${request_id} updated to ${status} by admin ${user.name || user.email}`,

@@ -411,6 +411,9 @@
                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
               </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Cover
+              </th>
               <th class="px-6 py-3 text-left">
                 <button
                   type="button"
@@ -491,6 +494,30 @@
                     onchange={() => toggleRequestSelection(request.id)}
                     class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
+                </td>
+                
+                <td class="px-6 py-4">
+                  <div class="w-16 h-20">
+                    {#if request.cover_url}
+                      <img
+                        src={request.cover_url}
+                        alt="{request.title} cover"
+                        class="w-full h-full object-cover rounded-lg shadow-sm bg-gray-200 dark:bg-gray-700"
+                        loading="lazy"
+                        onerror={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling.style.display = 'flex';
+                        }}
+                      />
+                      <div class="w-full h-full hidden items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <Icon icon="heroicons:photo" class="w-6 h-6 text-gray-400" />
+                      </div>
+                    {:else}
+                      <div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <Icon icon="heroicons:photo" class="w-6 h-6 text-gray-400" />
+                      </div>
+                    {/if}
+                  </div>
                 </td>
                 
                 <td class="px-6 py-4">
@@ -750,3 +777,4 @@
     </div>
   </div>
 {/if}
+

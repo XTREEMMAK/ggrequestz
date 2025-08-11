@@ -8,6 +8,7 @@ import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
+import { sendRequestCancelledDeletedNotification } from "$lib/gotify.js";
 import { invalidateCache } from "$lib/cache.js";
 
 export async function DELETE({ request, cookies }) {
@@ -132,8 +133,19 @@ console.log(
       `✅ Successfully deleted ${deletedCount} request(s) by ${user.name || user.email}`,
     );
 
-    // Detailed logging of deleted requests
+    // Send Gotify notifications for deleted requests (asynchronously)
     requestsToDelete.rows.forEach((req) => {
+      sendRequestCancelledDeletedNotification({
+        id: req.id,
+        title: req.title,
+        user_name: req.user_name,
+        action: 'deleted',
+        reason: reason || '',
+        admin_name: user.name || user.email,
+      }).catch((error) => {
+        console.warn(`Failed to send Gotify deletion notification for request ${req.id}:`, error);
+        // Don't fail the request if notification fails
+      });
     });
 
     // Invalidate cache for affected users and general request caches

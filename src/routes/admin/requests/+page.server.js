@@ -95,7 +95,7 @@ export async function load({ url, parent }) {
     const requestsQuery = `
       SELECT 
         id, title, user_id, user_name, status, request_type, priority,
-        description, reason, platforms, admin_notes,
+        description, reason, platforms, admin_notes, igdb_id,
         created_at, updated_at
       FROM ggr_game_requests 
       ${whereClause}
@@ -106,12 +106,36 @@ export async function load({ url, parent }) {
     queryParams.push(limit, offset);
     const requestsResult = await query(requestsQuery, queryParams);
 
+    // Fetch cover URLs from games cache for requests with igdb_id
+    const igdbIds = requestsResult.rows
+      .filter(row => row.igdb_id)
+      .map(row => row.igdb_id);
+    
+    let gameCovers = {};
+    if (igdbIds.length > 0) {
+      try {
+        const coverQuery = `
+          SELECT igdb_id, cover_url 
+          FROM ggr_games_cache 
+          WHERE igdb_id = ANY($1)
+        `;
+        const coverResult = await query(coverQuery, [igdbIds]);
+        gameCovers = coverResult.rows.reduce((acc, row) => {
+          acc[row.igdb_id] = row.cover_url;
+          return acc;
+        }, {});
+      } catch (error) {
+        console.error('Error fetching game covers:', error);
+      }
+    }
+
     const requests = requestsResult.rows.map((row) => ({
       ...row,
       platforms:
         typeof row.platforms === "string"
           ? JSON.parse(row.platforms)
           : row.platforms || [],
+      cover_url: row.igdb_id ? gameCovers[row.igdb_id] : null,
     }));
 
     return {

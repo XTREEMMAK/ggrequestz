@@ -5,6 +5,7 @@
 import { json, error } from "@sveltejs/kit";
 import { requireAuth } from "$lib/auth.js";
 import { watchlist } from "$lib/database.js";
+import { query } from "$lib/database.js";
 
 export async function POST({ request }) {
   try {
@@ -14,6 +15,31 @@ export async function POST({ request }) {
       throw error(401, "Authentication required");
     }
 
+    // Get user's local database ID 
+    let userResult;
+    let localUserId;
+    
+    if (user.sub?.startsWith('basic_auth_')) {
+      // For basic auth, extract ID from the user.sub format: basic_auth_123
+      const basicAuthId = user.sub.replace('basic_auth_', '');
+      userResult = await query(
+        "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
+        [parseInt(basicAuthId)]
+      );
+    } else {
+      // For Authentik users
+      userResult = await query(
+        "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+        [user.sub]
+      );
+    }
+
+    if (userResult.rows.length === 0) {
+      throw error(404, "User not found in database");
+    }
+    
+    localUserId = userResult.rows[0].id;
+
     // Parse request data
     const { game_id, game_data } = await request.json();
 
@@ -22,7 +48,7 @@ export async function POST({ request }) {
     }
 
     // Check if already in watchlist
-    const alreadyExists = await watchlist.contains(user.sub, game_id);
+    const alreadyExists = await watchlist.contains(localUserId, game_id);
     if (alreadyExists) {
       return json(
         {
@@ -34,7 +60,7 @@ export async function POST({ request }) {
     }
 
     // Add to watchlist
-    const watchlistItem = await watchlist.add(user.sub, game_id);
+    const watchlistItem = await watchlist.add(localUserId, game_id);
 
     return json({
       success: true,

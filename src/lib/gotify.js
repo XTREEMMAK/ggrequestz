@@ -4,6 +4,14 @@
  */
 
 import { query } from "$lib/database.js";
+import {
+  GOTIFY_URL as ENV_GOTIFY_URL,
+  GOTIFY_TOKEN as ENV_GOTIFY_TOKEN,
+} from "$env/static/private";
+
+// Hybrid approach: use SvelteKit env vars first, fall back to process.env for Docker
+const GOTIFY_URL = ENV_GOTIFY_URL || process.env.GOTIFY_URL || process.env.VITE_GOTIFY_URL;
+const GOTIFY_TOKEN = ENV_GOTIFY_TOKEN || process.env.GOTIFY_TOKEN || process.env.VITE_GOTIFY_TOKEN;
 
 /**
  * Send a notification via Gotify
@@ -27,9 +35,9 @@ export async function sendGotifyNotification({
     let gotifyToken = null;
 
     // First, check environment variables (highest priority)
-    if (import.meta.env.VITE_GOTIFY_URL && import.meta.env.VITE_GOTIFY_TOKEN) {
-      gotifyUrl = import.meta.env.VITE_GOTIFY_URL;
-      gotifyToken = import.meta.env.VITE_GOTIFY_TOKEN;
+    if (GOTIFY_URL && GOTIFY_TOKEN) {
+      gotifyUrl = GOTIFY_URL;
+      gotifyToken = GOTIFY_TOKEN;
     } else {
       // Fallback to database settings
       
@@ -347,6 +355,66 @@ export async function sendAdminActionNotification({
         title,
         admin_name,
         ...extras,
+      },
+    },
+  });
+}
+
+/**
+ * Send a notification specifically for cancelled/deleted requests
+ * @param {Object} request - Request data
+ * @param {string} request.id - Request ID  
+ * @param {string} request.title - Game title
+ * @param {string} request.user_name - User who submitted the request
+ * @param {string} request.action - Action type ('cancelled' or 'deleted')
+ * @param {string} [request.reason] - Reason for cancellation/deletion
+ * @param {string} [request.admin_name] - Name of admin who performed action
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function sendRequestCancelledDeletedNotification({
+  id,
+  title,
+  user_name,
+  action, // 'cancelled' or 'deleted'
+  reason = "",
+  admin_name = "Admin",
+}) {
+  const actionEmoji = action === 'deleted' ? "🗑️" : "🚫";
+  const actionLabel = action === 'deleted' ? "Deleted" : "Cancelled";
+  
+  const notificationTitle = `${actionEmoji} Request ${actionLabel}`;
+
+  const messageLines = [
+    `**Game:** ${title}`,
+    `**User:** ${user_name}`,
+    `**Action:** Request has been ${action}`,
+  ];
+
+  if (reason && reason.trim()) {
+    messageLines.push(`**Reason:** ${reason.trim()}`);
+  }
+
+  messageLines.push(`**Admin:** ${admin_name}`);
+  messageLines.push(`**Request ID:** ${id}`);
+
+  const message = messageLines.join("\n");
+
+  // Higher priority for deletions, medium for cancellations
+  const gotifyPriority = action === 'deleted' ? 6 : 4;
+
+  return await sendGotifyNotification({
+    title: notificationTitle,
+    message,
+    priority: gotifyPriority,
+    type: 'admin_actions',
+    extras: {
+      "request_cancelled_deleted": {
+        id,
+        title,
+        user_name,
+        action,
+        reason,
+        admin_name,
       },
     },
   });

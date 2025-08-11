@@ -15,7 +15,9 @@
       'popular': 'status-popular',
       'fulfilled': 'status-fulfilled',
       'pending': 'status-pending',
-      'approved': 'status-approved'
+      'approved': 'status-approved',
+      'rejected': 'status-rejected',
+      'cancelled': 'status-cancelled'
     };
     
     return statusMap[status.toLowerCase()] || 'status-pending';

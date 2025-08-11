@@ -141,3 +141,22 @@ export async function sendNotification(notificationData) {
 
   return response.json();
 }
+
+/**
+ * Rescind (withdraw) a game request
+ * @param {number} requestId - Request ID
+ * @returns {Promise<Object>} - Response
+ */
+export async function rescindRequest(requestId) {
+  const response = await fetch("/api/request/rescind", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      request_id: requestId,
+    }),
+  });
+
+  return response.json();
+}

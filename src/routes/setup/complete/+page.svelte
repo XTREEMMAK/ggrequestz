@@ -7,6 +7,7 @@
   import { goto } from '$app/navigation';
   import { invalidateAll } from '$app/navigation';
   import Icon from '@iconify/svelte';
+  import { setupCompleteConfetti } from '$lib/confetti.js';
 
   let { data } = $props();
   let backgroundImage = $state('');
@@ -41,6 +42,11 @@
     } catch (error) {
       imageLoaded = true;
     }
+
+    // Trigger celebration confetti after a short delay
+    setTimeout(() => {
+      setupCompleteConfetti();
+    }, 500);
   });
 
   async function goToLogin() {

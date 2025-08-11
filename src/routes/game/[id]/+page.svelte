@@ -4,6 +4,7 @@
 
 <script>
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import PlatformIcons from '../../../components/PlatformIcons.svelte';
   import StatusBadge from '../../../components/StatusBadge.svelte';
   import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
@@ -36,6 +37,32 @@
   
   let truncatedSummary = $derived(game?.summary ? truncateText(game.summary, 300) : '');
   let showExpandButton = $derived(game?.summary && game.summary.length > 300);
+  
+  function handleBack() {
+    if (browser) {
+      // Store the current page to avoid infinite loops
+      const currentPath = window.location.pathname;
+      
+      // Check if we can go back
+      if (window.history.length > 1) {
+        // First try to go back
+        window.history.back();
+        
+        // Fallback: if history.back() doesn't work within 100ms, redirect to search
+        setTimeout(() => {
+          if (window.location.pathname === currentPath) {
+            goto('/search');
+          }
+        }, 100);
+      } else {
+        // No history available, go to search
+        goto('/search');
+      }
+    } else {
+      // Not in browser, fallback to search
+      goto('/search');
+    }
+  }
   
   async function toggleWatchlist() {
     if (!user) {
@@ -162,6 +189,19 @@
   
   <!-- Main content -->
   <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Back Button -->
+    <button
+      onclick={handleBack}
+      class="back-button-enhanced flex items-center gap-3 mb-6 group overflow-hidden relative"
+    >
+      <svg class="w-5 h-5 transition-transform group-hover:-translate-x-1 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      <span class="text-sm font-medium relative z-10">Back</span>
+      <!-- Shine effect overlay -->
+      <div class="shine-overlay absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+    </button>
+    
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <!-- Left Column - Game Images -->
       <div class="lg:col-span-1">

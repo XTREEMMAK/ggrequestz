@@ -8,7 +8,7 @@
   import LoadingSpinner from './LoadingSpinner.svelte';
   import { debounce } from '$lib/utils.js';
   import { igdbRequest, submitGameRequest } from '$lib/api.client.js';
-  import { fade } from 'svelte/transition';
+  import { fade, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Icon from '@iconify/svelte';
   
@@ -20,6 +20,10 @@
   let loading = $state(false);
   let submitError = $state('');
   let submitSuccess = $state(false);
+  
+  // Auto-hide timers for messages
+  let successTimer = $state(null);
+  let errorTimer = $state(null);
   
   // Form data - using $state for reactivity
   let gameRequestForm = $state({
@@ -83,10 +87,56 @@
     { value: 'other', label: 'Other Issue' }
   ];
   
+  // Auto-hide message functions
+  function setSuccessMessage(show = true) {
+    submitSuccess = show;
+    if (show) {
+      // Clear any existing timer
+      if (successTimer) {
+        clearTimeout(successTimer);
+      }
+      // Set 7-second auto-hide timer
+      successTimer = setTimeout(() => {
+        submitSuccess = false;
+        successTimer = null;
+      }, 7000);
+    }
+  }
+  
+  function setErrorMessage(message = '') {
+    submitError = message;
+    if (message) {
+      // Clear any existing timer
+      if (errorTimer) {
+        clearTimeout(errorTimer);
+      }
+      // Set 7-second auto-hide timer
+      errorTimer = setTimeout(() => {
+        submitError = '';
+        errorTimer = null;
+      }, 7000);
+    }
+  }
+  
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function switchTab(tabId) {
     activeTab = tabId;
     submitError = '';
     submitSuccess = false;
+    
+    // Clear any active timers
+    if (successTimer) {
+      clearTimeout(successTimer);
+      successTimer = null;
+    }
+    if (errorTimer) {
+      clearTimeout(errorTimer);
+      errorTimer = null;
+    }
+    
     // Clear selected game background when switching away from game tab
     if (tabId !== 'game') {
       selectedGame = null;
@@ -139,7 +189,7 @@
   
   async function submitRequest() {
     if (!user) {
-      submitError = 'You must be logged in to submit a request.';
+      setErrorMessage('You must be logged in to submit a request.');
       return;
     }
     
@@ -202,7 +252,10 @@
       const result = await submitGameRequest(requestData);
       
       if (result.success) {
-        submitSuccess = true;
+        // Scroll to top first
+        scrollToTop();
+        // Then show success message with auto-hide
+        setSuccessMessage(true);
         resetForm();
         dispatch('success', { request: result.request });
       } else {
@@ -211,7 +264,7 @@
       
     } catch (error) {
       console.error('Submit error:', error);
-      submitError = error.message;
+      setErrorMessage(error.message);
     } finally {
       loading = false;
     }
@@ -283,7 +336,10 @@
   
   <!-- Success Message -->
   {#if submitSuccess}
-    <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-lg p-4 mb-6">
+    <div 
+      class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-lg p-4 mb-6"
+      transition:scale={{ duration: 200, easing: cubicOut }}
+    >
       <div class="flex">
         <Icon icon="heroicons:check-circle-solid" class="w-5 h-5 text-green-400 mt-0.5 mr-3" />
         <div>
@@ -300,7 +356,10 @@
   
   <!-- Error Message -->
   {#if submitError}
-    <div class="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-lg p-4 mb-6">
+    <div 
+      class="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-lg p-4 mb-6"
+      transition:scale={{ duration: 200, easing: cubicOut }}
+    >
       <div class="flex">
         <Icon icon="heroicons:x-circle-solid" class="w-5 h-5 text-red-400 mt-0.5 mr-3" />
         <div>

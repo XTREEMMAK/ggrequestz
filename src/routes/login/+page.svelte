@@ -83,8 +83,8 @@
 </script>
 
 <svelte:head>
-  <title>Login - GameRequest</title>
-  <meta name="description" content="Login to GameRequest - Game Discovery & Request Platform" />
+  <title>Login - G.G Requestz</title>
+  <meta name="description" content="Login to G.G Requestz - Game Discovery & Request Platform" />
 </svelte:head>
 
 <!-- Background Image -->
@@ -123,7 +123,7 @@
             class="w-full h-full object-contain"
           />
         </div>
-        <h1 class="text-3xl font-bold text-white mb-2">GameRequest</h1>
+        <h1 class="text-3xl font-bold text-white mb-2">G.G Requestz</h1>
         <p class="text-blue-100/80 text-sm">Game Discovery & Request Platform</p>
       </div>
       

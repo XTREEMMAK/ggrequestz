@@ -53,6 +53,60 @@ body {
   @apply bg-indigo-600 text-white border-indigo-500;
 }
 
+.status-rejected {
+  @apply bg-red-600 text-white border-red-500;
+}
+
+.status-cancelled {
+  @apply bg-gray-500 text-white border-gray-400;
+}
+
+/* Enhanced back button with shine effect */
+.back-button-enhanced {
+  background: rgba(17, 24, 39, 0.9);
+  border: 1px solid rgba(75, 85, 99, 0.6);
+  backdrop-filter: blur(12px);
+  border-radius: 50px;
+  padding: 12px 20px;
+  color: rgb(209, 213, 219);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.back-button-enhanced:hover {
+  background: rgba(17, 24, 39, 0.95);
+  border-color: rgba(156, 163, 175, 0.8);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Shine effect animation */
+.shine-overlay {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent
+  );
+  background-size: 200% 100%;
+  background-position: -200% 0;
+  animation: none;
+}
+
+.back-button-enhanced:hover .shine-overlay {
+  animation: shine 0.6s ease-out;
+}
+
+@keyframes shine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
 /* Poster card hover effects - Overseerr style */
 .poster-card {
   @apply transition-all duration-200 ease-in-out;
@@ -72,6 +126,27 @@ body {
 .game-card:hover {
   @apply transform scale-105;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+/* Ghost scale effect for game card clicks */
+.ghost-click {
+  animation: ghostClick 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ghostClick {
+  0% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
+  50% { 
+    transform: scale(0.95); 
+    opacity: 0.8; 
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  100% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
 }
 
 /* Loading spinner animation */
