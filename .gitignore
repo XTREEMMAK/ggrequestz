@@ -19,6 +19,7 @@ dist/
 .env*
 !.env.example
 !.env.test
+!.env.docker-build
 .env.local
 .env.development
 .env.production
