@@ -1,11 +1,40 @@
 # Changelog
 
-All notable changes to GameRequest will be documented in this file.
+All notable changes to GG Requestz will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2025-01-13
+
+### Added
+- **Performance Optimizations**
+  - Hover preloading for instant navigation (200ms+ improvement)
+  - Server-side cache warming on startup
+  - Progressive data loading with prioritization
+  - Custom hover preloading for Load More buttons
+  - Session-based preload caching
+  - Smart timeout protection with graceful fallbacks
+
+- **Authentication Enhancements**
+  - Generic OIDC provider support (not Authentik-specific)
+  - Support for Keycloak, Auth0, Okta, Azure AD
+  - Provider registry system with lazy loading
+  - Basic auth with bcrypt password hashing
+
+### Changed
+- Converted GameCard components to use direct links for native preloading
+- Optimized homepage data fetching with parallel loading
+- Improved error handling with timeout protection
+- Updated hooks for proper header mutability
+
+### Fixed
+- Search input focus loss issues
+- Headers immutability errors in hooks.server.js
+- Missing variable references in preloaders
+- ROMM cross-reference API errors
+
+## [0.9.0] - 2024-12-15
 
 ### Added
 - Multi-page first-run setup wizard with system checks
