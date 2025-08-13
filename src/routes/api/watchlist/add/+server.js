@@ -41,14 +41,28 @@ export async function POST({ request }) {
     localUserId = userResult.rows[0].id;
 
     // Parse request data
-    const { game_id, game_data } = await request.json();
+    const body = await request.json();
+    const { game_id, game_data } = body;
 
-    if (!game_id || !game_data) {
-      throw error(400, "Missing game_id or game_data");
+    // Enhanced validation for game_id
+    if (!game_id && game_id !== 0) {
+      console.error('Watchlist add - missing game_id:', { body, game_id });
+      throw error(400, "Missing game_id");
+    }
+
+    if (!game_data) {
+      throw error(400, "Missing game_data");
+    }
+
+    // Ensure game_id is numeric
+    const numericGameId = parseInt(game_id);
+    if (isNaN(numericGameId)) {
+      console.error('Watchlist add - invalid game_id:', { game_id, type: typeof game_id });
+      throw error(400, "Invalid game_id format");
     }
 
     // Check if already in watchlist
-    const alreadyExists = await watchlist.contains(localUserId, game_id);
+    const alreadyExists = await watchlist.contains(localUserId, numericGameId);
     if (alreadyExists) {
       return json(
         {
@@ -60,7 +74,7 @@ export async function POST({ request }) {
     }
 
     // Add to watchlist
-    const watchlistItem = await watchlist.add(localUserId, game_id);
+    const watchlistItem = await watchlist.add(localUserId, numericGameId);
 
     return json({
       success: true,

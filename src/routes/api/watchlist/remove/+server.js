@@ -41,14 +41,24 @@ export async function POST({ request }) {
     localUserId = userResult.rows[0].id;
 
     // Parse request data
-    const { game_id } = await request.json();
+    const body = await request.json();
+    const { game_id } = body;
 
-    if (!game_id) {
+    // Enhanced validation for game_id
+    if (!game_id && game_id !== 0) {
+      console.error('Watchlist remove - missing game_id:', { body, game_id });
       throw error(400, "Missing game_id");
     }
 
+    // Ensure game_id is numeric
+    const numericGameId = parseInt(game_id);
+    if (isNaN(numericGameId)) {
+      console.error('Watchlist remove - invalid game_id:', { game_id, type: typeof game_id });
+      throw error(400, "Invalid game_id format");
+    }
+
     // Check if game is in watchlist and remove it
-    const success = await watchlist.remove(localUserId, game_id);
+    const success = await watchlist.remove(localUserId, numericGameId);
 
     if (!success) {
       return json(

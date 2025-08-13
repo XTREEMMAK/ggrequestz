@@ -16,6 +16,7 @@ import {
   cacheGameRequests,
   withCache
 } from "$lib/cache.js";
+import { safeAsync, withTimeout } from "$lib/utils.js";
 
 import { redirect } from "@sveltejs/kit";
 
@@ -42,66 +43,67 @@ export async function load({ parent, cookies, url }) {
       ? `session=${cookies.get("session")}`
       : null;
 
-    // Check if ROMM is available (with caching)
-    const rommAvailable = await withCache(
-      'romm-availability',
-      () => isRommAvailable(cookieHeader),
-      2 * 60 * 1000 // 2 minutes
+    // Check if ROMM is available (with caching and timeout)
+    const rommAvailable = await safeAsync(
+      () => withCache(
+        'romm-availability',
+        () => withTimeout(isRommAvailable(cookieHeader), 3000, 'ROMM availability check timed out'),
+        2 * 60 * 1000 // 2 minutes
+      ),
+      { 
+        timeout: 4000, 
+        fallback: false, 
+        errorContext: 'ROMM availability check' 
+      }
     );
 
-    // Fetch data in parallel with caching for better performance
-    const [
-      newInLibrary,
-      newReleases,
-      popularGames,
-      recentRequests,
-      userWatchlist,
-    ] = await Promise.all([
-      // Get top 16 newest ROMs from ROMM library (with caching)
-      rommAvailable
-        ? cacheRommGames(
-            () => getRecentlyAddedROMs(16, 0, cookieHeader),
-            0
-          ).catch((err) => {
-            console.error("Error loading new in library ROMs:", err);
-            return [];
-          })
-        : Promise.resolve([]),
+    // Prioritize critical data first - load games without ROMM cross-reference for speed
+    const criticalDataPromise = Promise.all([
+      // Get new releases from IGDB (fast, no ROMM cross-reference yet)
+      safeAsync(
+        () => cacheRecentGames(() => getRecentGames(8)),
+        { timeout: 8000, fallback: [], errorContext: 'Recent games loading' }
+      ),
 
-      // Get new releases from IGDB with ROMM cross-reference (with caching)
-      cacheRecentGames(
-        () => getRecentGames(8).then((games) =>
-          rommAvailable ? crossReferenceWithROMM(games, cookieHeader) : games,
-        )
-      ).catch((err) => {
-        console.error("Error loading recent games:", err);
-        return [];
-      }),
-
-      // Get popular games from IGDB with ROMM cross-reference (with caching)
-      cachePopularGames(
-        () => getPopularGames(8).then((games) =>
-          rommAvailable ? crossReferenceWithROMM(games, cookieHeader) : games,
-        )
-      ).catch((err) => {
-        console.error("Error loading popular games:", err);
-        return [];
-      }),
+      // Get popular games from IGDB (fast, no ROMM cross-reference yet)
+      safeAsync(
+        () => cachePopularGames(() => getPopularGames(8)),
+        { timeout: 8000, fallback: [], errorContext: 'Popular games loading' }
+      ),
 
       // Get recent game requests (with caching)
-      cacheGameRequests(
-        () => gameRequests.getRecent(6)
-      ).catch((err) => {
-        console.error("Error loading recent requests:", err);
-        return [];
-      }),
+      safeAsync(
+        () => cacheGameRequests(() => gameRequests.getRecent(6)),
+        { timeout: 5000, fallback: [], errorContext: 'Recent requests loading' }
+      ),
 
       // Get user's watchlist
-      watchlist.get(user.sub).catch((err) => {
-        console.error("Error loading user watchlist:", err);
-        return [];
-      }),
+      safeAsync(
+        () => watchlist.get(user.sub),
+        { timeout: 3000, fallback: [], errorContext: 'User watchlist loading' }
+      ),
     ]);
+
+    // Secondary data - ROMM integration (can be slower)
+    const secondaryDataPromise = rommAvailable
+      ? Promise.all([
+          // Get top 16 newest ROMs from ROMM library
+          safeAsync(
+            () => cacheRommGames(
+              () => getRecentlyAddedROMs(16, 0, cookieHeader),
+              0
+            ),
+            { timeout: 10000, fallback: [], errorContext: 'ROMM library loading' }
+          ),
+          // ROMM cross-reference for critical games (will be done client-side for better UX)
+        ])
+      : Promise.resolve([[], []]);
+
+    // Wait for critical data first
+    const [newReleases, popularGames, recentRequests, userWatchlist] = await criticalDataPromise;
+    
+    // Get secondary data
+    const [newInLibrary] = await secondaryDataPromise;
 
 
     // If no games were loaded, start cache warming in background
@@ -113,25 +115,27 @@ export async function load({ parent, cookies, url }) {
 
     return {
       newInLibrary,
-      // recentlyAddedROMs removed
       newReleases,
       popularGames,
       recentRequests,
       userWatchlist,
       rommAvailable,
       loading: false,
+      // Flag to indicate ROMM cross-reference should be done client-side
+      needsRommCrossReference: rommAvailable && (newReleases.length > 0 || popularGames.length > 0),
+      cookieHeader, // Pass for client-side ROMM operations
     };
   } catch (error) {
     console.error("Homepage load error:", error);
     return {
       newInLibrary: [],
-      // recentlyAddedROMs removed
       newReleases: [],
       popularGames: [],
       recentRequests: [],
       userWatchlist: [],
       rommAvailable: false,
       loading: false,
+      needsRommCrossReference: false,
       error: error.message,
     };
   }

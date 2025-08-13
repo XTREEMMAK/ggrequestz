@@ -11,7 +11,7 @@ import {
 } from "$lib/auth.js";
 import { upsertUserFromAuthentik } from "$lib/userProfile.js";
 
-export async function GET({ url, cookies }) {
+export async function GET({ url, cookies, getClientAddress, request, locals }) {
 
   try {
     const code = url.searchParams.get("code");
@@ -79,11 +79,11 @@ export async function GET({ url, cookies }) {
     }
 
 
-    // Create session token with local user reference
+    // Create session token
     const sessionToken = await createSessionToken(
       userInfo,
       tokens.access_token,
-      user.id, // Add local user ID to session
+      user.id // Add local user ID to session
     );
 
     // Set session cookie with Docker-compatible settings

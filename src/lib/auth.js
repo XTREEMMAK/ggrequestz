@@ -4,6 +4,7 @@
 
 import { SignJWT, jwtVerify } from "jose";
 import { serialize, parse } from "cookie";
+import crypto from "crypto";
 import {
   AUTHENTIK_CLIENT_ID as ENV_CLIENT_ID,
   AUTHENTIK_CLIENT_SECRET as ENV_CLIENT_SECRET,
@@ -200,7 +201,7 @@ export async function getUserInfo(accessToken) {
 }
 
 /**
- * Create a session token (JWT)
+ * Create a session token (JWT) with enhanced security
  * @param {Object} user - User information from Authentik
  * @param {string} accessToken - Access token from Authentik
  * @param {number} localUserId - Local user ID from database
@@ -209,7 +210,7 @@ export async function getUserInfo(accessToken) {
 export async function createSessionToken(
   user,
   accessToken,
-  localUserId = null,
+  localUserId = null
 ) {
   const now = Math.floor(Date.now() / 1000);
 
@@ -219,6 +220,8 @@ export async function createSessionToken(
     email: user.email,
     preferred_username: user.preferred_username,
     access_token: accessToken,
+    sessionId: crypto.randomUUID(),
+    createdAt: now * 1000
   };
 
   // Add local user ID if provided

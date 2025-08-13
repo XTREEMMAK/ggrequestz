@@ -15,6 +15,7 @@
   import { browser } from '$app/environment';
   import { onMount, onDestroy } from 'svelte';
   import { addToWatchlist, removeFromWatchlist } from '$lib/api.client.js';
+  import { createHoverPreloader } from '$lib/utils.js';
   
   let { data } = $props();
   
@@ -243,14 +244,6 @@
     }
   }
   
-  function handleViewDetails({ detail }) {
-    const gameId = detail.game.igdb_id || detail.game.id;
-    if (gameId) {
-      goto(`/game/${gameId}`);
-    } else {
-      console.error('No game ID found for navigation:', detail.game);
-    }
-  }
   
   function handleShowModal({ detail }) {
     modalGame = detail.game;
@@ -330,16 +323,23 @@
     
     loadingNewReleases = true;
     try {
-      const response = await fetch(`/api/games/recent?page=${newReleasesPage + 1}&limit=${ITEMS_PER_PAGE}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.games && data.games.length > 0) {
-          // Add games one by one with staggered animation
-          await addGamesWithStagger(data.games, newReleases, (updatedGames) => {
-            newReleases = updatedGames;
-          });
-          newReleasesPage += 1;
+      // Try to use preloaded data first
+      let data = newReleasesPreloader.getCached();
+      
+      if (!data) {
+        // Fallback to manual fetch if no preloaded data
+        const response = await fetch(`/api/games/recent?page=${newReleasesPage + 1}&limit=${ITEMS_PER_PAGE}`);
+        if (response.ok) {
+          data = await response.json();
         }
+      }
+      
+      if (data?.games && data.games.length > 0) {
+        // Add games one by one with staggered animation
+        await addGamesWithStagger(data.games, newReleases, (updatedGames) => {
+          newReleases = updatedGames;
+        });
+        newReleasesPage += 1;
       }
     } catch (error) {
       console.error('Failed to load more new releases:', error);
@@ -353,16 +353,23 @@
     
     loadingPopular = true;
     try {
-      const response = await fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.games && data.games.length > 0) {
-          // Add games one by one with staggered animation
-          await addGamesWithStagger(data.games, popularGames, (updatedGames) => {
-            popularGames = updatedGames;
-          });
-          popularPage += 1;
+      // Try to use preloaded data first
+      let data = popularGamesPreloader.getCached();
+      
+      if (!data) {
+        // Fallback to manual fetch if no preloaded data
+        const response = await fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}`);
+        if (response.ok) {
+          data = await response.json();
         }
+      }
+      
+      if (data?.games && data.games.length > 0) {
+        // Add games one by one with staggered animation
+        await addGamesWithStagger(data.games, popularGames, (updatedGames) => {
+          popularGames = updatedGames;
+        });
+        popularPage += 1;
       }
     } catch (error) {
       console.error('Failed to load more popular games:', error);
@@ -445,6 +452,17 @@
       behavior: 'smooth'
     });
   }
+  
+  // Create hover preloaders for Load More buttons
+  const newReleasesPreloader = $derived(createHoverPreloader(
+    () => fetch(`/api/games/recent?page=${newReleasesPage + 1}&limit=${ITEMS_PER_PAGE}`).then(r => r.json()),
+    { delay: 200, cacheKey: `new-releases-${newReleasesPage + 1}` }
+  ));
+  
+  const popularGamesPreloader = $derived(createHoverPreloader(
+    () => fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}`).then(r => r.json()),
+    { delay: 200, cacheKey: `popular-games-${popularPage + 1}` }
+  ));
 </script>
 
 <SEOHead 
@@ -522,7 +540,6 @@
               isInWatchlist={false}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
-              on:view-details={handleViewDetails}
               on:show-modal={handleShowModal}
             />
           </div>
@@ -543,7 +560,6 @@
               isInWatchlist={false}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
-              on:view-details={handleViewDetails}
               on:show-modal={handleShowModal}
             />
           </div>
@@ -601,8 +617,7 @@
                   isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
-                  on:view-details={handleViewDetails}
-                  on:show-modal={handleShowModal}
+                      on:show-modal={handleShowModal}
                 />
               </div>
             {/each}
@@ -622,8 +637,7 @@
                   isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
-                  on:view-details={handleViewDetails}
-                  on:show-modal={handleShowModal}
+                      on:show-modal={handleShowModal}
                 />
               </div>
             {/each}
@@ -635,6 +649,8 @@
           <button
             class="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onclick={loadMoreNewReleases}
+            onmouseenter={() => newReleasesPreloader.preload()}
+            onmouseleave={() => newReleasesPreloader.cancel()}
             disabled={loadingNewReleases}
           >
             {#if loadingNewReleases}
@@ -700,8 +716,7 @@
                   isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
-                  on:view-details={handleViewDetails}
-                  on:show-modal={handleShowModal}
+                      on:show-modal={handleShowModal}
                 />
               </div>
             {/each}
@@ -721,8 +736,7 @@
                   isInWatchlist={isGameInWatchlist(game)}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
-                  on:view-details={handleViewDetails}
-                  on:show-modal={handleShowModal}
+                      on:show-modal={handleShowModal}
                 />
               </div>
             {/each}
@@ -734,6 +748,8 @@
           <button
             class="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onclick={loadMorePopular}
+            onmouseenter={() => popularGamesPreloader.preload()}
+            onmouseleave={() => popularGamesPreloader.cancel()}
             disabled={loadingPopular}
           >
             {#if loadingPopular}

@@ -8,7 +8,7 @@
   import { truncateText, formatDate } from '$lib/utils.js';
   import Icon from '@iconify/svelte';
   
-  let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null } = $props();
+  let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null, preserveState = false } = $props();
   
   const dispatch = createEventDispatcher();
   
@@ -36,11 +36,17 @@
     dispatch('watchlist', { game, add: !isInWatchlist });
   }
   
-  function handleViewDetails() {
+  function handleClick(event) {
     triggerGhostClick();
-    dispatch('view-details', { game });
+    
+    // If preserveState is true, prevent default link behavior and use event dispatcher
+    if (preserveState) {
+      event.preventDefault();
+      dispatch('view-details', { game });
+    }
+    // Otherwise, let the normal link navigation happen
   }
-  
+
   function handleShowModal() {
     triggerGhostClick();
     dispatch('show-modal', { game });
@@ -187,15 +193,14 @@
   });
 </script>
 
-<div 
-  class="poster-card group relative rounded-xl overflow-hidden cursor-pointer aspect-[2/3] bg-gray-800 w-full {isClicked ? 'ghost-click' : ''}"
-  onclick={() => handleViewDetails()}
+<a 
+  href="/game/{game.igdb_id || game.id}"
+  class="poster-card group relative rounded-xl overflow-hidden cursor-pointer aspect-[2/3] bg-gray-800 w-full block {isClicked ? 'ghost-click' : ''}"
   onmouseenter={() => handleMouseEnter()}
   onmouseleave={() => handleMouseLeave()}
-  onkeydown={(e) => e.key === 'Enter' || e.key === ' ' ? handleViewDetails() : null}
+  onclick={handleClick}
   aria-label="View details for {game.title || 'Unknown Game'}"
-  role="button"
-  tabindex="0"
+  data-sveltekit-preload-data="hover"
 >
   <!-- Poster Image with rotation -->
   <div class="relative w-full h-full overflow-hidden">
@@ -295,4 +300,4 @@
     
   </div>
   
-</div>
+</a>

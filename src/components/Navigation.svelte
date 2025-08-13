@@ -63,6 +63,7 @@
             <a
               href={item.path}
               class="inline-flex items-center px-1 pt-1 text-sm font-medium border-b-2 transition-colors"
+              data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
               class:border-blue-500={isActivePath(item.path)}
               class:text-gray-900={isActivePath(item.path)}
               class:dark:text-white={isActivePath(item.path)}
@@ -95,6 +96,7 @@
               <a
                 href={item.path}
                 class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
                 class:text-gray-900={isActivePath(item.path)}
                 class:dark:text-white={isActivePath(item.path)}
               >
@@ -165,6 +167,7 @@
             href={item.path}
             onclick={closeMobileMenu}
             class="block px-3 py-2 rounded-md text-base font-medium transition-colors"
+            data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
             class:bg-blue-50={isActivePath(item.path)}
             class:dark:bg-blue-900={isActivePath(item.path)}
             class:text-blue-700={isActivePath(item.path)}
@@ -184,6 +187,7 @@
               href={item.path}
               onclick={closeMobileMenu}
               class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
             >
               {item.label}
             </a>

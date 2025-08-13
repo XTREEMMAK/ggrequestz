@@ -19,6 +19,9 @@ export async function load({ fetch, data }) {
   // Use the server-side data as the base
   const initialData = data;
   
+  // Use the server-side data which already includes ROMM availability checks
+  let enhancedData = { ...initialData };
+  
   // Preload additional data that might be needed for Load More functionality
   const preloadPromises = [];
   
@@ -59,7 +62,7 @@ export async function load({ fetch, data }) {
   };
   
   return {
-    ...initialData,
+    ...enhancedData,
     preloadCache
   };
 }

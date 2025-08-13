@@ -3,7 +3,7 @@
  */
 
 import { json, error } from "@sveltejs/kit";
-import { hybridCache } from "$lib/cache.js";
+import cache from "$lib/cache.js";
 
 export async function POST({ request }) {
   try {
@@ -14,7 +14,7 @@ export async function POST({ request }) {
     }
     
     // Clear the specific cache key
-    await hybridCache.delete(cacheKey);
+    await cache.delete(cacheKey);
     
     return json({
       success: true,
@@ -30,7 +30,7 @@ export async function POST({ request }) {
 // Alternative: clear all cache
 export async function DELETE() {
   try {
-    await hybridCache.clear();
+    await cache.clear();
     
     return json({
       success: true,

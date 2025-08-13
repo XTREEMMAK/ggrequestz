@@ -1,65 +1,85 @@
 /**
- * SvelteKit server-side hooks for performance optimization and authentication
+ * SvelteKit server-side hooks for performance optimization, authentication, and security
  */
 
 import { sequence } from '@sveltejs/kit/hooks';
 import { redirect } from '@sveltejs/kit';
 import { getSession } from '$lib/auth.js';
 import { getBasicAuthUser } from '$lib/basicAuth.js';
+import { warmUpCache } from '$lib/gameCache.js';
+
+// Initialize cache warming on server startup
+let cacheWarmed = false;
+const startCacheWarming = async () => {
+  if (!cacheWarmed) {
+    cacheWarmed = true;
+    try {
+      console.log('🔥 Starting cache warm-up...');
+      await warmUpCache();
+      console.log('✅ Cache warm-up completed');
+    } catch (error) {
+      console.error('❌ Cache warm-up failed:', error);
+      // Reset flag to allow retry on next request
+      cacheWarmed = false;
+    }
+  }
+};
 
 // HTTP Cache headers hook
 const cacheHeaders = async ({ event, resolve }) => {
   const response = await resolve(event);
   
+  // Clone headers to make them mutable
+  const headers = new Headers(response.headers);
+  
   // Add cache headers for static assets
   if (event.url.pathname.startsWith('/api/')) {
     // API responses - short cache for dynamic content
-    response.headers.set('Cache-Control', 'private, max-age=300'); // 5 minutes
-    response.headers.set('Vary', 'Cookie');
+    headers.set('Cache-Control', 'private, max-age=300'); // 5 minutes
+    headers.set('Vary', 'Cookie');
   } else if (event.url.pathname.startsWith('/_app/')) {
     // Build assets - long cache with versioning
-    response.headers.set('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year
   } else if (event.url.pathname.match(/\.(js|css|woff|woff2|png|jpg|jpeg|gif|svg|ico)$/)) {
     // Static assets - medium cache
-    response.headers.set('Cache-Control', 'public, max-age=86400'); // 1 day
+    headers.set('Cache-Control', 'public, max-age=86400'); // 1 day
   } else if (event.url.pathname === '/' || event.url.pathname.startsWith('/game/')) {
     // HTML pages - short cache with revalidation
-    response.headers.set('Cache-Control', 'public, max-age=300, must-revalidate'); // 5 minutes
-    response.headers.set('Vary', 'Accept-Encoding, Cookie');
+    headers.set('Cache-Control', 'public, max-age=300, must-revalidate'); // 5 minutes
+    headers.set('Vary', 'Accept-Encoding, Cookie');
   }
   
-  // Security headers
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('X-Content-Type-Options', 'nosniff');
+  // Basic security headers for defense-in-depth
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   
-  // Allow CDN scripts for Vanta.js and Three.js, YouTube embeds
-  response.headers.set('Content-Security-Policy', 
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' " +
-    "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
-    "font-src 'self' data:; " +
-    "connect-src 'self' https:; " +
-    "media-src 'self'; " +
-    "object-src 'none'; " +
-    "frame-src 'self' https://www.youtube.com https://youtube.com; " +
-    "worker-src 'self'; " +
-    "form-action 'self';"
-  );
-  
-  return response;
+  // Return new response with modified headers
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 };
 
-// Performance timing hook
+// Performance timing hook with cache warming
 const performanceTiming = async ({ event, resolve }) => {
   const start = Date.now();
+  
+  // Start cache warming on first request (non-blocking)
+  startCacheWarming().catch(error => {
+    console.error('Cache warming failed:', error);
+  });
+  
   const response = await resolve(event);
   const duration = Date.now() - start;
   
+  // Clone headers to make them mutable
+  const headers = new Headers(response.headers);
+  
   // Add performance timing header for debugging
   if (event.url.pathname.startsWith('/api/')) {
-    response.headers.set('X-Response-Time', `${duration}ms`);
+    headers.set('X-Response-Time', `${duration}ms`);
   }
   
   // Log slow responses
@@ -67,7 +87,12 @@ const performanceTiming = async ({ event, resolve }) => {
     console.warn(`Slow response: ${event.url.pathname} took ${duration}ms`);
   }
   
-  return response;
+  // Return new response with modified headers
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 };
 
 // Authentication hook

@@ -23,13 +23,13 @@
   let searchResults = $state(data?.searchResults || { hits: [], found: 0 });
   let loading = $state(false);
   let searchError = $state('');
-  let currentPage = $state(1);
+  let currentPage = $state(data?.initialFilters?.page || 1);
   let resultsPerPage = $state(20);
   
   // Filter state - using $state for reactivity
-  let selectedPlatforms = $state([]);
-  let selectedGenres = $state([]);
-  let sortBy = $state('popularity:desc');
+  let selectedPlatforms = $state(data?.initialFilters?.platforms || []);
+  let selectedGenres = $state(data?.initialFilters?.genres || []);
+  let sortBy = $state(data?.initialFilters?.sortBy || 'popularity:desc');
   let showFilters = $state(false);
   
   // Available filter options - using $state for reactivity
@@ -46,19 +46,13 @@
   
   // Initialize from URL on mount - only run once
   onMount(() => {
-    // Set initial values from URL if present
-    if (queryFromUrl && queryFromUrl !== searchQuery) {
-      searchQuery = queryFromUrl;
-      performSearch();
-    }
+    // Extract available filters from results
+    updateAvailableFilters();
     
     // Apply initial filter from URL
     if (filterFromUrl) {
       applyFilterFromUrl(filterFromUrl);
     }
-    
-    // Extract available filters from results
-    updateAvailableFilters();
   });
   
   // Debounced search is now handled by SearchBar component events
@@ -135,12 +129,20 @@
     }
   }
   
-  const debouncedSearch = debounce(performSearch, 300);
+  // No auto-search - only search on explicit user action
   
   function handleSearchSubmit({ detail }) {
-    // The searchQuery is already bound, so we just need to trigger immediate search
+    // Handle explicit search submission (Enter key)
     currentPage = 1;
-    performSearchWithUrl();
+    if (searchQuery.trim()) {
+      // Perform search if there's a query
+      performSearchWithUrl();
+    } else {
+      // Clear URL if submitting empty search
+      searchResults = { hits: [], found: 0 };
+      const newUrl = '/search';
+      goto(newUrl, { replaceState: true, noScroll: true });
+    }
   }
   
   // Separate function for search with URL update (called on submit)
@@ -150,16 +152,20 @@
   }
   
   function handleSearchInput({ detail }) {
-    // Update search query and trigger debounced search
+    // Only update search query, don't trigger search or navigation
     searchQuery = detail.value;
+    if (!searchQuery.trim()) {
+      // Just clear results when search is empty, don't navigate at all
+      searchResults = { hits: [], found: 0 };
+      // No URL update to preserve focus completely
+    }
+  }
+  
+  function handleSearchBlur() {
+    // Search when user loses focus (if there's a query)
     if (searchQuery.trim()) {
       currentPage = 1;
-      debouncedSearch();
-    } else {
-      searchResults = { hits: [], found: 0 };
-      // Clear URL when search is empty
-      const newUrl = '/search';
-      goto(newUrl, { replaceState: true, noScroll: true });
+      performSearchWithUrl();
     }
   }
 
@@ -276,7 +282,11 @@
   }
   
   function handleViewDetails({ detail }) {
-    goto(`/game/${detail.game.igdb_id || detail.game.id}`);
+    // Preserve current search URL in history by using proper navigation
+    const currentUrl = $page.url.pathname + $page.url.search;
+    goto(`/game/${detail.game.igdb_id || detail.game.id}`, {
+      state: { previousUrl: currentUrl }
+    });
   }
   
   let totalPages = $derived(Math.ceil(searchResults.found / resultsPerPage));
@@ -325,6 +335,7 @@
         on:input={handleSearchInput}
         on:search={handleSearchSuggestion}
         on:select={handleSearchSubmit}
+        on:blur={handleSearchBlur}
         on:clear-suggestions={clearSuggestions}
       />
     </div>
@@ -485,6 +496,7 @@
               {game} 
               {user}
               isInWatchlist={userWatchlist.some(w => w.igdb_id === game.igdb_id)}
+              preserveState={true}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
               on:view-details={handleViewDetails}

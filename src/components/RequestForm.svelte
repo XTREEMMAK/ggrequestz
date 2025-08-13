@@ -392,12 +392,12 @@
                 />
               </div>
               {#if selectedGame.title}
-                <h5 class="text-sm font-semibold text-gray-900 dark:text-white mt-3 line-clamp-2">
+                <h5 class="text-sm font-semibold text-gray-900 dark:text-white mt-3 overflow-hidden line-clamp-2">
                   {selectedGame.title}
                 </h5>
               {/if}
               {#if selectedGame.summary}
-                <p class="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-3">
+                <p class="text-xs text-gray-600 dark:text-gray-400 mt-2 overflow-hidden line-clamp-3">
                   {selectedGame.summary}
                 </p>
               {/if}
@@ -706,5 +706,20 @@
   .scrollbar-hide {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+  }
+  
+  /* Line clamp utilities */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 </style>
