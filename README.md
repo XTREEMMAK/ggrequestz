@@ -21,16 +21,18 @@ A modern game discovery and request management platform with IGDB integration, R
 ### Docker Compose (Recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/ggrequestz.git
+# Step 1: Clone the repository
+git clone https://github.com/XTREEMMAK/ggrequestz.git
 cd ggrequestz
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings
+# Step 2: Copy .env.example file and rename to .env.docker
+cp .env.example .env.docker
 
-# Start services
-docker-compose up -d
+# Step 3: Adjust environment variables to taste. Read on how to get your Typesense API key
+# Edit .env.docker with your settings
+
+# Step 4: Run the deploy script
+sudo ./scripts/deploy-production.sh
 ```
 
 ### Local Development
