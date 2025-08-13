@@ -196,45 +196,24 @@ body {
 }
 
 .sidebar-item {
-  @apply flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 transition-colors relative overflow-hidden;
+  @apply flex items-center space-x-3 px-4 py-3 text-gray-300 relative;
   /* Remove default button focus/active styles */
   -webkit-tap-highlight-color: transparent;
   outline: none;
   user-select: none;
+  /* Smooth transitions */
+  transition: all 0.2s ease-in-out;
+}
+
+.sidebar-item:hover {
+  @apply text-white bg-gray-700;
+  transform: translateX(2px);
 }
 
 .sidebar-item:focus {
-  @apply ring-2 ring-blue-500 ring-opacity-50;
+  @apply ring-2 ring-blue-500/50;
 }
 
 .sidebar-item.active {
   @apply text-white bg-gray-700 border-r-2 border-blue-500;
-}
-
-/* Wipe effect using box-shadow overlay */
-.sidebar-item.wipe-active {
-  position: relative;
-}
-
-.sidebar-item.wipe-active::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.6) 50%, transparent 100%);
-  border-radius: 0.5rem;
-  animation: wipeEffect 0.4s ease-out forwards;
-  z-index: 10;
-  pointer-events: none;
-}
-
-@keyframes wipeEffect {
-  from {
-    left: -100%;
-  }
-  to {
-    left: 100%;
-  }
 }

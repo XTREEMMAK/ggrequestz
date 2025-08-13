@@ -214,16 +214,7 @@
 					<!-- Internal links use goto() for faster navigation -->
 					<button
 						type="button"
-						onclick={(e) => { 
-							goto(item.href); 
-							sidebarOpen = false; 
-							// Trigger wipe effect after click
-							const target = e.currentTarget;
-							if (target) {
-								target.classList.add('wipe-active');
-								setTimeout(() => target.classList.remove('wipe-active'), 400);
-							}
-						}}
+						onclick={() => { goto(item.href); sidebarOpen = false; }}
 						class="sidebar-item mb-1 rounded-lg {isActivePath(item.href) ? 'active' : ''} w-full text-left"
 						aria-label="Navigate to {item.name}"
 					>
