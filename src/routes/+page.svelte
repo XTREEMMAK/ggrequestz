@@ -427,7 +427,7 @@
   });
   
   // Handle scroll to top button visibility and save scroll position periodically
-  $effect(() => {
+  onMount(() => {
     if (browser) {
       const handleScroll = () => {
         // Show scroll to top button after scrolling down 300px

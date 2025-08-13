@@ -38,7 +38,8 @@ A comprehensive game discovery and request application built with **SvelteKit 5*
 ### 📱 **Modern UI/UX**
 
 - **Responsive Design**: Mobile-first approach with Tailwind CSS 4.0
-- **Dark Mode Support**: Automatic theme switching
+- **Animated Login**: Vanta.js powered waves with dynamic gradient overlays
+- **Advanced Animations**: Multi-layered blend modes and choreographed reveals
 - **Interactive Cards**: Hover animations and smooth transitions
 - **Status Indicators**: Color-coded badges for easy status recognition
 

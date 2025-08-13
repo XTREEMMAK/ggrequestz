@@ -4,8 +4,31 @@
 
 // Use runtime environment variables instead of build-time static imports
 // to support Docker containers with runtime configuration
-const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
-const IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET;
+let IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
+let IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET;
+
+// Helper function to ensure environment variables are loaded
+async function loadEnvironmentVariables() {
+  // In development, try to load .env file if environment variables aren't available
+  if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) {
+    try {
+      // Use dynamic import for dotenv in ESM context
+      const { config } = await import('dotenv');
+      config();
+      
+      // Reload variables after dotenv config
+      IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
+      IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET;
+    } catch (error) {
+      console.warn('⚠️ Could not load dotenv for IGDB credentials:', error.message);
+    }
+  }
+  
+  return {
+    client_id: IGDB_CLIENT_ID,
+    client_secret: IGDB_CLIENT_SECRET
+  };
+}
 
 const IGDB_BASE_URL = "https://api.igdb.com/v4";
 let accessToken = null;
@@ -25,10 +48,17 @@ async function getAccessToken() {
     return accessToken;
   }
 
+  // Ensure environment variables are loaded
+  const credentials = await loadEnvironmentVariables();
+  
+  if (!credentials.client_id || !credentials.client_secret) {
+    throw new Error('IGDB API credentials not found. Please check IGDB_CLIENT_ID and IGDB_CLIENT_SECRET environment variables.');
+  }
+
   const tokenUrl = "https://id.twitch.tv/oauth2/token";
   const params = new URLSearchParams({
-    client_id: IGDB_CLIENT_ID,
-    client_secret: IGDB_CLIENT_SECRET,
+    client_id: credentials.client_id,
+    client_secret: credentials.client_secret,
     grant_type: "client_credentials",
   });
 
@@ -141,27 +171,33 @@ export async function getGameById(igdbId) {
 }
 
 /**
- * Get popular/trending games using PopScore
+ * Get popular/trending games using IGDB popularity primitives
  * @param {number} limit - Number of games to return
  * @param {number} offset - Offset for pagination
  * @returns {Promise<Array>} - Array of popular games
  */
 export async function getPopularGames(limit = 20, offset = 0) {
   try {
-    // First get popular game IDs from PopScore
-    const popScoreQuery = `fields game_id,value;
+    console.log(`🎯 getPopularGames called with limit=${limit}, offset=${offset}`);
+    
+    // Use IGDB popularity_primitives endpoint for true popularity
+    const popularityQuery = `fields game_id,value,popularity_type;
 sort value desc;
 offset ${offset};
-limit ${limit};`;
+limit ${limit};
+where popularity_type = 1;`;
 
-    const popScores = await igdbRequest("popscore", popScoreQuery);
+    const popularityData = await igdbRequest("popularity_primitives", popularityQuery);
+    console.log(`📊 Got ${popularityData.length} popularity entries`);
 
-    if (popScores.length === 0) {
+    if (popularityData.length === 0) {
+      console.log("No popularity data found, falling back to high rated games");
       return await getHighRatedGames(limit, offset);
     }
 
-    // Extract game IDs
-    const gameIds = popScores.map((score) => score.game_id);
+    // Extract game IDs from popularity data
+    const gameIds = popularityData.map((item) => item.game_id);
+    console.log(`🎯 Top 5 game IDs by popularity:`, gameIds.slice(0, 5));
 
     // Get game details for these IDs
     const gameQuery = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url;
@@ -169,17 +205,21 @@ where id = (${gameIds.join(",")}) & cover != null;
 limit ${limit};`;
 
     const games = await igdbRequest("games", gameQuery);
+    console.log(`📊 Got ${games.length} game details`);
 
-    // Sort games by their PopScore order
+    // Sort games by their popularity order
     const sortedGames = gameIds
       .map((id) => games.find((game) => game.id === id))
       .filter(Boolean);
 
+    console.log(`🎯 Final sorted games:`, sortedGames.slice(0, 3).map(g => `${g.name} (${g.id})`));
+
     return sortedGames.map(formatGameData);
   } catch (error) {
-    console.error("IGDB popular games error:", error);
-    // Fallback to rating-based query
-    return await getHighRatedGames(limit);
+    console.error("IGDB popularity games error:", error);
+    // Fallback to rating-based query if popularity endpoint fails
+    console.log("Falling back to high rated games due to error");
+    return await getHighRatedGames(limit, offset);
   }
 }
 

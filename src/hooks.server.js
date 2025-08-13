@@ -32,6 +32,22 @@ const cacheHeaders = async ({ event, resolve }) => {
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   
+  // Allow CDN scripts for Vanta.js and Three.js, YouTube embeds
+  response.headers.set('Content-Security-Policy', 
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' " +
+    "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' data:; " +
+    "connect-src 'self' https:; " +
+    "media-src 'self'; " +
+    "object-src 'none'; " +
+    "frame-src 'self' https://www.youtube.com https://youtube.com; " +
+    "worker-src 'self'; " +
+    "form-action 'self';"
+  );
+  
   return response;
 };
 

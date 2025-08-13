@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -19,7 +20,7 @@
 	let basicAuthEnabled = $derived(data?.basicAuthEnabled || false);
 	
 	// Check for URL parameters that indicate we should refresh user state
-	$effect(() => {
+	onMount(() => {
 		if (browser) {
 			const url = new URL(window.location);
 			const refreshParam = url.searchParams.get('t');

@@ -1,84 +1,93 @@
-<!--
-  Login page with IGDB background covers and modern gradient design
--->
+<!-- Enhanced Login Page with Dynamic Vanta.js Integration -->
 
 <script>
+  import { browser } from '$app/environment';
+  import { loadVantaWaves } from '$lib/utils/scriptLoader.js';
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
-  import LoadingSpinner from '../../components/LoadingSpinner.svelte';
-  import Icon from '@iconify/svelte';
-
+  
+  // Minimal props only
   let { data } = $props();
   
-  let backgroundImage = $state('');
-  let imageLoaded = $state(false);
-  let loading = $state(false);
-  let user = $derived(data?.user);
+  // Reactive state for fade-in animation
+  let vantaLoaded = $state(false);
+  let vantaError = $state(false);
+  let vantaNode = $state(null);
+  let vantaEffect = $state(null);
   
-  // If user is already logged in, redirect to homepage
-  $effect(() => {
-    if (user) {
-      goto('/', { replaceState: true });
+  // Initialize Vanta after scripts are loaded
+  async function initializeVanta(node) {
+    if (!node || !window.VANTA || !window.VANTA.WAVES) {
+      return;
     }
-  });
-  
-  // Load random IGDB cover on mount
-  onMount(async () => {
-    try {
-      const response = await fetch('/api/games/popular?limit=20');
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+    
+    const effect = window.VANTA.WAVES({
+      el: node,
+      mouseControls: true,
+      touchControls: true,
+      gyroControls: false,
+      minHeight: 200.00,
+      minWidth: 200.00,
+      scale: 1.00,
+      scaleMobile: 1.00,
+      color: 0x1e3a8a,
+      shininess: 40,
+      waveHeight: 15,
+      waveSpeed: 1.0,
+      zoom: 0.8
+    });
+    
+    if (effect) {
+      vantaEffect = effect;
       
-      const games = await response.json();
-      
-      // Filter games with high quality cover images
-      const gamesWithCovers = games.filter(game => 
-        game.cover_url && 
-        !game.cover_url.includes('nocover') &&
-        game.cover_url.includes('igdb.com')
-      );
-      
-      
-      if (gamesWithCovers.length > 0) {
-        const randomGame = gamesWithCovers[Math.floor(Math.random() * gamesWithCovers.length)];
-        // Convert to high resolution version
-        let highResUrl = randomGame.cover_url;
-        if (highResUrl.includes('/t_thumb/')) {
-          highResUrl = randomGame.cover_url.replace('/t_thumb/', '/t_1080p/');
-        } else if (highResUrl.includes('/t_cover_small/')) {
-          highResUrl = randomGame.cover_url.replace('/t_cover_small/', '/t_1080p/');
+      // Force resize after initialization
+      setTimeout(() => {
+        if (effect.resize) {
+          effect.resize();
         }
-        
-        backgroundImage = highResUrl;
-        
-        // Preload image
-        const img = new Image();
-        img.onload = () => {
-          imageLoaded = true;
-        };
-        img.onerror = () => {
-          console.error('Failed to load background image');
-          imageLoaded = true; // Show page anyway
-        };
-        img.src = highResUrl;
-      } else {
-        imageLoaded = true;
-      }
-    } catch (error) {
-      console.error('Failed to load background image:', error);
-      imageLoaded = true; // Show page anyway
+      }, 100);
     }
-  });
-  
-  function handleAuthentikLogin() {
-    loading = true;
-    window.location.href = '/api/auth/login';
   }
   
-  function handleBasicLogin() {
-    goto('/login/basic');
+  // Load Vanta.js scripts on mount
+  onMount(async () => {
+    if (browser) {
+      try {
+        await loadVantaWaves();
+        vantaLoaded = true;
+        
+        // Initialize Vanta if node is ready
+        if (vantaNode) {
+          await initializeVanta(vantaNode);
+        }
+      } catch (error) {
+        // Silently handle Vanta.js loading errors
+        vantaError = true;
+      }
+    }
+    
+    // Cleanup on component destroy
+    return () => {
+      if (vantaEffect) {
+        vantaEffect.destroy();
+        vantaEffect = null;
+      }
+    };
+  });
+  
+  // Simplified Vanta.js action that just stores the node reference
+  function vantaWaves(node) {
+    vantaNode = node;
+    
+    // If scripts are already loaded, initialize immediately
+    if (vantaLoaded && !vantaEffect) {
+      initializeVanta(node);
+    }
+    
+    return {
+      destroy() {
+        // Cleanup handled in onMount return
+      }
+    };
   }
 </script>
 
@@ -87,139 +96,417 @@
   <meta name="description" content="Login to G.G Requestz - Game Discovery & Request Platform" />
 </svelte:head>
 
-<!-- Background Image -->
-<div class="fixed inset-0 overflow-hidden">
-  {#if backgroundImage && imageLoaded}
-    <div 
-      class="absolute inset-0 bg-cover bg-center bg-no-repeat transform scale-110 blur-sm"
-      style="background-image: url('{backgroundImage}')"
-    ></div>
-  {/if}
-  
-  <!-- Dark overlay -->
-  <div class="absolute inset-0 bg-black/60"></div>
-  
-  <!-- Gradient overlay -->
-  <div class="absolute inset-0 bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-pink-900/30"></div>
-</div>
+<!-- Vanta.js Background Container with Fade-in -->
+<div 
+  use:vantaWaves 
+  class="vanta-layer" 
+  class:vanta-loaded={vantaLoaded}
+  class:vanta-error={vantaError}
+></div>
 
-<!-- Main Content -->
-<div class="relative min-h-screen flex items-center justify-center p-4">
-  <!-- Login Card -->
+<!-- Standard Background (fallback) -->
+<div class="simple-bg"></div>
+
+
+<!-- Content Layer -->
+<div class="content-container">
   <div class="w-full max-w-md">
-    <!-- Multi-layered shiny gradient backgrounds -->
-    <div class="absolute inset-0 bg-gradient-to-r from-pink-500/30 via-purple-500/30 via-blue-500/30 to-cyan-500/30 rounded-3xl blur-2xl transform -rotate-2 animate-pulse"></div>
-    <div class="absolute inset-0 bg-gradient-to-l from-yellow-400/20 via-red-500/20 via-purple-600/20 to-indigo-600/20 rounded-3xl blur-xl transform rotate-1" style="animation: shimmer 3s ease-in-out infinite alternate;"></div>
-    <div class="absolute inset-0 bg-gradient-to-br from-emerald-400/25 via-blue-500/25 to-purple-600/25 rounded-3xl blur-lg transform -rotate-1" style="animation: shimmer 4s ease-in-out infinite alternate-reverse;"></div>
-    
-    <!-- Login card -->
-    <div class="relative bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl login-card-glow">
-      <!-- Logo and Title -->
-      <div class="text-center mb-8">
-        <div class="mx-auto w-24 h-24 mb-4 flex items-center justify-center rounded-full shadow-2xl overflow-hidden">
-          <img 
-            src="/GGR_Logo.webp" 
-            alt="GameRequest Logo" 
-            class="w-full h-full object-contain"
-          />
-        </div>
-        <h1 class="text-3xl font-bold text-white mb-2">G.G Requestz</h1>
-        <p class="text-blue-100/80 text-sm">Game Discovery & Request Platform</p>
-      </div>
       
-      <!-- Login Options -->
-      <div class="space-y-4">
-        {#if data?.isAuthentikEnabled}
-          <!-- Authentik Login -->
-          <button
-            type="button"
-            onclick={handleAuthentikLogin}
-            disabled={loading}
-            class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 
-                   text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200
-                   disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]
-                   shadow-lg hover:shadow-blue-500/25 border border-blue-500/30"
-          >
-            {#if loading}
-              <LoadingSpinner size="sm" />
-              <span class="ml-2">Connecting...</span>
-            {:else}
-              <Icon icon="heroicons:key" class="w-5 h-5 inline mr-2" />
-              Login with Authentik
-            {/if}
-          </button>
-        {/if}
+      <!-- Login card -->
+      <div class="glass-card">
+        <!-- Logo and Title -->
+        <div class="text-center mb-8">
+          <div class="logo-container">
+            <img 
+              src="/GGR_Logo.webp" 
+              alt="GameRequest Logo" 
+              class="w-full h-full object-contain"
+            />
+          </div>
+          <h1 class="gradient-text">G.G Requestz</h1>
+          <p class="text-blue-100/80 text-sm">Game Discovery & Request Platform</p>
+        </div>
         
-        {#if data?.isBasicAuthEnabled}
-          <!-- Basic Auth Login -->
-          <button
-            type="button"
-            onclick={handleBasicLogin}
-            class="w-full bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 
-                   text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200
-                   transform hover:scale-[1.02] shadow-lg hover:shadow-gray-500/25 border border-gray-500/30"
+        <!-- Login Options -->
+        <div class="space-y-4">
+          <!-- Authentik Button -->
+          {#if data?.isAuthentikEnabled}
+          <a
+            href="/api/auth/login"
+            class="auth-button primary-button"
+            style="text-decoration: none;"
           >
-            <Icon icon="heroicons:user" class="w-5 h-5 inline mr-2" />
+            <svg class="key-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/>
+              <path d="m21 2-9.6 9.6"/>
+              <circle cx="7.5" cy="15.5" r="5.5"/>
+            </svg>
+            <span>Login with Authentik</span>
+          </a>
+          {/if}
+          
+          <!-- Basic Auth Button -->
+          {#if data?.isBasicAuthEnabled}
+          <a
+            href="/login/basic"
+            class="auth-button secondary-button"
+            style="text-decoration: none;"
+          >
+            <svg class="user-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
             Login with Username/Password
-          </button>
-        {/if}
-        
-        {#if !data?.isAuthentikEnabled && !data?.isBasicAuthEnabled}
-          <div class="text-center text-red-200 bg-red-900/20 border border-red-500/30 rounded-xl p-4">
-            <Icon icon="heroicons:exclamation-triangle" class="w-6 h-6 mx-auto mb-2" />
+          </a>
+          {/if}
+          
+          <!-- Error Message -->
+          {#if !data?.isAuthentikEnabled && !data?.isBasicAuthEnabled}
+          <div class="error-card">
+            <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+              <path d="M12 9v4"/>
+              <path d="m12 17 .01 0"/>
+            </svg>
             <p class="text-sm">No authentication methods are configured.</p>
           </div>
-        {/if}
-      </div>
-      
-      <!-- Footer -->
-      <div class="mt-8 text-center">
-        <p class="text-xs text-blue-100/60">
-          Secure authentication powered by industry-standard protocols
-        </p>
+          {/if}
+        </div>
+        
+        <!-- Footer -->
+        <div class="mt-8 text-center">
+          <p class="text-xs text-blue-100/60">
+            Secure authentication powered by industry-standard protocols
+          </p>
+        </div>
       </div>
     </div>
-    
-    <!-- Enhanced floating elements for visual effect -->
-    <div class="absolute -top-8 -left-8 w-16 h-16 bg-gradient-to-r from-pink-400/20 to-purple-500/20 rounded-full blur-xl animate-bounce" style="animation-duration: 3s;"></div>
-    <div class="absolute -top-12 -right-12 w-20 h-20 bg-gradient-to-r from-blue-400/15 to-cyan-500/15 rounded-full blur-2xl animate-pulse" style="animation-delay: 1.5s;"></div>
-    <div class="absolute -bottom-8 -right-6 w-24 h-24 bg-gradient-to-r from-yellow-400/20 to-red-500/20 rounded-full blur-xl animate-bounce" style="animation-delay: 2s; animation-duration: 4s;"></div>
-    <div class="absolute -bottom-12 -left-8 w-18 h-18 bg-gradient-to-r from-emerald-400/15 to-blue-500/15 rounded-full blur-xl animate-pulse" style="animation-delay: 0.5s;"></div>
-  </div>
 </div>
 
-<!-- Loading state overlay -->
-{#if !imageLoaded && backgroundImage}
-  <div class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
-    <LoadingSpinner size="lg" text="Loading..." />
-  </div>
-{/if}
-
 <style>
-  :global(body) {
+  :global(html, body) {
+    margin: 0;
+    padding: 0;
     overflow-x: hidden;
   }
   
-  @keyframes shimmer {
+  /* Dedicated Vanta.js Layer with Fade-in Animation */
+  .vanta-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 2s ease-in-out;
+    /* Blend mode for visual enhancement */
+    mix-blend-mode: overlay;
+  }
+  
+  .vanta-layer.vanta-loaded {
+    opacity: 1;
+  }
+  
+  .vanta-layer.vanta-error {
+    opacity: 0;
+    display: none;
+  }
+  
+  /* Enhanced Background with Smooth Blend Mode Support */
+  .simple-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+    /* Use pseudo-elements for smooth gradient transitions */
+    background: linear-gradient(149deg,rgba(34, 193, 195, 1) 0%, rgba(253, 187, 45, 1) 100%);
+    /* Fade in the base gradient */
+    opacity: 0;
+    animation: baseFadeIn 3s ease-out forwards;
+  }
+  
+  @keyframes baseFadeIn {
     0% {
-      opacity: 0.5;
-      transform: scale(1) rotate(1deg);
-    }
-    50% {
-      opacity: 0.8;
-      transform: scale(1.05) rotate(-0.5deg);
+      opacity: 0;
     }
     100% {
-      opacity: 0.6;
-      transform: scale(1.02) rotate(0.5deg);
+      opacity: 1;
     }
   }
   
-  /* Additional glow effect */
-  .login-card-glow {
-    box-shadow: 
-      0 0 60px rgba(168, 85, 247, 0.15),
-      0 0 120px rgba(59, 130, 246, 0.1),
-      0 0 180px rgba(236, 72, 153, 0.05);
+  .simple-bg::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(320deg,rgba(153, 26, 21, 1) 0%, rgba(87, 199, 133, 1) 22%, rgba(237, 83, 234, 1) 100%);
+    opacity: 0;
+    transition: opacity 8s ease-in-out;
+    animation: gradientFade 24s ease-in-out infinite 2s;
   }
+  
+  .simple-bg::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, 
+      #10b981 0%,
+      #5b21b6 25%, 
+      #0f766e 50%, 
+      #312e81 75%, 
+      #1e3a8a 100%
+    );
+    opacity: 0;
+    transition: opacity 8s ease-in-out;
+    animation: gradientFade 32s ease-in-out infinite 10s;
+  }
+  
+  /* Add a fourth gradient layer for the complex teal-to-purple effect */
+  .simple-bg {
+    position: relative;
+  }
+  
+  .simple-bg:before {
+    z-index: 1;
+  }
+  
+  .simple-bg:after {
+    z-index: 1;
+  }
+  
+  /* Create the complex gradient using a pseudo-element on the parent */
+  .content-container::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    background: radial-gradient(ellipse at center, 
+      rgba(6, 182, 212, 0.9) 0%,
+      rgba(16, 185, 129, 0.8) 20%,
+      rgba(59, 130, 246, 0.7) 40%,
+      rgba(147, 51, 234, 0.8) 70%,
+      rgba(30, 58, 138, 0.9) 100%
+    );
+    opacity: 0;
+    transition: opacity 10s ease-in-out;
+    animation: complexGradientFade 32s ease-in-out infinite 18s;
+    pointer-events: none;
+    /* Add blend mode for better visual mixing */
+    mix-blend-mode: multiply;
+  }
+  
+  @keyframes gradientFade {
+    0%, 31.25%, 100% { 
+      opacity: 0; 
+    }
+    15.625% { 
+      opacity: 0.7; 
+    }
+  }
+  
+  @keyframes complexGradientFade {
+    0%, 31.25%, 100% { 
+      opacity: 0; 
+    }
+    15.625% { 
+      opacity: 0.6; 
+    }
+  }
+  
+  /* Content Layer - Above everything */
+  .content-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 100;
+    pointer-events: none;
+  }
+  
+  /* Allow interactions with the login card */
+  .glass-card {
+    pointer-events: auto;
+  }
+  
+  /* Lighter glass card with improved styling */
+  .glass-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.3) 0%, rgba(51, 65, 85, 0.4) 50%, rgba(71, 85, 105, 0.2) 100%);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(148, 163, 184, 0.2),
+      0 0 0 1px rgba(51, 65, 85, 0.3);
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 5;
+  }
+  
+  .glass-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 
+      0 20px 40px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(148, 163, 184, 0.3),
+      0 0 0 1px rgba(71, 85, 105, 0.4);
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(51, 65, 85, 0.7) 50%, rgba(71, 85, 105, 0.5) 100%);
+  }
+  
+  /* Logo container with enhanced styling */
+  .logo-container {
+    width: 6rem;
+    height: 6rem;
+    margin: 0 auto 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(147, 197, 253, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    transition: transform 0.3s ease;
+    border: 2px solid rgba(147, 197, 253, 0.4);
+  }
+  
+  .logo-container:hover {
+    transform: scale(1.05) rotate(5deg);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Simple clean text */
+  .gradient-text {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Enhanced button styling */
+  .auth-button {
+    width: 100%;
+    font-weight: 600;
+    padding: 1rem 1.5rem;
+    border-radius: 15px;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    position: relative;
+    overflow: hidden;
+    font-size: 1rem;
+  }
+  
+  .auth-button::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.3) 50%, transparent 70%);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+  }
+  
+  .auth-button:hover::before {
+    transform: translateX(100%);
+  }
+  
+  .primary-button {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    color: white;
+    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
+    border: 1px solid rgba(147, 197, 253, 0.3);
+  }
+  
+  .primary-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(37, 99, 235, 0.6);
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
+  }
+  
+  .primary-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .secondary-button {
+    background: linear-gradient(135deg, #475569 0%, #334155 100%);
+    color: #e2e8f0;
+    box-shadow: 0 8px 25px rgba(71, 85, 105, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
+  
+  .secondary-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(71, 85, 105, 0.6);
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+  }
+  
+  /* Icon styling with proper spacing */
+  .key-icon, .user-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+  }
+  
+  .auth-button:hover .key-icon,
+  .auth-button:hover .user-icon {
+    transform: scale(1.1) rotate(5deg);
+  }
+  
+  .warning-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: 0 auto 0.5rem;
+    color: #fbbf24;
+  }
+  
+  .error-card {
+    text-align: center;
+    color: #fecaca;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.1) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 15px;
+    padding: 1rem;
+    backdrop-filter: blur(10px);
+  }
+  
+  /* Utility classes */
+  .space-y-4 > * + * { margin-top: 1rem; }
+  .text-center { text-align: center; }
+  .mb-8 { margin-bottom: 2rem; }
+  .mt-8 { margin-top: 2rem; }
+  .text-sm { font-size: 0.875rem; }
+  .text-xs { font-size: 0.75rem; }
+  .text-blue-100\/80 { color: rgba(219, 234, 254, 0.9); }
+  .text-blue-100\/60 { color: rgba(219, 234, 254, 0.8); }
+  .w-full { width: 100%; }
+  .h-full { height: 100%; }
+  .object-contain { object-fit: contain; }
+  .max-w-md { max-width: 28rem; }
+  
+  
+  
 </style>
