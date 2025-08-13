@@ -3,7 +3,7 @@
  */
 
 import { json, error } from "@sveltejs/kit";
-import { GOTIFY_URL, GOTIFY_TOKEN, N8N_WEBHOOK_URL } from "$env/static/private";
+import { env } from "$env/dynamic/private";
 
 export async function POST({ request }) {
   try {
@@ -25,7 +25,7 @@ export async function POST({ request }) {
     };
 
     // Send Gotify notification
-    if (GOTIFY_URL && GOTIFY_TOKEN) {
+    if ((env.GOTIFY_URL || process.env.GOTIFY_URL) && (env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN)) {
       try {
         const gotifyResponse = await sendGotifyNotification({
           title,
@@ -45,7 +45,7 @@ export async function POST({ request }) {
     }
 
     // Send n8n webhook
-    if (N8N_WEBHOOK_URL) {
+    if (env.N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL) {
       try {
         const n8nResponse = await sendN8nWebhook({
           type,
@@ -81,11 +81,11 @@ export async function POST({ request }) {
  * Send notification to Gotify
  */
 async function sendGotifyNotification({ title, message, priority, extras }) {
-  const response = await fetch(`${GOTIFY_URL}/message`, {
+  const response = await fetch(`${env.GOTIFY_URL || process.env.GOTIFY_URL}/message`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Gotify-Key": GOTIFY_TOKEN,
+      "X-Gotify-Key": env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN,
     },
     body: JSON.stringify({
       title,
@@ -106,7 +106,7 @@ async function sendGotifyNotification({ title, message, priority, extras }) {
  * Send webhook to n8n
  */
 async function sendN8nWebhook(payload) {
-  const response = await fetch(N8N_WEBHOOK_URL, {
+  const response = await fetch(env.N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

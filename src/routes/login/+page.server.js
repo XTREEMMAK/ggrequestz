@@ -3,11 +3,7 @@
  */
 
 import { redirect } from "@sveltejs/kit";
-import { 
-  AUTHENTIK_CLIENT_ID as ENV_CLIENT_ID,
-  AUTHENTIK_CLIENT_SECRET as ENV_CLIENT_SECRET,
-  AUTHENTIK_ISSUER as ENV_ISSUER
-} from '$env/static/private';
+import { env } from '$env/dynamic/private';
 
 export async function load({ parent }) {
   const { user, needsSetup, authMethod } = await parent();
@@ -24,9 +20,9 @@ export async function load({ parent }) {
   }
   
   // Check what authentication methods are available - hybrid approach for npm and Docker compatibility
-  const AUTHENTIK_CLIENT_ID = ENV_CLIENT_ID || process.env.AUTHENTIK_CLIENT_ID;
-  const AUTHENTIK_CLIENT_SECRET = ENV_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
-  const AUTHENTIK_ISSUER = ENV_ISSUER || process.env.AUTHENTIK_ISSUER;
+  const AUTHENTIK_CLIENT_ID = env.AUTHENTIK_CLIENT_ID || process.env.AUTHENTIK_CLIENT_ID;
+  const AUTHENTIK_CLIENT_SECRET = env.AUTHENTIK_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
+  const AUTHENTIK_ISSUER = env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_ISSUER;
   
   const isAuthentikEnabled = !!(
     AUTHENTIK_CLIENT_ID && 

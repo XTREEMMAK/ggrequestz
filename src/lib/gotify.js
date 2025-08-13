@@ -4,14 +4,11 @@
  */
 
 import { query } from "$lib/database.js";
-import {
-  GOTIFY_URL as ENV_GOTIFY_URL,
-  GOTIFY_TOKEN as ENV_GOTIFY_TOKEN,
-} from "$env/static/private";
+import { env } from "$env/dynamic/private";
 
-// Hybrid approach: use SvelteKit env vars first, fall back to process.env for Docker
-const GOTIFY_URL = ENV_GOTIFY_URL || process.env.GOTIFY_URL || process.env.VITE_GOTIFY_URL;
-const GOTIFY_TOKEN = ENV_GOTIFY_TOKEN || process.env.GOTIFY_TOKEN || process.env.VITE_GOTIFY_TOKEN;
+// Use dynamic environment variables for runtime configuration
+const GOTIFY_URL = env.GOTIFY_URL || process.env.GOTIFY_URL || process.env.VITE_GOTIFY_URL;
+const GOTIFY_TOKEN = env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN || process.env.VITE_GOTIFY_TOKEN;
 
 /**
  * Send a notification via Gotify

@@ -3,12 +3,7 @@
  */
 
 import Typesense from "typesense";
-import {
-  TYPESENSE_API_KEY,
-  TYPESENSE_HOST,
-  TYPESENSE_PORT,
-  TYPESENSE_PROTOCOL,
-} from "$env/static/private";
+import { env } from "$env/dynamic/private";
 
 let client;
 
@@ -21,12 +16,12 @@ export function getTypesenseClient() {
     client = new Typesense.Client({
       nodes: [
         {
-          host: TYPESENSE_HOST || "localhost",
-          port: parseInt(TYPESENSE_PORT) || 8108,
-          protocol: TYPESENSE_PROTOCOL || "http",
+          host: env.TYPESENSE_HOST || process.env.TYPESENSE_HOST || "localhost",
+          port: parseInt(env.TYPESENSE_PORT || process.env.TYPESENSE_PORT) || 8108,
+          protocol: env.TYPESENSE_PROTOCOL || process.env.TYPESENSE_PROTOCOL || "http",
         },
       ],
-      apiKey: TYPESENSE_API_KEY || "xyz",
+      apiKey: env.TYPESENSE_API_KEY || process.env.TYPESENSE_API_KEY || "xyz",
       connectionTimeoutSeconds: 2,
     });
   }

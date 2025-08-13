@@ -77,19 +77,19 @@ print_success "Environment validation passed"
 
 # Stop existing containers
 print_status "Stopping existing containers..."
-docker compose down --remove-orphans || true
+docker compose --env-file .env.docker down --remove-orphans || true
 
 # Pull latest images
 print_status "Pulling latest images..."
-docker compose -f docker-compose.yml -f docker-compose.production.yml pull || print_warning "Some images may not be available for pulling"
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.production.yml pull || print_warning "Some images may not be available for pulling"
 
 # Build application
 print_status "Building application..."
-docker compose -f docker-compose.yml -f docker-compose.production.yml build --no-cache
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.production.yml build --no-cache
 
 # Start services
 print_status "Starting production services..."
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.production.yml up -d
 
 # Wait for services to be healthy
 print_status "Waiting for services to be healthy..."
@@ -97,7 +97,7 @@ sleep 10
 
 # Fix migration table structure if needed
 print_status "Ensuring migration table structure is compatible..."
-if docker compose exec ggrequestz node scripts/fix-migration-table.js; then
+if docker compose --env-file .env.docker exec ggrequestz node scripts/fix-migration-table.js; then
   print_success "Migration table structure validated"
 else
   print_warning "Migration table fix had issues - deployment may still proceed"
@@ -110,7 +110,7 @@ services=("ggrequestz" "postgres" "redis" "typesense")
 healthy_services=0
 
 for service in "${services[@]}"; do
-    if docker compose ps | grep -q "$service.*healthy\|$service.*running"; then
+    if docker compose --env-file .env.docker ps | grep -q "$service.*healthy\|$service.*running"; then
         print_success "$service is healthy"
         ((healthy_services++))
     else

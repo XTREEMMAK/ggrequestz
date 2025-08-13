@@ -59,23 +59,22 @@ endif
 # Clean up everything
 clean:
 	docker-compose down -v --remove-orphans
-	docker-compose -f docker-compose.dev.yml down -v --remove-orphans
 	docker system prune -f
 
 # Development mode
 dev:
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+	docker-compose --env-file .env.dev up -d
 
 dev-logs:
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
+	docker-compose --env-file .env.dev logs -f
 
 # Production mode
 prod:
-	docker-compose up -d
+	docker-compose --env-file .env.docker -f docker-compose.yml -f docker-compose.production.yml up -d
 
 # Production with all services
 prod-full:
-	docker-compose --profile notifications --profile proxy up -d
+	docker-compose --env-file .env.docker -f docker-compose.yml -f docker-compose.production.yml --profile notifications --profile proxy up -d
 
 # Health check
 health:

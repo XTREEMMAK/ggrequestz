@@ -5,7 +5,7 @@
  */
 
 import { createClient } from 'redis';
-import { REDIS_URL } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 
 class HybridCache {
   constructor() {
@@ -28,7 +28,7 @@ class HybridCache {
     if (process.env.NODE_ENV === 'development') {
     }
     
-    const redisUrl = REDIS_URL || process.env.REDIS_URL;
+    const redisUrl = env.REDIS_URL || process.env.REDIS_URL;
     if (!redisUrl) {
       if (process.env.NODE_ENV === 'development') {
       }

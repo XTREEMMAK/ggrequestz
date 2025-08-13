@@ -5,18 +5,13 @@
 import { SignJWT, jwtVerify } from "jose";
 import { serialize, parse } from "cookie";
 import crypto from "crypto";
-import {
-  AUTHENTIK_CLIENT_ID as ENV_CLIENT_ID,
-  AUTHENTIK_CLIENT_SECRET as ENV_CLIENT_SECRET,
-  AUTHENTIK_ISSUER as ENV_ISSUER,
-  SESSION_SECRET as ENV_SESSION_SECRET,
-} from "$env/static/private";
+import { env } from "$env/dynamic/private";
 
-// Hybrid approach: use SvelteKit env vars first, fall back to process.env for Docker
-const AUTHENTIK_CLIENT_ID = ENV_CLIENT_ID || process.env.AUTHENTIK_CLIENT_ID;
-const AUTHENTIK_CLIENT_SECRET = ENV_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
-const AUTHENTIK_ISSUER = ENV_ISSUER || process.env.AUTHENTIK_ISSUER;
-const SESSION_SECRET = ENV_SESSION_SECRET || process.env.SESSION_SECRET;
+// Use dynamic environment variables for runtime configuration
+const AUTHENTIK_CLIENT_ID = env.AUTHENTIK_CLIENT_ID || process.env.AUTHENTIK_CLIENT_ID;
+const AUTHENTIK_CLIENT_SECRET = env.AUTHENTIK_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
+const AUTHENTIK_ISSUER = env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_ISSUER;
+const SESSION_SECRET = env.SESSION_SECRET || process.env.SESSION_SECRET;
 
 // Validate required environment variables
 function validateEnvironment() {
