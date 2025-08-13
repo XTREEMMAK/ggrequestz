@@ -67,7 +67,7 @@
 {#if providerId === 'local_auth'}
   <div class="bg-gray-700/50 rounded-lg p-4">
     <p class="text-sm text-gray-300">
-      Local authentication uses traditional username/password login stored in the GameRequest database. 
+      Local authentication uses traditional username/password login stored in the G.G Requestz database. 
       No additional configuration required.
     </p>
   </div>

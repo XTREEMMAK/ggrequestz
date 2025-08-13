@@ -25,7 +25,7 @@
 </script>
 
 <svelte:head>
-  <title>Request Games - GameRequest</title>
+  <title>Request Games - G.G Requestz</title>
   <meta name="description" content="Request new games, updates, or report issues. Help us improve our game library." />
 </svelte:head>
 

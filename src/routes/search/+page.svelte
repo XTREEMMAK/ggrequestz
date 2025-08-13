@@ -294,7 +294,7 @@
 </script>
 
 <svelte:head>
-  <title>Search Games - GameRequest</title>
+  <title>Search Games - G.G Requestz</title>
   <meta name="description" content="Search our extensive game library with advanced filters and sorting options." />
 </svelte:head>
 

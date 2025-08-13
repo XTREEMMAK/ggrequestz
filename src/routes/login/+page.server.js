@@ -24,13 +24,15 @@ export async function load({ parent }) {
   const AUTHENTIK_CLIENT_SECRET = env.AUTHENTIK_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
   const AUTHENTIK_ISSUER = env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_ISSUER;
   
+  // Only enable Authentik if credentials are present AND auth method is not set to 'basic' only
   const isAuthentikEnabled = !!(
     AUTHENTIK_CLIENT_ID && 
     AUTHENTIK_CLIENT_SECRET && 
-    AUTHENTIK_ISSUER
+    AUTHENTIK_ISSUER &&
+    authMethod !== 'basic'
   );
   
-  // Check if basic auth is enabled (by checking if initial admin exists) - only if we're in basic auth mode
+  // Check if basic auth is enabled (by checking if initial admin exists)
   let isBasicAuthEnabled = false;
   if (authMethod === 'basic') {
     try {
@@ -38,6 +40,14 @@ export async function load({ parent }) {
       isBasicAuthEnabled = !(await needsInitialSetup());
     } catch (error) {
       console.error('Error checking basic auth status:', error);
+      isBasicAuthEnabled = false;
+    }
+  } else if (authMethod === 'authentik') {
+    // If using Authentik as primary method, still allow basic auth as fallback if configured
+    try {
+      const { needsInitialSetup } = await import('$lib/basicAuth.js');
+      isBasicAuthEnabled = !(await needsInitialSetup());
+    } catch (error) {
       isBasicAuthEnabled = false;
     }
   }

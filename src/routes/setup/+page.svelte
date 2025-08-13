@@ -50,8 +50,8 @@
 </script>
 
 <svelte:head>
-  <title>Welcome to GameRequest - First Run Setup</title>
-  <meta name="description" content="Welcome to GameRequest - Game Discovery & Request Platform Setup" />
+  <title>Welcome to G.G Requestz - First Run Setup</title>
+  <meta name="description" content="Welcome to G.G Requestz - Game Discovery & Request Platform Setup" />
 </svelte:head>
 
 <!-- Background Image -->

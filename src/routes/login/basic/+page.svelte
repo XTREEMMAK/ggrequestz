@@ -8,6 +8,7 @@
   import { page } from '$app/stores';
   import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
   import Icon from '@iconify/svelte';
+  import { fade } from 'svelte/transition';
 
   let { data, form } = $props();
   
@@ -24,12 +25,29 @@
 </script>
 
 <svelte:head>
-  <title>Basic Login - GameRequest</title>
+  <title>Basic Login - G.G Requestz</title>
   <meta name="description" content="Login with username and password" />
 </svelte:head>
 
 <!-- Background -->
 <div class="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4">
+  
+  <!-- Full-page loading overlay -->
+  {#if loading}
+    <div 
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
+      transition:fade={{ duration: 300 }}
+    >
+      <div 
+        class="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 text-center"
+        transition:fade={{ duration: 400, delay: 100 }}
+      >
+        <LoadingSpinner size="lg" />
+        <p class="text-white mt-4 text-lg font-medium">Logging you in...</p>
+        <p class="text-blue-100/70 text-sm mt-2">Please wait while we authenticate your credentials</p>
+      </div>
+    </div>
+  {/if}
   
   <!-- Login Card -->
   <div class="w-full max-w-md">
@@ -62,7 +80,10 @@
         use:enhance={() => {
           loading = true;
           return async ({ result, update }) => {
-            loading = false;
+            // Only set loading to false if login failed (not redirecting)
+            if (result.type === 'failure' || result.type === 'error') {
+              loading = false;
+            }
             await update();
             if (result.type === 'redirect') {
               goto(result.location || '/', { replaceState: true });

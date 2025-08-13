@@ -143,7 +143,7 @@
 </script>
 
 <svelte:head>
-  <title>My Profile - GameRequest</title>
+  <title>My Profile - G.G Requestz</title>
   <meta name="description" content="Manage your game watchlist and view your request history." />
 </svelte:head>
 

@@ -145,7 +145,7 @@
 			<div class="flex-1 flex items-center justify-center">
 				<img 
 					src="/GGR_Logo.webp" 
-					alt="GameRequest Logo" 
+					alt="G.G Requestz Logo" 
 					class="h-24 w-auto"
 				/>
 			</div>

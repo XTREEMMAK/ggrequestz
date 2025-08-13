@@ -81,7 +81,7 @@
 </script>
 
 <svelte:head>
-  <title>Admin Panel - GameRequest</title>
+  <title>Admin Panel - G.G Requestz</title>
   <meta name="description" content="Administrative interface for managing game requests and users." />
 </svelte:head>
 
@@ -100,7 +100,7 @@
           <a href="/admin" class="flex-1 flex items-center justify-center space-x-3">
             <img 
               src="/GGR_Logo.webp" 
-              alt="GameRequest Admin Logo" 
+              alt="G.G Requestz Admin Logo" 
               class="h-10 w-auto filter brightness-0 invert"
             />
             <span class="text-white font-semibold text-lg">Admin</span>
