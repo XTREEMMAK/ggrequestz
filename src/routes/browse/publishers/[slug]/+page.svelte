@@ -69,9 +69,23 @@
   <!-- Header -->
   <div class="mb-8">
     <nav class="text-sm text-gray-400 mb-4">
-      <a href="/" class="hover:text-white transition-colors">Home</a>
+      <button
+        type="button"
+        onclick={() => goto('/')}
+        class="hover:text-white transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+        aria-label="Navigate to Home"
+      >
+        Home
+      </button>
       <span class="mx-2">/</span>
-      <a href="/browse" class="hover:text-white transition-colors">Browse</a>
+      <button
+        type="button"
+        onclick={() => goto('/browse')}
+        class="hover:text-white transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+        aria-label="Navigate to Browse"
+      >
+        Browse
+      </button>
       <span class="mx-2">/</span>
       <span class="text-white">{publisher?.name || 'Publisher'}</span>
     </nav>
@@ -93,6 +107,7 @@
           {game} 
           {user}
           isInWatchlist={userWatchlist.some(w => w.igdb_id === game.igdb_id)}
+          enablePreloading={true}
           on:request={handleGameRequest}
           on:watchlist={handleWatchlist}
           on:view-details={handleViewDetails}

@@ -40,24 +40,16 @@
   
   function handleBack() {
     if (browser) {
-      // Store the current page to avoid infinite loops
-      const currentPath = window.location.pathname;
+      // Check for referrer in URL params or session storage
+      const referrer = $page.url.searchParams.get('from') 
+        || sessionStorage.getItem('gameDetailReferrer') 
+        || '/search';
       
-      // Check if we can go back
-      if (window.history.length > 1) {
-        // First try to go back
-        window.history.back();
-        
-        // Fallback: if history.back() doesn't work within 100ms, redirect to search
-        setTimeout(() => {
-          if (window.location.pathname === currentPath) {
-            goto('/search');
-          }
-        }, 100);
-      } else {
-        // No history available, go to search
-        goto('/search');
-      }
+      // Clean up the referrer from session storage
+      sessionStorage.removeItem('gameDetailReferrer');
+      
+      // Use SvelteKit's goto instead of window.history.back()
+      goto(referrer);
     } else {
       // Not in browser, fallback to search
       goto('/search');
@@ -600,12 +592,14 @@
       <p class="text-gray-500 dark:text-gray-400 mb-4">
         The game you're looking for doesn't exist or has been removed.
       </p>
-      <a
-        href="/search"
-        class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+      <button
+        type="button"
+        onclick={() => goto('/search')}
+        class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        aria-label="Navigate to Search"
       >
         Browse Games
-      </a>
+      </button>
     </div>
   </div>
 {/if}

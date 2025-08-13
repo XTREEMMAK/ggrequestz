@@ -215,12 +215,14 @@
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
               My Watchlist ({userWatchlist.length})
             </h2>
-            <a 
-              href="/search"
-              class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium transition-colors"
+            <button
+              type="button"
+              onclick={() => goto('/search')}
+              class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+              aria-label="Navigate to Search"
             >
               Find more games →
-            </a>
+            </button>
           </div>
           
           {#if userWatchlist.length > 0}
@@ -248,12 +250,14 @@
               <p class="text-gray-500 dark:text-gray-400 mb-4">
                 Start building your game collection by adding games to your watchlist.
               </p>
-              <a
-                href="/search"
-                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              <button
+                type="button"
+                onclick={() => goto('/search')}
+                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label="Navigate to Search"
               >
                 Browse Games
-              </a>
+              </button>
             </div>
           {/if}
         </div>
@@ -266,12 +270,14 @@
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
               My Requests ({userRequests.length})
             </h2>
-            <a 
-              href="/request"
-              class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium transition-colors"
+            <button
+              type="button"
+              onclick={() => goto('/request')}
+              class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+              aria-label="Navigate to Request"
             >
               Make new request →
-            </a>
+            </button>
           </div>
           
           {#if userRequests.length > 0}
@@ -389,12 +395,14 @@
               <p class="text-gray-500 dark:text-gray-400 mb-4">
                 You haven't submitted any game requests. Start by requesting a game you'd like to see added.
               </p>
-              <a
-                href="/request"
-                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              <button
+                type="button"
+                onclick={() => goto('/request')}
+                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label="Navigate to Request"
               >
                 Make Your First Request
-              </a>
+              </button>
             </div>
           {/if}
         </div>

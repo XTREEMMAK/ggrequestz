@@ -62,7 +62,6 @@
   let skipAnimations = $state(false);
   
   // Navigation and scroll management
-  let isNavigatingToDetail = $state(false);
   let savedScrollPosition = $state(0);
   
   // Modal state
@@ -378,37 +377,31 @@
     }
   }
   
-  // Enhanced navigation hooks for selective scroll restoration
+  // Simplified navigation hooks - reduce interference with browser history
   beforeNavigate((navigation) => {
     if (!browser) return;
     
-    // Save state when leaving the homepage
-    if (window.location.pathname === '/') {
+    // Only save state when leaving the homepage for a game detail page
+    if (window.location.pathname === '/' && navigation.to?.url.pathname.startsWith('/game/')) {
       saveHomepageState();
-      
-      // Check if navigating to a game detail page
-      if (navigation.to?.url.pathname.startsWith('/game/')) {
-        isNavigatingToDetail = true;
-        saveScrollPosition();
-      }
+      saveScrollPosition();
     }
   });
   
   afterNavigate((navigation) => {
     if (!browser) return;
     
-    // Check if we're returning to homepage from a detail page
+    // Only restore when returning from a game detail page
     if (window.location.pathname === '/' && navigation.from?.url.pathname.startsWith('/game/')) {
-      // Short delay to ensure content is rendered before restoring scroll
       setTimeout(() => {
         restoreScrollPosition();
-      }, 100);
+      }, 50); // Reduced timeout
     }
   });
   
   onDestroy(() => {
-    // Clean up any pending scroll position saves when component is destroyed
-    if (browser && isNavigatingToDetail) {
+    // Component cleanup - minimal state management
+    if (browser) {
       saveScrollPosition();
     }
   });
@@ -538,6 +531,7 @@
               {game} 
               {user}
               isInWatchlist={false}
+              enablePreloading={true}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
               on:show-modal={handleShowModal}
@@ -558,6 +552,7 @@
               {game} 
               {user}
               isInWatchlist={false}
+              enablePreloading={true}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
               on:show-modal={handleShowModal}
@@ -615,6 +610,7 @@
                   {game} 
                   {user}
                   isInWatchlist={isGameInWatchlist(game)}
+                  enablePreloading={true}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                       on:show-modal={handleShowModal}
@@ -635,6 +631,7 @@
                   {game} 
                   {user}
                   isInWatchlist={isGameInWatchlist(game)}
+                  enablePreloading={true}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                       on:show-modal={handleShowModal}
@@ -714,6 +711,7 @@
                   {game} 
                   {user}
                   isInWatchlist={isGameInWatchlist(game)}
+                  enablePreloading={true}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                       on:show-modal={handleShowModal}
@@ -734,6 +732,7 @@
                   {game} 
                   {user}
                   isInWatchlist={isGameInWatchlist(game)}
+                  enablePreloading={true}
                   on:request={handleGameRequest}
                   on:watchlist={handleWatchlist}
                       on:show-modal={handleShowModal}

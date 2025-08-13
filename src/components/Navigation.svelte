@@ -52,18 +52,23 @@
       <div class="flex">
         <!-- Logo -->
         <div class="flex-shrink-0 flex items-center">
-          <a href="/" class="text-xl font-bold text-gray-900 dark:text-white">
+          <button
+            type="button"
+            onclick={() => goto('/')}
+            class="text-xl font-bold text-gray-900 dark:text-white bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md"
+            aria-label="Navigate to Home"
+          >
             🎮 GG.Requestz
-          </a>
+          </button>
         </div>
         
         <!-- Desktop navigation -->
         <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
           {#each navItems as item}
-            <a
-              href={item.path}
-              class="inline-flex items-center px-1 pt-1 text-sm font-medium border-b-2 transition-colors"
-              data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
+            <button
+              type="button"
+              onclick={() => goto(item.path)}
+              class="inline-flex items-center px-1 pt-1 text-sm font-medium border-b-2 transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-0"
               class:border-blue-500={isActivePath(item.path)}
               class:text-gray-900={isActivePath(item.path)}
               class:dark:text-white={isActivePath(item.path)}
@@ -72,6 +77,7 @@
               class:hover:text-gray-700={!isActivePath(item.path)}
               class:dark:text-gray-400={!isActivePath(item.path)}
               class:dark:hover:text-gray-300={!isActivePath(item.path)}
+              aria-label="Navigate to {item.label}"
             >
               <!-- Icons -->
               {#if item.icon === 'home'}
@@ -82,7 +88,7 @@
                 <Icon icon="heroicons:plus" class="w-4 h-4 mr-2" />
               {/if}
               {item.label}
-            </a>
+            </button>
           {/each}
         </div>
       </div>
@@ -93,16 +99,17 @@
           <!-- User authenticated -->
           <div class="hidden sm:ml-4 sm:flex sm:items-center sm:space-x-4">
             {#each userNavItems as item}
-              <a
-                href={item.path}
-                class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
+              <button
+                type="button"
+                onclick={() => goto(item.path)}
+                class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-2 rounded-md text-sm font-medium transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 class:text-gray-900={isActivePath(item.path)}
                 class:dark:text-white={isActivePath(item.path)}
+                aria-label="Navigate to {item.label}"
               >
                 <Icon icon="heroicons:user" class="w-4 h-4 inline mr-1" />
                 {item.label}
-              </a>
+              </button>
             {/each}
             
             <!-- User dropdown -->
@@ -163,11 +170,10 @@
     <div class="sm:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
       <div class="px-2 pt-2 pb-3 space-y-1">
         {#each navItems as item}
-          <a
-            href={item.path}
-            onclick={closeMobileMenu}
-            class="block px-3 py-2 rounded-md text-base font-medium transition-colors"
-            data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
+          <button
+            type="button"
+            onclick={() => { goto(item.path); closeMobileMenu(); }}
+            class="block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             class:bg-blue-50={isActivePath(item.path)}
             class:dark:bg-blue-900={isActivePath(item.path)}
             class:text-blue-700={isActivePath(item.path)}
@@ -176,21 +182,22 @@
             class:dark:text-gray-300={!isActivePath(item.path)}
             class:hover:bg-gray-50={!isActivePath(item.path)}
             class:dark:hover:bg-gray-700={!isActivePath(item.path)}
+            aria-label="Navigate to {item.label}"
           >
             {item.label}
-          </a>
+          </button>
         {/each}
         
         {#if user}
           {#each userNavItems as item}
-            <a
-              href={item.path}
-              onclick={closeMobileMenu}
-              class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              data-sveltekit-preload-data={item.path.startsWith('/admin') ? 'off' : 'hover'}
+            <button
+              type="button"
+              onclick={() => { goto(item.path); closeMobileMenu(); }}
+              class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              aria-label="Navigate to {item.label}"
             >
               {item.label}
-            </a>
+            </button>
           {/each}
           
           <button

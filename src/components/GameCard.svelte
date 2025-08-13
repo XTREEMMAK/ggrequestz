@@ -7,8 +7,9 @@
   import StatusBadge from './StatusBadge.svelte';
   import { truncateText, formatDate } from '$lib/utils.js';
   import Icon from '@iconify/svelte';
+  import { browser } from '$app/environment';
   
-  let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null, preserveState = false } = $props();
+  let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null, preserveState = false, enablePreloading = false } = $props();
   
   const dispatch = createEventDispatcher();
   
@@ -38,6 +39,11 @@
   
   function handleClick(event) {
     triggerGhostClick();
+    
+    // Store referrer information for proper back navigation
+    if (browser) {
+      sessionStorage.setItem('gameDetailReferrer', window.location.pathname + window.location.search);
+    }
     
     // If preserveState is true, prevent default link behavior and use event dispatcher
     if (preserveState) {
@@ -200,7 +206,7 @@
   onmouseleave={() => handleMouseLeave()}
   onclick={handleClick}
   aria-label="View details for {game.title || 'Unknown Game'}"
-  data-sveltekit-preload-data="hover"
+  data-sveltekit-preload-data={enablePreloading ? "hover" : "off"}
 >
   <!-- Poster Image with rotation -->
   <div class="relative w-full h-full overflow-hidden">

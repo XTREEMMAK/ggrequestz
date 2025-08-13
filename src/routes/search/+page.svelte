@@ -497,6 +497,7 @@
               {user}
               isInWatchlist={userWatchlist.some(w => w.igdb_id === game.igdb_id)}
               preserveState={true}
+              enablePreloading={true}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
               on:view-details={handleViewDetails}
