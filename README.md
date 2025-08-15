@@ -18,7 +18,11 @@ A modern game discovery and request management platform with IGDB integration, R
 - **🎨 Modern UI** - Responsive design with dark mode and smooth animations
 
 ## 📹 Preview
-[Video Preview](https://www.youtube.com/watch?v=dblxpNVZlqY)
+
+<div style="text-align:center;">
+[VIDEO PROMO](https://www.youtube.com/watch?v=dblxpNVZlqY)
+</div>
+
 <img src=".github/resources/screenshots/01.png" alt="Desktop Preview - 01" />
 <img src=".github/resources/screenshots/02.png" alt="Desktop Preview - 02" />
 <img src=".github/resources/screenshots/03.png" alt="Desktop Preview - 03" />
