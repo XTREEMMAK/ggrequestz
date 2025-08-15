@@ -1,12 +1,13 @@
 <p align="center">
   <img src="static/GGR_Logo.webp" alt="G.G Requestz Logo" width="400">
 </p>
+
 # 🎮 GG Requestz
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
 ![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
 
