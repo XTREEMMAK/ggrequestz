@@ -95,13 +95,13 @@
 </script>
 
 <svelte:head>
-  <title>Initial Setup - GameRequest</title>
+  <title>Initial Setup - G.G. Requestz</title>
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
   <div class="sm:mx-auto sm:w-full sm:max-w-md">
     <div class="text-center">
-      <h2 class="text-3xl font-bold text-gray-900 mb-2">🎮 GameRequest</h2>
+      <h2 class="text-3xl font-bold text-gray-900 mb-2">🎮 G.G. Requestz</h2>
       <p class="text-sm text-gray-600 mb-1">Initial System Setup</p>
       <p class="text-xs text-orange-600">Create the first admin account</p>
     </div>
@@ -321,6 +321,6 @@
 
   <!-- Footer -->
   <div class="mt-8 text-center text-xs text-gray-500">
-    <p>© 2024 GameRequest. Secure setup with bcrypt encryption.</p>
+    <p>© 2024 G.G. Requestz. Secure setup with bcrypt encryption.</p>
   </div>
 </div>

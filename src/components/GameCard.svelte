@@ -256,7 +256,7 @@
       <!-- Screenshots indicator -->
       {#if hasAdditionalScreenshots}
         <button
-          onclick={(e) => { e.stopPropagation(); handleShowModal(); }}
+          onclick={(e) => { e.preventDefault(); e.stopPropagation(); handleShowModal(); }}
           class="bg-black bg-opacity-70 text-white p-1 rounded-full hover:bg-opacity-90 transition-all self-end"
           title="View {game.screenshots.length} screenshots"
         >
@@ -278,7 +278,7 @@
         {#if isInWatchlist}
           <!-- Remove from watchlist button -->
           <button
-            onclick={(e) => { e.stopPropagation(); handleWatchlist(); }}
+            onclick={(e) => { e.preventDefault(); e.stopPropagation(); handleWatchlist(); }}
             class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors opacity-90 hover:opacity-100"
             title="Remove from watchlist"
           >
@@ -287,7 +287,7 @@
         {:else}
           <!-- Add to watchlist button -->
           <button
-            onclick={(e) => { e.stopPropagation(); handleWatchlist(); }}
+            onclick={(e) => { e.preventDefault(); e.stopPropagation(); handleWatchlist(); }}
             class="bg-gray-800 bg-opacity-70 hover:bg-green-600 text-white p-2 rounded-full transition-all opacity-90 hover:opacity-100"
             title="Add to watchlist"
           >

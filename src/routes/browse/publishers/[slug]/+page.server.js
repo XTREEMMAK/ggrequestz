@@ -15,7 +15,26 @@ export async function load({ params, parent }) {
     const [publisher, games, userWatchlist] = await Promise.all([
       getPublisherBySlug(publisherSlug),
       getGamesByPublisher(publisherSlug, 24, 0),
-      user ? watchlist.get(user.sub).catch(() => []) : Promise.resolve([]),
+      user ? (async () => {
+        let userId;
+        
+        if (user.sub?.startsWith('basic_auth_')) {
+          // For Basic Auth users, extract actual user ID from sub
+          userId = user.sub.replace('basic_auth_', '');
+        } else {
+          // For Authentik users, look up database ID by authentik_sub
+          const { query } = await import('$lib/database.js');
+          const userResult = await query(
+            "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+            [user.sub]
+          );
+          if (userResult.rows.length > 0) {
+            userId = userResult.rows[0].id;
+          }
+        }
+        
+        return userId ? watchlist.get(userId).catch(() => []) : [];
+      })() : Promise.resolve([]),
     ]);
 
     if (!publisher) {

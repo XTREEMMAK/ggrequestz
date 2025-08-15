@@ -77,9 +77,29 @@ export async function load({ parent, cookies, url }) {
         { timeout: 5000, fallback: [], errorContext: 'Recent requests loading' }
       ),
 
-      // Get user's watchlist
+      // Get user's watchlist - handle both auth types properly
       safeAsync(
-        () => watchlist.get(user.sub),
+        async () => {
+          let userId;
+          
+          if (user.sub?.startsWith('basic_auth_')) {
+            // For Basic Auth users, extract actual user ID from sub
+            userId = user.sub.replace('basic_auth_', '');
+          } else {
+            // For Authentik users, look up database ID by authentik_sub
+            const { query } = await import('$lib/database.js');
+            const userResult = await query(
+              "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+              [user.sub]
+            );
+            if (userResult.rows.length === 0) {
+              throw new Error('User not found in database');
+            }
+            userId = userResult.rows[0].id;
+          }
+          
+          return watchlist.get(userId);
+        },
         { timeout: 3000, fallback: [], errorContext: 'User watchlist loading' }
       ),
     ]);

@@ -4,13 +4,28 @@
 
 import { json, error } from "@sveltejs/kit";
 import { requireAuth } from "$lib/auth.js";
+import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { watchlist } from "$lib/database.js";
 import { query } from "$lib/database.js";
+import { parse } from "cookie";
 
 export async function POST({ request }) {
   try {
-    // Verify authentication
-    const user = await requireAuth(request);
+    // Verify authentication - try both Authentik and Basic Auth
+    let user = await requireAuth(request);
+    
+    // If Authentik auth failed, try Basic Auth
+    if (!user) {
+      const cookieHeader = request.headers.get("cookie");
+      if (cookieHeader) {
+        const cookies = parse(cookieHeader);
+        const basicAuthSession = cookies.basic_auth_session;
+        if (basicAuthSession) {
+          user = getBasicAuthUser(basicAuthSession);
+        }
+      }
+    }
+    
     if (!user) {
       throw error(401, "Authentication required");
     }

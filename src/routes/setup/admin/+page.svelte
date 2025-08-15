@@ -126,7 +126,7 @@
 </script>
 
 <svelte:head>
-  <title>Create Admin Account - GameRequest Setup</title>
+  <title>Create Admin Account - G.G. Requestz Setup</title>
 </svelte:head>
 
 <!-- Background Image -->
@@ -152,7 +152,7 @@
       <!-- Header -->
       <div class="text-center mb-8">
         <div class="mx-auto w-20 h-20 mb-4 flex items-center justify-center">
-          <img src="/GGR_Logo.webp" alt="GameRequest Logo" class="w-full h-full object-contain" />
+          <img src="/GGR_Logo.webp" alt="G.G. Requestz Logo" class="w-full h-full object-contain" />
         </div>
         <h1 class="text-3xl font-bold text-white mb-2">Create Admin Account</h1>
         <p class="text-blue-100/80">Set up your first administrator account</p>

@@ -5,7 +5,7 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 ## ✨ Features
@@ -71,7 +71,7 @@ OIDC_ISSUER_URL=https://your-provider.com
 OIDC_CLIENT_ID=your-client-id
 OIDC_CLIENT_SECRET=your-client-secret
 
-# IGDB API
+# IGDB API (Required for game data)
 IGDB_CLIENT_ID=your-igdb-client
 IGDB_CLIENT_SECRET=your-igdb-secret
 
@@ -79,6 +79,32 @@ IGDB_CLIENT_SECRET=your-igdb-secret
 REDIS_URL=redis://localhost:6379
 ROMM_URL=http://your-romm-instance
 ```
+
+### Getting IGDB API Credentials
+
+IGDB (Internet Game Database) provides the game data for G.G. Requestz. To get your API credentials:
+
+1. **Create a Twitch Developer Account**
+   - Visit the [Twitch Developer Console](https://dev.twitch.tv/console)
+   - Sign in with your Twitch account (or create one if needed)
+
+2. **Register Your Application**
+   - Click "Register Your Application"
+   - Fill in the required details:
+     - **Name**: G.G. Requestz (or your preferred name)
+     - **OAuth Redirect URLs**: `http://localhost:5173` (for development)
+     - **Category**: Application Integration
+
+3. **Get Your Credentials**
+   - After registration, you'll receive:
+     - **Client ID** → Use as `IGDB_CLIENT_ID`
+     - **Client Secret** → Use as `IGDB_CLIENT_SECRET`
+
+4. **Detailed Setup Guide**
+   - For complete setup instructions, visit: https://api-docs.igdb.com/#getting-started
+   - The IGDB API uses Twitch's OAuth system for authentication
+
+**Note**: These credentials are required for the application to fetch game data, search results, and cover images.
 
 ## 🤝 Contributing
 

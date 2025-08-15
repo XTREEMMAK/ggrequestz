@@ -7,7 +7,7 @@ import { json } from '@sveltejs/kit';
 import { query } from '$lib/database.js';
 import { getRedisClient } from '$lib/cache.js';
 
-export async function POST({ request }) {
+export async function POST({ request, cookies }) {
   try {
     const { service } = await request.json();
     
@@ -24,7 +24,7 @@ export async function POST({ request }) {
         result = await testIGDB();
         break;
       case 'romm_library':
-        result = await testROMM();
+        result = await testROMM(cookies);
         break;
       default:
         result = { success: false, error: 'Unknown service' };
@@ -116,7 +116,7 @@ async function testIGDB() {
   }
 }
 
-async function testROMM() {
+async function testROMM(cookies) {
   try {
     const rommUrl = process.env.ROMM_SERVER_URL;
     const rommUsername = process.env.ROMM_USERNAME;
@@ -130,22 +130,43 @@ async function testROMM() {
       return { success: false, error: 'ROMM credentials not configured' };
     }
     
-    // Test ROMM connection
-    const loginResponse = await fetch(`${rommUrl}/api/auth/login`, {
+    // Check if user is authenticated with basic auth
+    let authHeaders = { 'Content-Type': 'application/json' };
+    
+    // Get basic auth session if available
+    const basicAuthSession = cookies?.get('basic_auth_session');
+    if (basicAuthSession) {
+      // For basic auth users, we may need to pass additional headers
+      // But for ROMM test, we use the configured ROMM credentials directly
+    }
+    
+    // Test ROMM authentication using the correct OAuth2 token endpoint
+    const tokenResponse = await fetch(`${rommUrl}/api/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'password',
         username: rommUsername,
-        password: rommPassword
-      })
+        password: rommPassword,
+        scope: 'roms.read',
+      }),
     });
     
-    if (loginResponse.ok) {
-      return { success: true };
+    if (tokenResponse.ok) {
+      const data = await tokenResponse.json();
+      if (data.access_token) {
+        return { success: true };
+      } else {
+        return { success: false, error: 'ROMM authentication failed: No access token received' };
+      }
+    } else if (tokenResponse.status === 401 || tokenResponse.status === 403) {
+      return { success: false, error: 'ROMM credentials are invalid' };
     } else {
-      return { success: false, error: `ROMM connection failed: ${loginResponse.status}` };
+      return { success: false, error: `ROMM connection failed: ${tokenResponse.status}` };
     }
   } catch (error) {
-    return { success: true, warning: `ROMM connection failed: ${error.message} (optional service)` };
+    return { success: true, warning: `ROMM connection test failed: ${error.message} (optional service)` };
   }
 }

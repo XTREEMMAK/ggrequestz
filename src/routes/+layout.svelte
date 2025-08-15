@@ -7,6 +7,7 @@
 	import Icon from '@iconify/svelte';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
+	import Toast from '../components/Toast.svelte';
 	
 	let { data, children } = $props();
 	
@@ -388,3 +389,6 @@
 		{@render children()}
 	</main>
 </div>
+
+<!-- Toast notifications -->
+<Toast />

@@ -34,7 +34,12 @@ IGDB_CLIENT_ID=your_igdb_client_id
 IGDB_CLIENT_SECRET=your_igdb_client_secret
 ```
 
-- Register at: https://api.igdb.com/
+**Getting IGDB Credentials:**
+1. Create a Twitch developer account at [dev.twitch.tv/console](https://dev.twitch.tv/console)
+2. Register your application with OAuth redirect URL: `http://localhost:5173`
+3. Use the Client ID and Client Secret as your IGDB credentials
+4. For detailed instructions: https://api-docs.igdb.com/#getting-started
+
 - Provides real game data instead of mock data
 
 #### **Level 2: User Authentication (Optional)**

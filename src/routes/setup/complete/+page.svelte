@@ -56,7 +56,7 @@
 </script>
 
 <svelte:head>
-  <title>Setup Complete - GameRequest</title>
+  <title>Setup Complete - G.G. Requestz</title>
 </svelte:head>
 
 <!-- Background Image -->
@@ -82,7 +82,7 @@
       <!-- Header -->
       <div class="text-center mb-8">
         <div class="mx-auto w-24 h-24 mb-6 flex items-center justify-center">
-          <img src="/GGR_Logo.webp" alt="GameRequest Logo" class="w-full h-full object-contain" />
+          <img src="/GGR_Logo.webp" alt="G.G. Requestz Logo" class="w-full h-full object-contain" />
         </div>
         
         <!-- Success Icon -->
@@ -91,7 +91,7 @@
         </div>
         
         <h1 class="text-4xl font-bold text-white mb-2">🎉 Setup Complete!</h1>
-        <p class="text-xl text-green-100/90 mb-2">GameRequest is ready to use</p>
+        <p class="text-xl text-green-100/90 mb-2">G.G. Requestz is ready to use</p>
         <p class="text-sm text-blue-200/70">Your game discovery platform has been successfully configured</p>
       </div>
 
@@ -102,7 +102,7 @@
           <div>
             <h3 class="text-green-100 font-medium mb-2">Installation Successful</h3>
             <p class="text-green-200/80 text-sm mb-4">
-              Your GameRequest platform has been successfully set up with all required components. 
+              Your G.G. Requestz platform has been successfully set up with all required components. 
               Your admin account is ready and you can now start using all features.
             </p>
             
@@ -147,7 +147,7 @@
           <div>
             <h3 class="text-blue-100 font-medium mb-2">Free and Open Source Software</h3>
             <p class="text-blue-200/80 text-sm mb-4">
-              GameRequest is proud to be Free and Open Source Software (FOSS). This means:
+              G.G. Requestz is proud to be Free and Open Source Software (FOSS). This means:
             </p>
             
             <ul class="space-y-2 text-sm text-blue-200/80 mb-4">
@@ -175,7 +175,7 @@
                 <div>
                   <p class="text-yellow-100 font-medium text-sm mb-1">Important Disclaimer</p>
                   <p class="text-yellow-200/80 text-sm">
-                    GameRequest does not provide, host, or distribute any copyrighted game content. 
+                    G.G. Requestz does not provide, host, or distribute any copyrighted game content. 
                     It is a discovery and request management platform only. Users are responsible 
                     for ensuring they comply with all applicable laws and licenses.
                   </p>
@@ -225,7 +225,7 @@
                  transform hover:scale-[1.02] shadow-2xl text-lg"
         >
           <Icon icon="heroicons:play" class="w-6 h-6 inline mr-3" />
-          Start Using GameRequest
+          Start Using G.G. Requestz
         </button>
         
         <!-- Progress indicator -->

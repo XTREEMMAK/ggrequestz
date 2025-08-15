@@ -25,7 +25,7 @@
       status: 'pending', 
       required: false, 
       error: null,
-      icon: 'heroicons:lightning-bolt'
+      icon: 'heroicons:server'
     },
     { 
       name: 'IGDB API', 
@@ -115,8 +115,13 @@
       const result = await response.json();
       
       if (result.success) {
-        check.status = 'success';
-        check.error = null;
+        if (result.warning) {
+          check.status = 'warning';
+          check.error = result.warning;
+        } else {
+          check.status = 'success';
+          check.error = null;
+        }
       } else {
         check.status = check.required ? 'error' : 'warning';
         check.error = result.error || 'Connection failed';
@@ -171,7 +176,7 @@
 </script>
 
 <svelte:head>
-  <title>System Checks - GameRequest Setup</title>
+  <title>System Checks - G.G. Requestz Setup</title>
 </svelte:head>
 
 <!-- Background Image -->
@@ -197,7 +202,7 @@
       <!-- Header -->
       <div class="text-center mb-8">
         <div class="mx-auto w-20 h-20 mb-4 flex items-center justify-center">
-          <img src="/GGR_Logo.webp" alt="GameRequest Logo" class="w-full h-full object-contain" />
+          <img src="/GGR_Logo.webp" alt="G.G. Requestz Logo" class="w-full h-full object-contain" />
         </div>
         <h1 class="text-3xl font-bold text-white mb-2">System Checks</h1>
         <p class="text-blue-100/80">Verifying system connections and requirements</p>
@@ -222,7 +227,9 @@
                   </div>
                   <p class="text-sm text-blue-100/70">{check.description}</p>
                   {#if check.error}
-                    <p class="text-xs text-red-300 mt-1">Error: {check.error}</p>
+                    <p class="text-xs {check.status === 'warning' ? 'text-yellow-300' : 'text-red-300'} mt-1">
+                      {check.status === 'warning' ? 'Warning' : 'Error'}: {check.error}
+                    </p>
                   {/if}
                 </div>
               </div>
@@ -271,7 +278,7 @@
               <Icon icon="heroicons:check-circle" class="w-5 h-5 text-green-400" />
               <div>
                 <p class="text-green-100 font-medium">All Required Checks Passed!</p>
-                <p class="text-green-200/70 text-sm">Your system is ready for GameRequest. You can proceed to the next step.</p>
+                <p class="text-green-200/70 text-sm">Your system is ready for G.G. Requestz. You can proceed to the next step.</p>
               </div>
             </div>
           </div>

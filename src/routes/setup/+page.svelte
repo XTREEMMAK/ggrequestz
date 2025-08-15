@@ -140,7 +140,7 @@
             <div>
               <h3 class="text-amber-100 font-medium mb-1">First-Time Setup</h3>
               <p class="text-amber-200/80 text-sm">
-                This setup wizard will guide you through configuring your GameRequest installation, 
+                This setup wizard will guide you through configuring your G.G. Requestz installation, 
                 testing system connections, and creating your first admin account.
               </p>
             </div>

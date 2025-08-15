@@ -16,6 +16,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { addToWatchlist, removeFromWatchlist } from '$lib/api.client.js';
   import { createHoverPreloader } from '$lib/utils.js';
+  import { toasts } from '$lib/stores/toast.js';
   
   let { data } = $props();
   
@@ -216,6 +217,7 @@
         const result = await removeFromWatchlist(gameId);
         if (result.success) {
           userWatchlist = userWatchlist.filter(w => w.igdb_id !== gameId);
+          toasts.success(`${game.title} removed from watchlist`);
         } else {
           throw new Error(result.error || 'Failed to remove from watchlist');
         }
@@ -233,13 +235,14 @@
         const result = await addToWatchlist(gameId, gameData);
         if (result.success) {
           userWatchlist = [...userWatchlist, { ...gameData, igdb_id: gameId }];
+          toasts.success(`${game.title} added to watchlist`);
         } else {
           throw new Error(result.error || 'Failed to add to watchlist');
         }
       }
     } catch (error) {
       console.error('Watchlist error:', error);
-      alert('Failed to update watchlist. Please try again.');
+      toasts.error('Failed to update watchlist. Please try again.');
     }
   }
   
@@ -530,7 +533,7 @@
             <GameCard 
               {game} 
               {user}
-              isInWatchlist={false}
+              isInWatchlist={isGameInWatchlist(game)}
               enablePreloading={true}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
@@ -551,7 +554,7 @@
             <GameCard 
               {game} 
               {user}
-              isInWatchlist={false}
+              isInWatchlist={isGameInWatchlist(game)}
               enablePreloading={true}
               on:request={handleGameRequest}
               on:watchlist={handleWatchlist}
