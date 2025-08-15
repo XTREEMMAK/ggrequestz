@@ -278,7 +278,7 @@
 		<!-- User section -->
 		<div class="absolute bottom-0 left-0 right-0 p-4" style="border-top: 1px solid var(--border-color);">
 			{#if user}
-				<div class="flex items-center space-x-3">
+				<div class="flex items-center space-x-3 mb-2">
 					<div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
 						<span class="text-sm font-medium text-white">U</span>
 					</div>
@@ -296,6 +296,13 @@
 						</svg>
 					</a>
 				</div>
+				
+				<!-- App Version -->
+				{#if appVersion}
+					<div class="text-center">
+						<p class="text-xs text-gray-400">v{appVersion}</p>
+					</div>
+				{/if}
 			{:else}
 				<!-- Show appropriate login link based on auth method -->
 				{#if authMethod === 'basic'}
@@ -315,13 +322,6 @@
 				{/if}
 			{/if}
 		</div>
-		
-		<!-- App Version -->
-		{#if appVersion}
-			<div class="px-4 py-2 border-t border-gray-600/30">
-				<p class="text-xs text-gray-400 text-center">v{appVersion}</p>
-			</div>
-		{/if}
 	</div>
 	{/if}
 

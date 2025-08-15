@@ -166,7 +166,7 @@
         
         <!-- User info -->
         <div class="border-t border-gray-200 dark:border-gray-700 p-4">
-          <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-3 mb-2">
             <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
               <span class="text-white text-sm font-medium">
                 {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'A'}
@@ -182,7 +182,14 @@
             </div>
           </div>
           
-          <div class="mt-3 space-y-1">
+          <!-- App Version -->
+          {#if appVersion}
+            <div class="mb-3 text-center">
+              <p class="text-xs text-gray-500 dark:text-gray-400">v{appVersion}</p>
+            </div>
+          {/if}
+          
+          <div class="space-y-1">
             <a
               href="/profile"
               class="block w-full text-left px-3 py-1 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -203,13 +210,6 @@
             </a>
           </div>
         </div>
-        
-        <!-- App Version -->
-        {#if appVersion}
-          <div class="border-t border-gray-200 dark:border-gray-700 px-4 py-2">
-            <p class="text-xs text-gray-500 dark:text-gray-400 text-center">v{appVersion}</p>
-          </div>
-        {/if}
       </div>
     </div>
     
