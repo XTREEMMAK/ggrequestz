@@ -32,10 +32,21 @@
 				// Invalidate all data to refresh user state
 				invalidateAll();
 			}
+			
+			// Fetch app version
+			fetch('/api/version')
+				.then(response => response.json())
+				.then(data => {
+					appVersion = data.version;
+				})
+				.catch(() => {
+					// Silently fail - version display is not critical
+				});
 		}
 	});
 	
 	let sidebarOpen = $state(false);
+	let appVersion = $state(null);
 	
 	// Base navigation items with positions
 	const baseNavigation = [
@@ -304,6 +315,13 @@
 				{/if}
 			{/if}
 		</div>
+		
+		<!-- App Version -->
+		{#if appVersion}
+			<div class="px-4 py-2 border-t border-gray-600/30">
+				<p class="text-xs text-gray-400 text-center">v{appVersion}</p>
+			</div>
+		{/if}
 	</div>
 	{/if}
 

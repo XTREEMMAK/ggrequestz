@@ -5,12 +5,15 @@
 <script>
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Icon from '@iconify/svelte';
   
   let { data, children } = $props();
   let user = $derived(data?.user);
   let userPermissions = $derived(data?.userPermissions || []);
   let currentPath = $derived($page.url.pathname);
+  let appVersion = $state(null);
   
   // Check if user has admin panel access
   let hasAdminAccess = $derived(userPermissions.includes('admin.panel'));
@@ -21,6 +24,20 @@
       goto('/api/auth/login');
     } else if (!hasAdminAccess) {
       goto('/?error=unauthorized');
+    }
+  });
+  
+  // Fetch app version
+  onMount(() => {
+    if (browser) {
+      fetch('/api/version')
+        .then(response => response.json())
+        .then(data => {
+          appVersion = data.version;
+        })
+        .catch(() => {
+          // Silently fail - version display is not critical
+        });
     }
   });
   
@@ -186,6 +203,13 @@
             </a>
           </div>
         </div>
+        
+        <!-- App Version -->
+        {#if appVersion}
+          <div class="border-t border-gray-200 dark:border-gray-700 px-4 py-2">
+            <p class="text-xs text-gray-500 dark:text-gray-400 text-center">v{appVersion}</p>
+          </div>
+        {/if}
       </div>
     </div>
     
