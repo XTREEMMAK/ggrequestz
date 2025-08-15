@@ -17,6 +17,20 @@ A modern game discovery and request management platform with IGDB integration, R
 - **⚡ High Performance** - Redis caching, hover preloading, and optimized data fetching
 - **🎨 Modern UI** - Responsive design with dark mode and smooth animations
 
+## 📹 Preview
+[Video Preview](https://www.youtube.com/watch?v=dblxpNVZlqY)
+<img src=".github/resources/screenshots/01.png" alt="Desktop Preview - 01" />
+<img src=".github/resources/screenshots/02.png" alt="Desktop Preview - 02" />
+<img src=".github/resources/screenshots/03.png" alt="Desktop Preview - 03" />
+<img src=".github/resources/screenshots/04.png" alt="Desktop Preview - 04" />
+<img src=".github/resources/screenshots/05.png" alt="Desktop Preview - 05" />
+<img src=".github/resources/screenshots/06.png" alt="Desktop Preview - 06" />
+<img src=".github/resources/screenshots/07.png" alt="Desktop Preview - 07" />
+
+<img src=".github/resources/screenshots/08.png" alt="Mobile Preview - 08" />
+<img src=".github/resources/screenshots/09.png" alt="Mobile Preview - 09" />
+
+
 ## 🚀 Quick Start
 
 ### Docker Compose (Recommended)
@@ -113,7 +127,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 
 ## 📝 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+GPLv3 License - see [LICENSE](LICENSE) file for details.
 
 ## 🔗 Links
 
