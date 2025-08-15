@@ -31,8 +31,8 @@ A modern game discovery and request management platform with IGDB integration, R
 <img src=".github/resources/screenshots/06.png" alt="Desktop Preview - 06" />
 <img src=".github/resources/screenshots/07.png" alt="Desktop Preview - 07" />
 
-<img src=".github/resources/screenshots/08.png" alt="Mobile Preview - 08" />
-<img src=".github/resources/screenshots/09.png" alt="Mobile Preview - 09" />
+<img src=".github/resources/screenshots/08.jpg" alt="Mobile Preview - 08" />
+<img src=".github/resources/screenshots/09.jpg" alt="Mobile Preview - 09" />
 
 
 ## 🚀 Quick Start
