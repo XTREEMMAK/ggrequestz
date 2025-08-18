@@ -141,11 +141,11 @@
 	<div 
 		class="fixed inset-0 z-40 lg:hidden cursor-pointer {sidebarOpen ? 'block' : 'hidden'}"
 		style="background-color: var(--overlay);"
-		onclick={toggleSidebar}
+		on:click={toggleSidebar}
 		aria-label="Close sidebar"
 		role="button"
 		tabindex="0"
-		onkeydown={(e) => e.key === 'Enter' || e.key === ' ' ? toggleSidebar() : null}
+		on:keydown={(e) => e.key === 'Enter' || e.key === ' ' ? toggleSidebar() : null}
 	></div>
 	{/if}
 
@@ -163,7 +163,7 @@
 			</div>
 			
 			<!-- Mobile close button -->
-			<button class="lg:hidden text-gray-400 hover:text-white" onclick={toggleSidebar} aria-label="Close sidebar">
+			<button class="lg:hidden text-gray-400 hover:text-white" on:click={toggleSidebar} aria-label="Close sidebar">
 				<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
 				</svg>
@@ -226,7 +226,7 @@
 					<!-- Internal links use goto() for faster navigation -->
 					<button
 						type="button"
-						onclick={() => { goto(item.href); sidebarOpen = false; }}
+						on:click={() => { goto(item.href); sidebarOpen = false; }}
 						class="sidebar-item mb-1 rounded-lg {isActivePath(item.href) ? 'active' : ''} w-full text-left"
 						aria-label="Navigate to {item.name}"
 					>
@@ -311,7 +311,7 @@
 							Initial Setup
 						</a>
 					{:else}
-						<a href="/auth/login" class="flex items-center justify-center w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors">
+						<a href="/login" class="flex items-center justify-center w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors">
 							Sign In
 						</a>
 					{/if}
@@ -330,7 +330,7 @@
 	<div class="lg:hidden fixed top-0 left-0 right-0 z-40 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800">
 		<div class="flex items-center justify-between p-4">
 			<button
-				onclick={toggleSidebar}
+				on:click={toggleSidebar}
 				class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
 				aria-label="Open sidebar"
 			>
@@ -355,7 +355,7 @@
 							type="text"
 							placeholder="Search games..."
 							class="block w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-							onkeydown={(e) => {
+							on:keydown={(e) => {
 								if (e.key === 'Enter' && e.target.value.trim()) {
 									window.location.href = `/search?q=${encodeURIComponent(e.target.value.trim())}`;
 								}
@@ -373,7 +373,7 @@
 				{#if user}
 					<button
 						type="button"
-						onclick={() => goto('/profile')}
+						on:click={() => goto('/profile')}
 						class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
 						aria-label="Navigate to Profile"
 					>
@@ -387,7 +387,7 @@
 								Setup
 							</a>
 						{:else}
-							<a href="/auth/login" class="text-blue-400 hover:text-blue-300 text-sm font-medium">
+							<a href="/login" class="text-blue-400 hover:text-blue-300 text-sm font-medium">
 								Sign In
 							</a>
 						{/if}

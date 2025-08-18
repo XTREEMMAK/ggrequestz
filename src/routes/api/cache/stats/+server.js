@@ -4,14 +4,17 @@
 
 import { json, error } from "@sveltejs/kit";
 import { getCacheStats as getGameCacheStats } from "$lib/gameCache.js";
-import { getCacheStats as getMemoryCacheStats, clearAllCache } from "$lib/cache.js";
+import {
+  getCacheStats as getMemoryCacheStats,
+  clearAllCache,
+} from "$lib/cache.js";
 
 export async function GET() {
   try {
     // Get stats from both cache systems
     const [gameCacheStats, memoryCacheStats] = await Promise.all([
       getGameCacheStats(),
-      Promise.resolve(getMemoryCacheStats())
+      Promise.resolve(getMemoryCacheStats()),
     ]);
 
     return json({
@@ -21,12 +24,18 @@ export async function GET() {
         size: memoryCacheStats.size,
         entries: memoryCacheStats.keys.length,
         keys: memoryCacheStats.keys,
-        memoryUsage: process.memoryUsage ? {
-          rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + ' MB',
-          heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
-          heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB'
-        } : 'N/A'
-      }
+        memoryUsage: process.memoryUsage
+          ? {
+              rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + " MB",
+              heapUsed:
+                Math.round(process.memoryUsage().heapUsed / 1024 / 1024) +
+                " MB",
+              heapTotal:
+                Math.round(process.memoryUsage().heapTotal / 1024 / 1024) +
+                " MB",
+            }
+          : "N/A",
+      },
     });
   } catch (err) {
     console.error("Cache stats API error:", err);
@@ -37,13 +46,13 @@ export async function GET() {
 export async function DELETE() {
   try {
     clearAllCache();
-    
+
     return json({
       success: true,
-      message: 'Memory cache cleared successfully'
+      message: "Memory cache cleared successfully",
     });
   } catch (err) {
-    console.error('Cache clear error:', err);
-    throw error(500, 'Failed to clear cache');
+    console.error("Cache clear error:", err);
+    throw error(500, "Failed to clear cache");
   }
 }

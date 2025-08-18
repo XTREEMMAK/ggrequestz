@@ -109,7 +109,7 @@ endif
 # Initialize database schema
 init-db:
 	@echo "🗄️ Initializing database schema..."
-	docker-compose exec ggrequestz node scripts/init-database.js init
+	docker-compose exec ggrequestz node scripts/database/db-manager.js init
 	@echo "✅ Database schema initialized"
 
 # PM2 management

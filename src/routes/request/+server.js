@@ -5,7 +5,7 @@
 
 import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { requireAuth } from "$lib/authHelper.js";
+import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { sendNewRequestNotification } from "$lib/gotify.js";
 
 /**
@@ -16,7 +16,7 @@ import { sendNewRequestNotification } from "$lib/gotify.js";
 export async function POST({ request, cookies }) {
   try {
     // Verify user authentication
-    const user = await requireAuth(cookies);
+    const user = await getAuthenticatedUser(cookies);
     if (!user) {
       return json(
         { success: false, error: "Authentication required" },
@@ -24,32 +24,32 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    // Get user's local database ID 
+    // Get user's local database ID
     let userResult;
     let localUserId;
-    
-    if (user.auth_type === 'basic') {
+
+    if (user.auth_type === "basic") {
       // For basic auth, extract ID from the user.sub format: basic_auth_123
-      const basicAuthId = user.sub?.replace('basic_auth_', '') || user.id;
+      const basicAuthId = user.sub?.replace("basic_auth_", "") || user.id;
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       // For Authentik users
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
     if (userResult.rows.length === 0) {
       return json(
         { success: false, error: "User not found in database" },
-        { status: 404 }
+        { status: 404 },
       );
     }
-    
+
     localUserId = userResult.rows[0].id;
 
     // Parse request data
@@ -199,7 +199,7 @@ export async function POST({ request, cookies }) {
       user_name: insertedRequest.user_name,
       description: insertedRequest.description,
     }).catch((error) => {
-      console.warn('Failed to send Gotify notification:', error);
+      console.warn("Failed to send Gotify notification:", error);
       // Don't fail the request if notification fails
     });
 
@@ -262,7 +262,7 @@ export async function POST({ request, cookies }) {
 export async function GET({ url, cookies }) {
   try {
     // Verify user authentication
-    const user = await requireAuth(cookies);
+    const user = await getAuthenticatedUser(cookies);
     if (!user) {
       return json(
         { success: false, error: "Authentication required" },
@@ -270,32 +270,32 @@ export async function GET({ url, cookies }) {
       );
     }
 
-    // Get user's local database ID 
+    // Get user's local database ID
     let userResult;
     let localUserId;
-    
-    if (user.auth_type === 'basic') {
+
+    if (user.auth_type === "basic") {
       // For basic auth, extract ID from the user.sub format: basic_auth_123
-      const basicAuthId = user.sub?.replace('basic_auth_', '') || user.id;
+      const basicAuthId = user.sub?.replace("basic_auth_", "") || user.id;
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       // For Authentik users
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
     if (userResult.rows.length === 0) {
       return json(
         { success: false, error: "User not found in database" },
-        { status: 404 }
+        { status: 404 },
       );
     }
-    
+
     localUserId = userResult.rows[0].id;
 
     // Get query parameters

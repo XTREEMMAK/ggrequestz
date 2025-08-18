@@ -13,27 +13,27 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-ggrequestz}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
-      
+
       # Authentication (required)
       AUTH_METHOD: ${AUTH_METHOD:-authentik}
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID}
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET}
       AUTHENTIK_ISSUER: ${AUTHENTIK_ISSUER}
       SESSION_SECRET: ${SESSION_SECRET}
-      
+
       # IGDB API (required)
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
-      
+
       # Search Engine (supports external Typesense)
       TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
       TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
       TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz123}
-      
+
       # Redis Cache (supports external Redis, optional - falls back to memory)
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      
+
       # Optional External Services
       GOTIFY_URL: ${GOTIFY_URL:-}
       GOTIFY_TOKEN: ${GOTIFY_TOKEN:-}
@@ -41,11 +41,11 @@ services:
       ROMM_USERNAME: ${ROMM_USERNAME:-}
       ROMM_PASSWORD: ${ROMM_PASSWORD:-}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
-      
+
       # Application Configuration
       PM2_INSTANCES: ${PM2_INSTANCES:-max}
       NODE_ENV: ${NODE_ENV:-production}
-      
+
       # Database Migration
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
     volumes:

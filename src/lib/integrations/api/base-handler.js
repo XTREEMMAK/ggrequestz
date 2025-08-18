@@ -3,8 +3,8 @@
  * Common functionality for integration API endpoints
  */
 
-import { json } from '@sveltejs/kit';
-import { requireAuth } from '../../auth.js';
+import { json } from "@sveltejs/kit";
+import { requireAuth } from "$lib/auth.server.js";
 
 /**
  * Base API Handler Class
@@ -21,32 +21,41 @@ export class BaseApiHandler {
    * @param {Array} requiredPermissions - Required permissions
    * @returns {Promise<Object|Response>} - User object or error response
    */
-  async authenticateRequest(request, requiredPermissions = ['admin']) {
+  async authenticateRequest(request, requiredPermissions = ["admin"]) {
     try {
       const user = await requireAuth(request);
-      
+
       if (!user) {
-        return json({
-          success: false,
-          error: 'Authentication required'
-        }, { status: 401 });
+        return json(
+          {
+            success: false,
+            error: "Authentication required",
+          },
+          { status: 401 },
+        );
       }
 
       // Check if user has required permissions
-      if (requiredPermissions.includes('admin') && !user.is_admin) {
-        return json({
-          success: false,
-          error: 'Admin access required'
-        }, { status: 403 });
+      if (requiredPermissions.includes("admin") && !user.is_admin) {
+        return json(
+          {
+            success: false,
+            error: "Admin access required",
+          },
+          { status: 403 },
+        );
       }
 
       return user;
     } catch (error) {
-      console.error('Authentication error:', error);
-      return json({
-        success: false,
-        error: 'Authentication failed'
-      }, { status: 500 });
+      console.error("Authentication error:", error);
+      return json(
+        {
+          success: false,
+          error: "Authentication failed",
+        },
+        { status: 500 },
+      );
     }
   }
 
@@ -59,40 +68,52 @@ export class BaseApiHandler {
   async parseRequestBody(request, schema = {}) {
     try {
       const data = await request.json();
-      
+
       // Basic validation
       for (const [key, config] of Object.entries(schema)) {
         if (config.required && !data[key]) {
-          return json({
-            success: false,
-            error: `Missing required field: ${key}`
-          }, { status: 400 });
+          return json(
+            {
+              success: false,
+              error: `Missing required field: ${key}`,
+            },
+            { status: 400 },
+          );
         }
 
         if (config.type && data[key] !== undefined) {
           const actualType = typeof data[key];
           if (actualType !== config.type) {
-            return json({
-              success: false,
-              error: `Invalid type for ${key}: expected ${config.type}, got ${actualType}`
-            }, { status: 400 });
+            return json(
+              {
+                success: false,
+                error: `Invalid type for ${key}: expected ${config.type}, got ${actualType}`,
+              },
+              { status: 400 },
+            );
           }
         }
 
         if (config.enum && data[key] && !config.enum.includes(data[key])) {
-          return json({
-            success: false,
-            error: `Invalid value for ${key}: must be one of ${config.enum.join(', ')}`
-          }, { status: 400 });
+          return json(
+            {
+              success: false,
+              error: `Invalid value for ${key}: must be one of ${config.enum.join(", ")}`,
+            },
+            { status: 400 },
+          );
         }
       }
 
       return data;
     } catch (error) {
-      return json({
-        success: false,
-        error: 'Invalid JSON body'
-      }, { status: 400 });
+      return json(
+        {
+          success: false,
+          error: "Invalid JSON body",
+        },
+        { status: 400 },
+      );
     }
   }
 
@@ -104,10 +125,10 @@ export class BaseApiHandler {
    */
   success(data = null, message = null) {
     const response = { success: true };
-    
+
     if (data !== null) response.data = data;
     if (message) response.message = message;
-    
+
     return json(response);
   }
 
@@ -120,9 +141,9 @@ export class BaseApiHandler {
    */
   error(error, status = 400, details = null) {
     const response = { success: false, error };
-    
+
     if (details) response.details = details;
-    
+
     return json(response, { status });
   }
 
@@ -135,10 +156,12 @@ export class BaseApiHandler {
     try {
       return await operation();
     } catch (error) {
-      console.error('API operation error:', error);
+      console.error("API operation error:", error);
       return this.error(
-        process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
-        500
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
+        500,
       );
     }
   }
@@ -151,35 +174,38 @@ export class BaseApiHandler {
    */
   validateQueryParams(searchParams, schema = {}) {
     const params = {};
-    
+
     for (const [key, config] of Object.entries(schema)) {
       const value = searchParams.get(key);
-      
+
       if (config.required && !value) {
         return this.error(`Missing required parameter: ${key}`, 400);
       }
 
       if (value !== null) {
-        if (config.type === 'number') {
+        if (config.type === "number") {
           const numValue = parseInt(value);
           if (isNaN(numValue)) {
             return this.error(`Invalid number for parameter: ${key}`, 400);
           }
           params[key] = numValue;
-        } else if (config.type === 'boolean') {
-          params[key] = value.toLowerCase() === 'true';
+        } else if (config.type === "boolean") {
+          params[key] = value.toLowerCase() === "true";
         } else {
           params[key] = value;
         }
 
         if (config.enum && !config.enum.includes(params[key])) {
-          return this.error(`Invalid value for ${key}: must be one of ${config.enum.join(', ')}`, 400);
+          return this.error(
+            `Invalid value for ${key}: must be one of ${config.enum.join(", ")}`,
+            400,
+          );
         }
       } else if (config.default !== undefined) {
         params[key] = config.default;
       }
     }
-    
+
     return params;
   }
 
@@ -190,25 +216,23 @@ export class BaseApiHandler {
    * @param {Object} details - Additional details
    */
   async logActivity(action, user = null, details = {}) {
-  try {
-    // This would integrate with the activity logging system
-    const activity = {
-      action,
-      user_id: user?.id,
-      user_email: user?.email,
-      details,
-      timestamp: new Date().toISOString(),
-    };
+    try {
+      // This would integrate with the activity logging system
+      const activity = {
+        action,
+        user_id: user?.id,
+        user_email: user?.email,
+        details,
+        timestamp: new Date().toISOString(),
+      };
 
-    console.log("Activity:", activity);
-    // You could replace the above with a DB insert or API call
-    // await activityLogger.save(activity);
-
-  } catch (error) {
-    console.error("Failed to log activity:", error);
+      console.log("Activity:", activity);
+      // You could replace the above with a DB insert or API call
+      // await activityLogger.save(activity);
+    } catch (error) {
+      console.error("Failed to log activity:", error);
+    }
   }
-}
-
 
   /**
    * Rate limiting check (placeholder for future implementation)
@@ -231,7 +255,7 @@ export class BaseApiHandler {
    */
   createPaginatedResponse(data, page, limit, total) {
     const totalPages = Math.ceil(total / limit);
-    
+
     return {
       data,
       pagination: {
@@ -240,8 +264,8 @@ export class BaseApiHandler {
         total,
         totalPages,
         hasNext: page < totalPages,
-        hasPrev: page > 1
-      }
+        hasPrev: page > 1,
+      },
     };
   }
 }

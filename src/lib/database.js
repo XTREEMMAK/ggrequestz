@@ -3,7 +3,6 @@
  * Works in both SvelteKit and Node.js environments
  */
 
-import pkg from "pg";
 import { browser } from "$app/environment";
 
 // Import environment variables based on context
@@ -13,40 +12,44 @@ let POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD;
 async function loadEnvironmentVariables() {
   if (browser) {
     // Browser context - this shouldn't happen for database operations
-    throw new Error("Database operations cannot be performed in browser context");
+    throw new Error(
+      "Database operations cannot be performed in browser context",
+    );
   } else {
     // In development, try to load .env file if environment variables aren't available
     if (!process.env.POSTGRES_PASSWORD) {
       try {
         // Use dynamic import for dotenv in ESM context
-        const { config } = await import('dotenv');
+        const { config } = await import("dotenv");
         config();
       } catch (error) {
-        console.warn('⚠️ Could not load dotenv via dynamic import:', error.message);
+        console.warn(
+          "⚠️ Could not load dotenv via dynamic import:",
+          error.message,
+        );
       }
     }
-    
+
     // Always use process.env directly - most reliable in Docker/server contexts
-    const host = process.env.POSTGRES_HOST || 'localhost';
-    const port = process.env.POSTGRES_PORT || '5432';
-    const db = process.env.POSTGRES_DB || 'postgres';
-    const user = process.env.POSTGRES_USER || 'postgres';
+    const host = process.env.POSTGRES_HOST || "localhost";
+    const port = process.env.POSTGRES_PORT || "5432";
+    const db = process.env.POSTGRES_DB || "postgres";
+    const user = process.env.POSTGRES_USER || "postgres";
     const password = process.env.POSTGRES_PASSWORD;
-    
-    
+
     return { host, port, db, user, password };
   }
 }
 
 // Initialize variables (but we'll reload them fresh in getPool)
 // Note: This is now async, so we initialize with defaults and load properly in getPool
-POSTGRES_HOST = 'localhost';
-POSTGRES_PORT = '5432';
-POSTGRES_DB = 'postgres';
-POSTGRES_USER = 'postgres';
+POSTGRES_HOST = "localhost";
+POSTGRES_PORT = "5432";
+POSTGRES_DB = "postgres";
+POSTGRES_USER = "postgres";
 POSTGRES_PASSWORD = undefined;
 
-const { Pool } = pkg;
+// PostgreSQL Pool will be loaded dynamically
 
 let pool;
 
@@ -65,15 +68,24 @@ export function resetPool() {
  * @returns {Promise<Object>} - PostgreSQL pool instance
  */
 async function getPool() {
+  if (browser) {
+    throw new Error("Database operations cannot be performed in browser context");
+  }
+  
   if (!pool) {
+    // Dynamically import PostgreSQL module to prevent client-side bundling
+    const pkg = await import("pg");
+    const { Pool } = pkg.default || pkg;
+    
     // Load fresh environment variables every time we create a pool
     const env = await loadEnvironmentVariables();
-    
-    
+
     if (!env.password) {
-      throw new Error('POSTGRES_PASSWORD is required but not defined. Check your .env file.');
+      throw new Error(
+        "POSTGRES_PASSWORD is required but not defined. Check your .env file.",
+      );
     }
-    
+
     pool = new Pool({
       host: env.host,
       port: parseInt(env.port),
@@ -272,34 +284,7 @@ export const gamesCache = {
         ],
       );
 
-      // Also add to Typesense search index
-      if (result.rows.length > 0) {
-        try {
-          const { upsertGame } = await import("./typesense.js");
-          await upsertGame({
-            id: gameData.igdb_id,
-            title: gameData.title,
-            normalized_title: gameData.title
-              ?.toLowerCase()
-              .replace(/[^\w\s]/g, "")
-              .trim(),
-            platforms: gameData.platforms || [],
-            genres: gameData.genres || [],
-            popularity: gameData.popularity_score || 0,
-            release_date: gameData.release_date
-              ? new Date(gameData.release_date).getTime()
-              : 0,
-            igdb_id: gameData.igdb_id,
-            cover_url: gameData.cover_url || "",
-            summary: gameData.summary || "",
-            rating: parseFloat(gameData.rating) || 0.0,
-            status: gameData.status || "available",
-          });
-        } catch (typesenseError) {
-          console.error("Failed to index game in Typesense:", typesenseError);
-          // Don't fail the database operation if Typesense fails
-        }
-      }
+      // TODO: Add to search index via API endpoint (non-blocking)
 
       return result.rows.length > 0;
     } catch (error) {
@@ -873,7 +858,7 @@ export const customNavigation = {
             navData.visible_to_all !== false, // Default to true
             navData.visible_to_guests !== false, // Default to true
             JSON.stringify(navData.allowed_roles || []),
-            navData.minimum_role || 'viewer', // Default to viewer
+            navData.minimum_role || "viewer", // Default to viewer
           ],
         );
       } catch (columnError) {
@@ -947,7 +932,7 @@ export const customNavigation = {
       }
 
       values.push(id);
-      
+
       // First try to update with role-based visibility fields
       let result;
       try {
@@ -957,7 +942,14 @@ export const customNavigation = {
         );
       } catch (columnError) {
         // If the new columns don't exist, fall back to basic fields only
-        const basicFields = ["name", "href", "icon", "position", "is_external", "is_active"];
+        const basicFields = [
+          "name",
+          "href",
+          "icon",
+          "position",
+          "is_external",
+          "is_active",
+        ];
         const basicSetClause = [];
         const basicValues = [];
         let basicParamCount = 1;

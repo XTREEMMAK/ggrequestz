@@ -1,33 +1,28 @@
 /**
  * IGDB API integration utilities
+ * Unified implementation for both web app and Node.js scripts
  */
 
-// Use runtime environment variables instead of build-time static imports
-// to support Docker containers with runtime configuration
-let IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
-let IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET;
+import { browser } from "$app/environment";
 
-// Helper function to ensure environment variables are loaded
-async function loadEnvironmentVariables() {
-  // In development, try to load .env file if environment variables aren't available
-  if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) {
+// Only load environment variables on server-side
+let IGDB_CLIENT_ID, IGDB_CLIENT_SECRET;
+
+if (!browser) {
+  // Try to load dotenv for development environments (server-side only)
+  // Skip dotenv in Docker/production where env vars are injected directly
+  if (process.env.NODE_ENV !== "production") {
     try {
-      // Use dynamic import for dotenv in ESM context
-      const { config } = await import('dotenv');
+      const { config } = await import("dotenv");
       config();
-      
-      // Reload variables after dotenv config
-      IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
-      IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET;
     } catch (error) {
-      console.warn('⚠️ Could not load dotenv for IGDB credentials:', error.message);
+      // Dotenv not available or already configured - continue
     }
   }
-  
-  return {
-    client_id: IGDB_CLIENT_ID,
-    client_secret: IGDB_CLIENT_SECRET
-  };
+
+  // Use environment variables on server-side
+  IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
+  IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET;
 }
 
 const IGDB_BASE_URL = "https://api.igdb.com/v4";
@@ -43,22 +38,25 @@ const MIN_REQUEST_INTERVAL = 100; // 100ms between requests
  * @returns {Promise<string>} - Access token
  */
 async function getAccessToken() {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
+  
   // Return cached token if still valid
   if (accessToken && tokenExpiry && Date.now() < tokenExpiry) {
     return accessToken;
   }
 
-  // Ensure environment variables are loaded
-  const credentials = await loadEnvironmentVariables();
-  
-  if (!credentials.client_id || !credentials.client_secret) {
-    throw new Error('IGDB API credentials not found. Please check IGDB_CLIENT_ID and IGDB_CLIENT_SECRET environment variables.');
+  if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) {
+    throw new Error(
+      "IGDB API credentials not found. Please check IGDB_CLIENT_ID and IGDB_CLIENT_SECRET environment variables.",
+    );
   }
 
   const tokenUrl = "https://id.twitch.tv/oauth2/token";
   const params = new URLSearchParams({
-    client_id: credentials.client_id,
-    client_secret: credentials.client_secret,
+    client_id: IGDB_CLIENT_ID,
+    client_secret: IGDB_CLIENT_SECRET,
     grant_type: "client_credentials",
   });
 
@@ -73,7 +71,7 @@ async function getAccessToken() {
 
     if (!response.ok) {
       throw new Error(
-        `Failed to get IGDB access token: ${response.statusText}`,
+        `Failed to get IGDB access token: ${response.status} ${response.statusText}`,
       );
     }
 
@@ -135,8 +133,11 @@ async function igdbRequest(endpoint, query) {
  * @returns {Promise<Array>} - Array of game objects
  */
 export async function searchGamesByTitle(title, limit = 10) {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
   const query = `
-    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, websites.category, websites.url;
+    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, websites.category, websites.url, total_rating_count;
     search "${title}";
     limit ${limit};
   `;
@@ -156,8 +157,11 @@ export async function searchGamesByTitle(title, limit = 10) {
  * @returns {Promise<Object|null>} - Game object or null
  */
 export async function getGameById(igdbId) {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
   const query = `
-    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, screenshots.url, videos.video_id, involved_companies.company.name, game_modes.name, websites.category, websites.url;
+    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, screenshots.url, videos.video_id, involved_companies.company.name, game_modes.name, websites.category, websites.url, total_rating_count;
     where id = ${igdbId};
   `;
 
@@ -177,9 +181,14 @@ export async function getGameById(igdbId) {
  * @returns {Promise<Array>} - Array of popular games
  */
 export async function getPopularGames(limit = 20, offset = 0) {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
   try {
-    console.log(`🎯 getPopularGames called with limit=${limit}, offset=${offset}`);
-    
+    console.log(
+      `🎯 getPopularGames called with limit=${limit}, offset=${offset}`,
+    );
+
     // Use IGDB popularity_primitives endpoint for true popularity
     const popularityQuery = `fields game_id,value,popularity_type;
 sort value desc;
@@ -187,7 +196,10 @@ offset ${offset};
 limit ${limit};
 where popularity_type = 1;`;
 
-    const popularityData = await igdbRequest("popularity_primitives", popularityQuery);
+    const popularityData = await igdbRequest(
+      "popularity_primitives",
+      popularityQuery,
+    );
     console.log(`📊 Got ${popularityData.length} popularity entries`);
 
     if (popularityData.length === 0) {
@@ -200,7 +212,7 @@ where popularity_type = 1;`;
     console.log(`🎯 Top 5 game IDs by popularity:`, gameIds.slice(0, 5));
 
     // Get game details for these IDs
-    const gameQuery = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url;
+    const gameQuery = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count;
 where id = (${gameIds.join(",")}) & cover != null;
 limit ${limit};`;
 
@@ -212,7 +224,10 @@ limit ${limit};`;
       .map((id) => games.find((game) => game.id === id))
       .filter(Boolean);
 
-    console.log(`🎯 Final sorted games:`, sortedGames.slice(0, 3).map(g => `${g.name} (${g.id})`));
+    console.log(
+      `🎯 Final sorted games:`,
+      sortedGames.slice(0, 3).map((g) => `${g.name} (${g.id})`),
+    );
 
     return sortedGames.map(formatGameData);
   } catch (error) {
@@ -231,7 +246,7 @@ limit ${limit};`;
 async function getHighRatedGames(limit = 20, offset = 0) {
   const oneYearAgo = Math.floor(Date.now() / 1000) - 365 * 24 * 60 * 60;
 
-  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url;
+  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count;
 where rating >= 80 & first_release_date > ${oneYearAgo} & cover != null;
 sort rating desc;
 offset ${offset};
@@ -253,9 +268,12 @@ limit ${limit};`;
  * @returns {Promise<Array>} - Array of recent games
  */
 export async function getRecentGames(limit = 20, offset = 0) {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
   // Get recently released games (past releases only, no future games)
   const currentTimestamp = Math.floor(Date.now() / 1000);
-  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url;
+  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count;
 where first_release_date != null & first_release_date < ${currentTimestamp} & version_parent = null & cover != null;
 sort first_release_date desc;
 offset ${offset};
@@ -275,6 +293,9 @@ limit ${limit};`;
  * @returns {Promise<Array>} - Array of platform objects
  */
 export async function getPlatforms() {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
   const query = `
     fields id, name, abbreviation;
     sort name asc;
@@ -294,6 +315,9 @@ export async function getPlatforms() {
  * @returns {Promise<Array>} - Array of genre objects
  */
 export async function getGenres() {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
   const query = `
     fields id, name;
     sort name asc;
@@ -338,12 +362,38 @@ function processWebsites(websites) {
 }
 
 /**
+ * Get high quality cover image URL
+ * @param {string} coverUrl - Original cover URL
+ * @returns {string} - High quality cover URL
+ */
+export function getHighQualityCover(coverUrl) {
+  if (!coverUrl) return null;
+  
+  // Handle both protocol-relative URLs (//images.igdb.com) and full URLs
+  let processedUrl = coverUrl
+    .replace("t_thumb", "t_cover_big")
+    .replace(/,f_webp/g, ""); // Remove format specifiers like ,f_webp
+  
+  // If URL starts with //, add https: prefix
+  if (processedUrl.startsWith("//")) {
+    processedUrl = `https:${processedUrl}`;
+  }
+  
+  // Use image proxy for better caching and performance
+  if (processedUrl.includes("igdb.com")) {
+    return `/api/images/proxy?url=${encodeURIComponent(processedUrl)}`;
+  }
+  
+  return processedUrl;
+}
+
+/**
  * Format IGDB game data to our standard format
  * @param {Object} game - Raw IGDB game object
  * @param {boolean} detailed - Whether to include detailed information
  * @returns {Object} - Formatted game object
  */
-function formatGameData(game, detailed = false) {
+export function formatGameData(game, detailed = false) {
   const formatted = {
     id: game.id,
     igdb_id: game.id.toString(),
@@ -354,19 +404,22 @@ function formatGameData(game, detailed = false) {
       ? game.first_release_date * 1000
       : null,
     rating: game.rating || null,
-    cover_url: game.cover?.url
-      ? `https:${game.cover.url.replace("t_thumb", "t_cover_big")}`
+    cover_url: game.cover?.url 
+      ? getHighQualityCover(game.cover.url)
       : null,
     platforms: game.platforms?.map((p) => p.name) || [],
     genres: game.genres?.map((g) => g.name) || [],
     websites: processWebsites(game.websites || []),
+    // Add popularity score for node.js scripts compatibility
+    popularity_score: game.total_rating_count || 0,
   };
 
   if (detailed) {
     formatted.screenshots =
-      game.screenshots?.map(
-        (s) => `https:${s.url.replace("t_thumb", "t_screenshot_med")}`,
-      ) || [];
+      game.screenshots?.map((s) => {
+        const screenshotUrl = `https:${s.url.replace("t_thumb", "t_screenshot_med")}`;
+        return `/api/images/proxy?url=${encodeURIComponent(screenshotUrl)}`;
+      }) || [];
     formatted.videos = game.videos?.map((v) => v.video_id) || [];
     formatted.companies =
       game.involved_companies?.map((ic) => ic.company.name) || [];
@@ -385,12 +438,29 @@ export function igdbTimestampToDate(timestamp) {
   return timestamp ? new Date(timestamp * 1000) : null;
 }
 
+
 /**
- * Get high quality cover image URL
- * @param {string} coverUrl - Original cover URL
- * @returns {string} - High quality cover URL
+ * Alternative method to get popular games using total rating count
+ * Useful for node.js scripts when popularity_primitives endpoint is unavailable
+ * @param {number} limit - Number of games to return
+ * @returns {Promise<Array>} - Array of popular games
  */
-export function getHighQualityCover(coverUrl) {
-  if (!coverUrl) return null;
-  return coverUrl.replace("t_thumb", "t_cover_big");
+export async function getPopularGamesByRating(limit = 20) {
+  if (browser) {
+    throw new Error("IGDB functions cannot be used in browser - use API routes instead");
+  }
+  try {
+    const query = `
+      fields id, name, slug, summary, cover.url, rating, first_release_date, platforms.name, genres.name, screenshots.url, videos.video_id, involved_companies.company.name, game_modes.name, total_rating_count, websites.category, websites.url;
+      where total_rating_count >= 50;
+      sort total_rating_count desc;
+      limit ${limit};
+    `;
+
+    const games = await igdbRequest("games", query);
+    return games.map((game) => formatGameData(game, true));
+  } catch (error) {
+    console.error("IGDB popular games by rating error:", error);
+    return [];
+  }
 }

@@ -4,8 +4,8 @@
 
 export async function load({ parent }) {
   const { user } = await parent();
-  
+
   return {
-    user: user || null
+    user: user || null,
   };
 }

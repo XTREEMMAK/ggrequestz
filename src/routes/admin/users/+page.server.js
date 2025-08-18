@@ -7,8 +7,8 @@ import { query } from "$lib/database.js";
 
 export async function load({ url, parent, depends }) {
   // Ensure page data is refetched when URL parameters change
-  depends('admin:users:filters');
-  
+  depends("admin:users:filters");
+
   const { userPermissions } = await parent();
 
   // Check permission
@@ -26,7 +26,6 @@ export async function load({ url, parent, depends }) {
     const page = parseInt(url.searchParams.get("page")) || 1;
     const limit = 20;
     const offset = (page - 1) * limit;
-
 
     // Build query conditions
     let whereConditions = [];

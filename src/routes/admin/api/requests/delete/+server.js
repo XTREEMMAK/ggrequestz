@@ -5,7 +5,7 @@
 
 import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { sendRequestCancelledDeletedNotification } from "$lib/gotify.js";
@@ -16,7 +16,7 @@ export async function DELETE({ request, cookies }) {
     // Verify authentication - support both auth types
     const sessionCookie = cookies.get("session");
     const basicAuthSessionCookie = cookies.get("basic_auth_session");
-    
+
     if (!sessionCookie && !basicAuthSessionCookie) {
       return json(
         { success: false, error: "Authentication required" },
@@ -30,7 +30,7 @@ export async function DELETE({ request, cookies }) {
     } else if (basicAuthSessionCookie) {
       user = getBasicAuthUser(basicAuthSessionCookie);
     }
-    
+
     if (!user) {
       return json(
         { success: false, error: "Invalid session" },
@@ -40,16 +40,16 @@ export async function DELETE({ request, cookies }) {
 
     // Get user's local ID - support both basic auth and Authentik users
     let userResult;
-    if (user.sub?.startsWith('basic_auth_')) {
-      const basicAuthId = user.sub.replace('basic_auth_', '');
+    if (user.sub?.startsWith("basic_auth_")) {
+      const basicAuthId = user.sub.replace("basic_auth_", "");
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
@@ -60,7 +60,10 @@ export async function DELETE({ request, cookies }) {
     const localUserId = userResult.rows[0].id;
 
     // Check permissions
-    const hasPermission = await userHasPermission(localUserId, "request.delete");
+    const hasPermission = await userHasPermission(
+      localUserId,
+      "request.delete",
+    );
     if (!hasPermission) {
       return json(
         { success: false, error: "Insufficient permissions" },
@@ -81,13 +84,12 @@ export async function DELETE({ request, cookies }) {
       );
     }
 
-
     // Get request details for logging before deletion
     const requestsToDelete = await query(
       `SELECT id, title, user_name, status, request_type 
        FROM ggr_game_requests 
        WHERE id = ANY($1)`,
-      [requestIds]
+      [requestIds],
     );
 
     if (requestsToDelete.rows.length === 0) {
@@ -102,7 +104,7 @@ export async function DELETE({ request, cookies }) {
       `DELETE FROM ggr_game_requests 
        WHERE id = ANY($1) 
        RETURNING id, title`,
-      [requestIds]
+      [requestIds],
     );
 
     const deletedCount = deleteResult.rows.length;
@@ -129,7 +131,7 @@ export async function DELETE({ request, cookies }) {
     } catch (analyticsError) {
       console.warn("Failed to log deletion analytics:", analyticsError);
     }
-console.log(
+    console.log(
       `✅ Successfully deleted ${deletedCount} request(s) by ${user.name || user.email}`,
     );
 
@@ -139,11 +141,14 @@ console.log(
         id: req.id,
         title: req.title,
         user_name: req.user_name,
-        action: 'deleted',
-        reason: reason || '',
+        action: "deleted",
+        reason: reason || "",
         admin_name: user.name || user.email,
       }).catch((error) => {
-        console.warn(`Failed to send Gotify deletion notification for request ${req.id}:`, error);
+        console.warn(
+          `Failed to send Gotify deletion notification for request ${req.id}:`,
+          error,
+        );
         // Don't fail the request if notification fails
       });
     });
@@ -151,18 +156,22 @@ console.log(
     // Invalidate cache for affected users and general request caches
     try {
       const cacheKeysToInvalidate = [
-        'game-requests', // General request cache
-        'recent-requests', // Recent requests
+        "game-requests", // General request cache
+        "recent-requests", // Recent requests
       ];
-      
+
       // Add user-specific cache keys for each affected user
       // user_id in requests table is actually the authentik_sub (or user identifier)
-      const affectedUserIds = [...new Set(requestsToDelete.rows.map(req => req.user_id).filter(Boolean))];
+      const affectedUserIds = [
+        ...new Set(
+          requestsToDelete.rows.map((req) => req.user_id).filter(Boolean),
+        ),
+      ];
       for (const userId of affectedUserIds) {
         cacheKeysToInvalidate.push(`user-${userId}-requests`);
         cacheKeysToInvalidate.push(`user-${userId}-watchlist`); // Also clear watchlist cache in case
       }
-      
+
       await invalidateCache(cacheKeysToInvalidate);
     } catch (cacheError) {
       console.warn("Failed to invalidate cache:", cacheError);
@@ -171,11 +180,10 @@ console.log(
 
     return json({
       success: true,
-      message: `Successfully deleted ${deletedCount} request${deletedCount > 1 ? 's' : ''}`,
+      message: `Successfully deleted ${deletedCount} request${deletedCount > 1 ? "s" : ""}`,
       deleted_count: deletedCount,
       deleted_requests: deletedRequests,
     });
-
   } catch (error) {
     console.error("❌ Request deletion error:", error);
 

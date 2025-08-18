@@ -3,16 +3,23 @@
  * Refactored to use shared utilities and HTTP client
  */
 
-import { createSessionToken, verifyJWT, extractUserFromPayload } from '../utils/jwt-utils.js';
-import { createOidcClient } from '../utils/http-client.js';
+import {
+  createSessionToken,
+  verifyJWT,
+  extractUserFromPayload,
+} from "../utils/jwt-utils.js";
+import { createOidcClient } from "../utils/http-client.js";
 
 /**
  * Get authorization URL for generic OIDC provider
  */
 export function getAuthorizationUrl(config, redirectUri, state) {
   const client = createOidcClient(config);
-  const authUrl = client.getAuthorizationUrl(redirectUri, state || crypto.randomUUID());
-  
+  const authUrl = client.getAuthorizationUrl(
+    redirectUri,
+    state || crypto.randomUUID(),
+  );
+
   return authUrl;
 }
 
@@ -22,30 +29,30 @@ export function getAuthorizationUrl(config, redirectUri, state) {
 export async function handleCallback(config, code, redirectUri) {
   try {
     const client = createOidcClient(config);
-    
+
     // Exchange code for tokens
     const tokens = await client.exchangeCodeForTokens(code, redirectUri);
-    
+
     // Get user info
     const userInfo = await client.getUserInfo(tokens.access_token);
-    
+
     // Create session token
     const sessionToken = await createSessionToken(userInfo, {
-      provider: 'oidc_generic',
-      externalToken: tokens.access_token
+      provider: "oidc_generic",
+      externalToken: tokens.access_token,
     });
-    
+
     return {
       success: true,
       user: userInfo,
       sessionToken,
-      tokens
+      tokens,
     };
   } catch (error) {
-    console.error('Generic OIDC callback error:', error);
+    console.error("Generic OIDC callback error:", error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
     };
   }
 }
@@ -65,15 +72,15 @@ export async function logout(token, config) {
   try {
     const payload = await verifyJWT(token);
     if (!payload || !payload.external_token) {
-      return { success: true, message: 'Session already invalid' };
+      return { success: true, message: "Session already invalid" };
     }
 
     // Optional: Call provider logout endpoint if supported
     // This varies by OIDC provider
-    
-    return { success: true, message: 'Logged out successfully' };
+
+    return { success: true, message: "Logged out successfully" };
   } catch (error) {
-    console.error('OIDC logout error:', error);
+    console.error("OIDC logout error:", error);
     return { success: false, error: error.message };
   }
 }

@@ -8,7 +8,8 @@
   import StatusBadge from '../../components/StatusBadge.svelte';
   import LoadingSpinner from '../../components/LoadingSpinner.svelte';
   import { formatDate } from '$lib/utils.js';
-  import { removeFromWatchlist, igdbRequest, rescindRequest } from '$lib/api.client.js';
+  import { igdbRequest, rescindRequest } from '$lib/api.client.js';
+  import { watchlistService } from '$lib/clientServices.js';
   
   let { data } = $props();
   
@@ -73,7 +74,8 @@
   async function removeFromWatchlistHandler(igdbId) {
     loading = true;
     try {
-      const result = await removeFromWatchlist(igdbId);
+      const success = await watchlistService.removeFromWatchlist(igdbId);
+      const result = { success };
       
       if (result.success) {
         // Remove from local list

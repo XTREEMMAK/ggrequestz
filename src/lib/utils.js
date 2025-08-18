@@ -153,17 +153,19 @@ export function generateId() {
  */
 export function generateSlug(title) {
   if (!title || typeof title !== "string") return "";
-  
-  return title
-    .toLowerCase()
-    .trim()
-    // Remove leading articles
-    .replace(/^(the|a|an)\s+/i, "")
-    // Replace special characters and spaces with hyphens
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    // Remove leading/trailing hyphens
-    .replace(/^-+|-+$/g, "");
+
+  return (
+    title
+      .toLowerCase()
+      .trim()
+      // Remove leading articles
+      .replace(/^(the|a|an)\s+/i, "")
+      // Replace special characters and spaces with hyphens
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      // Remove leading/trailing hyphens
+      .replace(/^-+|-+$/g, "")
+  );
 }
 
 /**
@@ -173,12 +175,16 @@ export function generateSlug(title) {
  * @param {string} timeoutMessage - Custom timeout message
  * @returns {Promise} - Promise that rejects on timeout
  */
-export function withTimeout(promise, timeoutMs = 5000, timeoutMessage = 'Operation timed out') {
+export function withTimeout(
+  promise,
+  timeoutMs = 5000,
+  timeoutMessage = "Operation timed out",
+) {
   return Promise.race([
     promise,
-    new Promise((_, reject) => 
-      setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
-    )
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs),
+    ),
   ]);
 }
 
@@ -193,24 +199,24 @@ export function withTimeout(promise, timeoutMs = 5000, timeoutMessage = 'Operati
  */
 export async function retryWithBackoff(fn, options = {}) {
   const { maxRetries = 3, baseDelay = 1000, maxDelay = 10000 } = options;
-  
+
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      
+
       if (attempt === maxRetries) {
         break;
       }
-      
+
       // Calculate delay with exponential backoff
       const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-  
+
   throw lastError;
 }
 
@@ -224,10 +230,18 @@ export async function retryWithBackoff(fn, options = {}) {
  * @returns {Promise} - Result or fallback value
  */
 export async function safeAsync(fn, options = {}) {
-  const { timeout = 5000, fallback = null, errorContext = 'Operation' } = options;
-  
+  const {
+    timeout = 5000,
+    fallback = null,
+    errorContext = "Operation",
+  } = options;
+
   try {
-    return await withTimeout(fn(), timeout, `${errorContext} timed out after ${timeout}ms`);
+    return await withTimeout(
+      fn(),
+      timeout,
+      `${errorContext} timed out after ${timeout}ms`,
+    );
   } catch (error) {
     console.warn(`${errorContext} failed:`, error.message);
     return fallback;
@@ -247,40 +261,40 @@ export function createHoverPreloader(fetchFn, options = {}) {
   let preloadTimer = null;
   let preloadPromise = null;
   let cachedData = null;
-  
+
   const preload = () => {
     if (preloadTimer) clearTimeout(preloadTimer);
-    
+
     preloadTimer = setTimeout(async () => {
       if (!preloadPromise) {
         preloadPromise = safeAsync(fetchFn, {
           timeout: 8000,
           fallback: null,
-          errorContext: 'Hover preload'
+          errorContext: "Hover preload",
         });
-        
+
         try {
           cachedData = await preloadPromise;
           if (cacheKey && cachedData) {
             sessionStorage.setItem(cacheKey, JSON.stringify(cachedData));
           }
         } catch (error) {
-          console.warn('Hover preload failed:', error);
+          console.warn("Hover preload failed:", error);
         }
       }
     }, delay);
   };
-  
+
   const cancel = () => {
     if (preloadTimer) {
       clearTimeout(preloadTimer);
       preloadTimer = null;
     }
   };
-  
+
   const getCached = () => {
     if (cachedData) return cachedData;
-    
+
     if (cacheKey) {
       try {
         const stored = sessionStorage.getItem(cacheKey);
@@ -289,12 +303,12 @@ export function createHoverPreloader(fetchFn, options = {}) {
           return cachedData;
         }
       } catch (error) {
-        console.warn('Failed to parse cached data:', error);
+        console.warn("Failed to parse cached data:", error);
       }
     }
-    
+
     return null;
   };
-  
+
   return { preload, cancel, getCached, getPromise: () => preloadPromise };
 }

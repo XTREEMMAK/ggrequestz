@@ -4,8 +4,8 @@
  * Uses Redis when available, falls back to in-memory cache
  */
 
-import { createClient } from 'redis';
-import { env } from '$env/dynamic/private';
+import { createClient } from "redis";
+import { browser } from "$app/environment";
 
 class HybridCache {
   constructor() {
@@ -13,53 +13,58 @@ class HybridCache {
     this.memoryCache = new Map();
     this.memoryTtlMap = new Map();
     this.defaultTTL = 5 * 60 * 1000; // 5 minutes default
-    
+
     // Redis client
     this.redisClient = null;
     this.redisConnected = false;
     this.initRedis();
-    
+
     // Clean up expired memory entries every 2 minutes
     setInterval(() => this.memoryCleanup(), 2 * 60 * 1000);
   }
-  
+
   async initRedis() {
     // Redis environment check (debug mode only)
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
     }
-    
-    const redisUrl = env.REDIS_URL || process.env.REDIS_URL;
+
+    // Skip Redis initialization on client-side
+    if (browser) {
+      return;
+    }
+
+    const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
       }
       return;
     }
-    
+
     try {
       // Parse Redis URL (handle http:// prefix)
-      const parsedRedisUrl = redisUrl.replace('http://', 'redis://');
+      const parsedRedisUrl = redisUrl.replace("http://", "redis://");
       this.redisClient = createClient({ url: parsedRedisUrl });
-      
-      this.redisClient.on('error', (err) => {
-        console.warn('🚨 Redis connection error:', err.message);
+
+      this.redisClient.on("error", (err) => {
+        console.warn("🚨 Redis connection error:", err.message);
         this.redisConnected = false;
       });
-      
-      this.redisClient.on('connect', () => {
-        if (process.env.NODE_ENV === 'development') {
+
+      this.redisClient.on("connect", () => {
+        if (process.env.NODE_ENV === "development") {
         }
         this.redisConnected = true;
       });
-      
+
       await this.redisClient.connect();
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('🚨 Failed to connect to Redis:', error.message);
+      if (process.env.NODE_ENV === "development") {
+        console.warn("🚨 Failed to connect to Redis:", error.message);
       }
       this.redisConnected = false;
     }
   }
-  
+
   /**
    * Get cached value
    * @param {string} key - Cache key
@@ -74,25 +79,25 @@ class HybridCache {
           return JSON.parse(value);
         }
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('🚨 Redis get error for key', key, ':', error.message);
+        if (process.env.NODE_ENV === "development") {
+          console.warn("🚨 Redis get error for key", key, ":", error.message);
         }
         this.redisConnected = false;
       }
     }
-    
+
     // Fallback to memory cache
     if (!this.memoryCache.has(key)) return null;
-    
+
     const expiry = this.memoryTtlMap.get(key);
     if (expiry && Date.now() > expiry) {
       this.delete(key);
       return null;
     }
-    
+
     return this.memoryCache.get(key);
   }
-  
+
   /**
    * Set cached value
    * @param {string} key - Cache key
@@ -107,18 +112,18 @@ class HybridCache {
         const ttlSeconds = Math.ceil(ttl / 1000);
         await this.redisClient.setEx(key, ttlSeconds, JSON.stringify(value));
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('🚨 Redis set error for key', key, ':', error.message);
+        if (process.env.NODE_ENV === "development") {
+          console.warn("🚨 Redis set error for key", key, ":", error.message);
         }
         this.redisConnected = false;
       }
     }
-    
+
     // Always set in memory cache as fallback
     this.memoryCache.set(key, value);
     this.memoryTtlMap.set(key, Date.now() + ttl);
   }
-  
+
   /**
    * Delete cached value
    * @param {string} key - Cache key
@@ -130,18 +135,23 @@ class HybridCache {
       try {
         await this.redisClient.del(key);
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('🚨 Redis delete error for key', key, ':', error.message);
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            "🚨 Redis delete error for key",
+            key,
+            ":",
+            error.message,
+          );
         }
         this.redisConnected = false;
       }
     }
-    
+
     // Always delete from memory cache
     this.memoryCache.delete(key);
     this.memoryTtlMap.delete(key);
   }
-  
+
   /**
    * Clear all cached values
    * @returns {Promise<void>}
@@ -152,18 +162,18 @@ class HybridCache {
       try {
         await this.redisClient.flushDb();
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('🚨 Redis clear error:', error.message);
+        if (process.env.NODE_ENV === "development") {
+          console.warn("🚨 Redis clear error:", error.message);
         }
         this.redisConnected = false;
       }
     }
-    
+
     // Always clear memory cache
     this.memoryCache.clear();
     this.memoryTtlMap.clear();
   }
-  
+
   /**
    * Clean up expired memory cache entries
    * (Redis handles expiration automatically)
@@ -177,36 +187,36 @@ class HybridCache {
       }
     }
   }
-  
+
   /**
    * Get cache statistics
    * @returns {Promise<Object>}
    */
   async stats() {
     let redisStats = { size: 0, connected: false };
-    
+
     if (this.redisConnected && this.redisClient) {
       try {
-        const info = await this.redisClient.info('keyspace');
-        const dbInfo = info.match(/db0:keys=(\d+)/); 
+        const info = await this.redisClient.info("keyspace");
+        const dbInfo = info.match(/db0:keys=(\d+)/);
         redisStats = {
           size: dbInfo ? parseInt(dbInfo[1]) : 0,
-          connected: true
+          connected: true,
         };
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('🚨 Redis stats error:', error.message);
+        if (process.env.NODE_ENV === "development") {
+          console.warn("🚨 Redis stats error:", error.message);
         }
         redisStats.connected = false;
       }
     }
-    
+
     return {
       redis: redisStats,
       memory: {
         size: this.memoryCache.size,
-        keys: Array.from(this.memoryCache.keys())
-      }
+        keys: Array.from(this.memoryCache.keys()),
+      },
     };
   }
 }
@@ -227,7 +237,7 @@ export async function withCache(key, fn, ttl = 5 * 60 * 1000) {
   if (cached !== null) {
     return cached;
   }
-  
+
   // Execute function and cache result
   try {
     const result = await fn();
@@ -245,7 +255,7 @@ export async function withCache(key, fn, ttl = 5 * 60 * 1000) {
  * @returns {Promise<Array>} - Popular games array
  */
 export async function cachePopularGames(fn) {
-  return withCache('popular-games', fn, 10 * 60 * 1000); // 10 minutes
+  return withCache("popular-games", fn, 10 * 60 * 1000); // 10 minutes
 }
 
 /**
@@ -254,7 +264,7 @@ export async function cachePopularGames(fn) {
  * @returns {Promise<Array>} - Recent games array
  */
 export async function cacheRecentGames(fn) {
-  return withCache('recent-games', fn, 5 * 60 * 1000); // 5 minutes
+  return withCache("recent-games", fn, 5 * 60 * 1000); // 5 minutes
 }
 
 /**
@@ -273,7 +283,7 @@ export async function cacheRommGames(fn, page = 0) {
  * @returns {Promise<Array>} - Game requests array
  */
 export async function cacheGameRequests(fn) {
-  return withCache('game-requests', fn, 2 * 60 * 1000); // 2 minutes
+  return withCache("game-requests", fn, 2 * 60 * 1000); // 2 minutes
 }
 
 /**
@@ -304,7 +314,7 @@ export async function cacheGameDetails(gameId, fn) {
  */
 export async function invalidateCache(keys) {
   const keyArray = Array.isArray(keys) ? keys : [keys];
-  await Promise.all(keyArray.map(key => cache.delete(key)));
+  await Promise.all(keyArray.map((key) => cache.delete(key)));
 }
 
 /**

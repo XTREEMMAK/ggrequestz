@@ -4,7 +4,7 @@
 
 import { error, redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 
 export async function load({ params, parent }) {
@@ -17,17 +17,17 @@ export async function load({ params, parent }) {
 
   try {
     const userId = params.id;
-    
+
     // Validate userId parameter
-    if (!userId || userId === 'undefined' || userId === 'null') {
-      console.error('Invalid user ID parameter:', userId);
+    if (!userId || userId === "undefined" || userId === "null") {
+      console.error("Invalid user ID parameter:", userId);
       throw error(400, "Invalid user ID");
     }
-    
+
     // Convert to integer and validate
     const userIdInt = parseInt(userId, 10);
     if (isNaN(userIdInt) || userIdInt <= 0) {
-      console.error('User ID is not a valid positive integer:', userId);
+      console.error("User ID is not a valid positive integer:", userId);
       throw error(400, "User ID must be a valid number");
     }
 
@@ -77,13 +77,14 @@ export async function load({ params, parent }) {
     let adminProtection = {
       isCurrentUser: false,
       isLastActiveAdmin: false,
-      canModifyUser: true
+      canModifyUser: true,
     };
 
     // Get current user's ID from parent data
     const currentUserId = userPermissions.localUserId;
     if (currentUserId) {
-      adminProtection.isCurrentUser = parseInt(userIdInt) === parseInt(currentUserId);
+      adminProtection.isCurrentUser =
+        parseInt(userIdInt) === parseInt(currentUserId);
     }
 
     // Check if target user is an admin
@@ -94,7 +95,7 @@ export async function load({ params, parent }) {
       JOIN ggr_roles r ON ur.role_id = r.id
       WHERE ur.user_id = $1 AND r.name = 'admin' AND ur.is_active = true
       `,
-      [userIdInt]
+      [userIdInt],
     );
 
     if (parseInt(userAdminCheck.rows[0].count) > 0) {
@@ -110,15 +111,17 @@ export async function load({ params, parent }) {
         AND u.is_active = true
         AND u.id != $1
         `,
-        [userIdInt]
+        [userIdInt],
       );
 
-      adminProtection.isLastActiveAdmin = parseInt(activeAdminCount.rows[0].count) === 0;
+      adminProtection.isLastActiveAdmin =
+        parseInt(activeAdminCount.rows[0].count) === 0;
     }
 
     // Can't modify if it's current user or if it would leave no admins
-    adminProtection.canModifyUser = !adminProtection.isCurrentUser && !adminProtection.isLastActiveAdmin;
-    
+    adminProtection.canModifyUser =
+      !adminProtection.isCurrentUser && !adminProtection.isLastActiveAdmin;
+
     // Add role-specific protection data for the UI
     adminProtection.hasAdminRole = parseInt(userAdminCheck.rows[0].count) > 0;
     adminProtection.canRemoveAdminRole = !adminProtection.isLastActiveAdmin;
@@ -134,9 +137,9 @@ export async function load({ params, parent }) {
       message: err.message,
       code: err.code,
       position: err.position,
-      userId: userIdInt
+      userId: userIdInt,
     });
-    
+
     if (err.status) throw err;
     throw error(500, `Failed to load user details: ${err.message}`);
   }
@@ -148,7 +151,7 @@ export const actions = {
       // Verify authentication - support both auth types
       const sessionCookie = cookies.get("session");
       const basicAuthSessionCookie = cookies.get("basic_auth_session");
-      
+
       if (!sessionCookie && !basicAuthSessionCookie) {
         return { success: false, error: "Authentication required" };
       }
@@ -157,26 +160,26 @@ export const actions = {
       if (sessionCookie) {
         user = await verifySessionToken(sessionCookie);
       } else if (basicAuthSessionCookie) {
-        const { getBasicAuthUser } = await import('$lib/basicAuth.js');
+        const { getBasicAuthUser } = await import("$lib/basicAuth.js");
         user = getBasicAuthUser(basicAuthSessionCookie);
       }
-      
+
       if (!user) {
         return { success: false, error: "Invalid session" };
       }
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith('basic_auth_')) {
-        const basicAuthId = user.sub.replace('basic_auth_', '');
+      if (user.sub?.startsWith("basic_auth_")) {
+        const basicAuthId = user.sub.replace("basic_auth_", "");
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)]
+          [parseInt(basicAuthId)],
         );
       } else {
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [user.sub]
+          [user.sub],
         );
       }
 
@@ -225,7 +228,7 @@ export const actions = {
           JOIN ggr_roles r ON ur.role_id = r.id
           WHERE ur.user_id = $1 AND r.name = 'admin' AND ur.is_active = true
           `,
-          [targetUserId]
+          [targetUserId],
         );
 
         if (parseInt(targetUserAdminCheck.rows[0].count) > 0) {
@@ -241,7 +244,7 @@ export const actions = {
             AND u.is_active = true
             AND u.id != $1
             `,
-            [targetUserId]
+            [targetUserId],
           );
 
           if (parseInt(activeAdminCount.rows[0].count) === 0) {
@@ -303,7 +306,7 @@ export const actions = {
       }
 
       console.log(
-      `✅ User ${targetUserId} profile updated by admin ${user.name || user.email}`
+        `✅ User ${targetUserId} profile updated by admin ${user.name || user.email}`,
       );
 
       return { success: true, message: "User profile updated successfully" };
@@ -318,7 +321,7 @@ export const actions = {
       // Verify authentication - support both auth types
       const sessionCookie = cookies.get("session");
       const basicAuthSessionCookie = cookies.get("basic_auth_session");
-      
+
       if (!sessionCookie && !basicAuthSessionCookie) {
         return { success: false, error: "Authentication required" };
       }
@@ -327,26 +330,26 @@ export const actions = {
       if (sessionCookie) {
         user = await verifySessionToken(sessionCookie);
       } else if (basicAuthSessionCookie) {
-        const { getBasicAuthUser } = await import('$lib/basicAuth.js');
+        const { getBasicAuthUser } = await import("$lib/basicAuth.js");
         user = getBasicAuthUser(basicAuthSessionCookie);
       }
-      
+
       if (!user) {
         return { success: false, error: "Invalid session" };
       }
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith('basic_auth_')) {
-        const basicAuthId = user.sub.replace('basic_auth_', '');
+      if (user.sub?.startsWith("basic_auth_")) {
+        const basicAuthId = user.sub.replace("basic_auth_", "");
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)]
+          [parseInt(basicAuthId)],
         );
       } else {
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [user.sub]
+          [user.sub],
         );
       }
 
@@ -415,8 +418,8 @@ export const actions = {
         console.warn("Failed to log analytics:", analyticsError);
       }
 
-       console.log(
-        `✅ Role ${roleId} assigned to user ${targetUserId} by admin ${user.name || user.email}`
+      console.log(
+        `✅ Role ${roleId} assigned to user ${targetUserId} by admin ${user.name || user.email}`,
       );
 
       return { success: true, message: "Role assigned successfully" };
@@ -431,7 +434,7 @@ export const actions = {
       // Verify authentication - support both auth types
       const sessionCookie = cookies.get("session");
       const basicAuthSessionCookie = cookies.get("basic_auth_session");
-      
+
       if (!sessionCookie && !basicAuthSessionCookie) {
         return { success: false, error: "Authentication required" };
       }
@@ -440,26 +443,26 @@ export const actions = {
       if (sessionCookie) {
         user = await verifySessionToken(sessionCookie);
       } else if (basicAuthSessionCookie) {
-        const { getBasicAuthUser } = await import('$lib/basicAuth.js');
+        const { getBasicAuthUser } = await import("$lib/basicAuth.js");
         user = getBasicAuthUser(basicAuthSessionCookie);
       }
-      
+
       if (!user) {
         return { success: false, error: "Invalid session" };
       }
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith('basic_auth_')) {
-        const basicAuthId = user.sub.replace('basic_auth_', '');
+      if (user.sub?.startsWith("basic_auth_")) {
+        const basicAuthId = user.sub.replace("basic_auth_", "");
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)]
+          [parseInt(basicAuthId)],
         );
       } else {
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [user.sub]
+          [user.sub],
         );
       }
 
@@ -543,7 +546,7 @@ export const actions = {
       }
       console.log(
         `✅ Role ${roleId} removed from user ${targetUserId} by admin ${user.name || user.email}`,
-     );
+      );
 
       return { success: true, message: "Role removed successfully" };
     } catch (err) {
@@ -557,7 +560,7 @@ export const actions = {
       // Verify authentication - support both auth types
       const sessionCookie = cookies.get("session");
       const basicAuthSessionCookie = cookies.get("basic_auth_session");
-      
+
       if (!sessionCookie && !basicAuthSessionCookie) {
         return { success: false, error: "Authentication required" };
       }
@@ -566,26 +569,26 @@ export const actions = {
       if (sessionCookie) {
         user = await verifySessionToken(sessionCookie);
       } else if (basicAuthSessionCookie) {
-        const { getBasicAuthUser } = await import('$lib/basicAuth.js');
+        const { getBasicAuthUser } = await import("$lib/basicAuth.js");
         user = getBasicAuthUser(basicAuthSessionCookie);
       }
-      
+
       if (!user) {
         return { success: false, error: "Invalid session" };
       }
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith('basic_auth_')) {
-        const basicAuthId = user.sub.replace('basic_auth_', '');
+      if (user.sub?.startsWith("basic_auth_")) {
+        const basicAuthId = user.sub.replace("basic_auth_", "");
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)]
+          [parseInt(basicAuthId)],
         );
       } else {
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [user.sub]
+          [user.sub],
         );
       }
 
@@ -614,7 +617,10 @@ export const actions = {
       }
 
       if (newPassword.length < 8) {
-        return { success: false, error: "Password must be at least 8 characters long" };
+        return {
+          success: false,
+          error: "Password must be at least 8 characters long",
+        };
       }
 
       if (newPassword !== confirmPassword) {
@@ -624,7 +630,7 @@ export const actions = {
       // Verify target user exists and is a basic auth user
       const targetUserResult = await query(
         "SELECT id, email, password_hash FROM ggr_users WHERE id = $1",
-        [targetUserId]
+        [targetUserId],
       );
 
       if (targetUserResult.rows.length === 0) {
@@ -634,11 +640,14 @@ export const actions = {
       const targetUser = targetUserResult.rows[0];
 
       if (!targetUser.password_hash) {
-        return { success: false, error: "Cannot update password for Authentik users" };
+        return {
+          success: false,
+          error: "Cannot update password for Authentik users",
+        };
       }
 
       // Hash the new password
-      const bcrypt = await import('bcrypt');
+      const bcrypt = await import("bcrypt");
       const saltRounds = 12;
       const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
@@ -654,7 +663,7 @@ export const actions = {
         WHERE id = $3
         RETURNING email
       `,
-        [hashedPassword, forceChange, targetUserId]
+        [hashedPassword, forceChange, targetUserId],
       );
 
       if (updateResult.rows.length === 0) {
@@ -676,13 +685,13 @@ export const actions = {
               target_user_email: targetUser.email,
               force_change: forceChange,
             }),
-          ]
+          ],
         );
       } catch (analyticsError) {
         console.warn("Failed to log analytics:", analyticsError);
       }
-        console.log(
-        `✅ Password updated for user ${targetUserId} by admin ${user.name || user.email}. Force change: ${forceChange}`
+      console.log(
+        `✅ Password updated for user ${targetUserId} by admin ${user.name || user.email}. Force change: ${forceChange}`,
       );
 
       return { success: true, message: "Password updated successfully" };

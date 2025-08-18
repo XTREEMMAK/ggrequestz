@@ -3,7 +3,7 @@
  */
 
 import { json, error } from "@sveltejs/kit";
-import { requireAuth } from "$lib/auth.js";
+import { requireAuth } from "$lib/auth.server.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { watchlist } from "$lib/database.js";
 import { query } from "$lib/database.js";
@@ -13,7 +13,7 @@ export async function POST({ request }) {
   try {
     // Verify authentication - try both Authentik and Basic Auth
     let user = await requireAuth(request);
-    
+
     // If Authentik auth failed, try Basic Auth
     if (!user) {
       const cookieHeader = request.headers.get("cookie");
@@ -25,34 +25,34 @@ export async function POST({ request }) {
         }
       }
     }
-    
+
     if (!user) {
       throw error(401, "Authentication required");
     }
 
-    // Get user's local database ID 
+    // Get user's local database ID
     let userResult;
     let localUserId;
-    
-    if (user.sub?.startsWith('basic_auth_')) {
+
+    if (user.sub?.startsWith("basic_auth_")) {
       // For basic auth, extract ID from the user.sub format: basic_auth_123
-      const basicAuthId = user.sub.replace('basic_auth_', '');
+      const basicAuthId = user.sub.replace("basic_auth_", "");
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       // For Authentik users
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
     if (userResult.rows.length === 0) {
       throw error(404, "User not found in database");
     }
-    
+
     localUserId = userResult.rows[0].id;
 
     // Parse request data
@@ -61,7 +61,7 @@ export async function POST({ request }) {
 
     // Enhanced validation for game_id
     if (!game_id && game_id !== 0) {
-      console.error('Watchlist add - missing game_id:', { body, game_id });
+      console.error("Watchlist add - missing game_id:", { body, game_id });
       throw error(400, "Missing game_id");
     }
 
@@ -72,7 +72,10 @@ export async function POST({ request }) {
     // Ensure game_id is numeric
     const numericGameId = parseInt(game_id);
     if (isNaN(numericGameId)) {
-      console.error('Watchlist add - invalid game_id:', { game_id, type: typeof game_id });
+      console.error("Watchlist add - invalid game_id:", {
+        game_id,
+        type: typeof game_id,
+      });
       throw error(400, "Invalid game_id format");
     }
 

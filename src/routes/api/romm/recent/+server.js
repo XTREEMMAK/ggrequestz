@@ -3,7 +3,7 @@
  */
 
 import { json, error } from "@sveltejs/kit";
-import { getRecentlyAddedROMs, isRommAvailable } from "$lib/romm.js";
+import { getRecentlyAddedROMs, isRommAvailable } from "$lib/romm.server.js";
 
 export async function GET({ url, request }) {
   try {

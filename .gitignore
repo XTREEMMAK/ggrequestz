@@ -106,7 +106,10 @@ backups/
 *.backup
 *.bak
 
-# Testing
+# Testing Artifacts
 /test-results/
 /playwright-report/
 /playwright/.cache/
+.vitest/
+vitest.config.js.timestamp-*
+vitest.config.ts.timestamp-*

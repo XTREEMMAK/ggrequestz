@@ -127,7 +127,7 @@
           <button 
             type="button" 
             class="lg:hidden text-white hover:text-gray-200"
-            onclick={() => document.getElementById('sidebar').classList.add('-translate-x-full')}
+            on:click={() => document.getElementById('sidebar').classList.add('-translate-x-full')}
           >
             <Icon icon="heroicons:x-mark" class="w-6 h-6" />
           </button>
@@ -222,7 +222,7 @@
           <button
             type="button"
             class="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
-            onclick={() => document.getElementById('sidebar').classList.remove('-translate-x-full')}
+            on:click={() => document.getElementById('sidebar').classList.remove('-translate-x-full')}
           >
             <Icon icon="heroicons:bars-3" class="w-6 h-6" />
           </button>

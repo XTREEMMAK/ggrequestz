@@ -3,7 +3,7 @@
  */
 
 import { redirect } from "@sveltejs/kit";
-import { clearSessionCookie } from "$lib/auth.js";
+import { clearSessionCookie } from "$lib/auth.server.js";
 
 export async function GET({ cookies }) {
   try {

@@ -3,8 +3,8 @@
  * Manual and automatic user sync from external systems
  */
 
-import { BaseApiHandler } from '$lib/integrations/api/base-handler.js';
-import { authManager } from '$lib/integrations/auth-manager.js';
+import { BaseApiHandler } from "$lib/integrations/api/base-handler.js";
+import { authManager } from "$lib/integrations/auth-manager.js";
 
 class SyncHandler extends BaseApiHandler {
   /** @type {import('./$types').RequestHandler} */
@@ -16,33 +16,39 @@ class SyncHandler extends BaseApiHandler {
 
       // Parse and validate request body
       const data = await this.parseRequestBody(request, {
-        action: { required: true, type: 'string', enum: ['sync_user', 'sync_all'] },
-        user_id: { required: false, type: 'string' }
+        action: {
+          required: true,
+          type: "string",
+          enum: ["sync_user", "sync_all"],
+        },
+        user_id: { required: false, type: "string" },
       });
       if (data.error) return data;
 
       // Handle different sync actions
       switch (data.action) {
-        case 'sync_user':
+        case "sync_user":
           if (!data.user_id) {
-            return this.error('user_id is required for sync_user action');
+            return this.error("user_id is required for sync_user action");
           }
 
           const userResult = await authManager.syncUser(data.user_id);
-          await this.logActivity('user_synced', user, { user_id: data.user_id });
-          
-          return this.success({
-            action: 'sync_user',
-            user: userResult
+          await this.logActivity("user_synced", user, {
+            user_id: data.user_id,
           });
 
-        case 'sync_all':
-          const syncResult = await authManager.syncAllUsers();
-          await this.logActivity('bulk_sync', user, { stats: syncResult });
-          
           return this.success({
-            action: 'sync_all',
-            stats: syncResult
+            action: "sync_user",
+            user: userResult,
+          });
+
+        case "sync_all":
+          const syncResult = await authManager.syncAllUsers();
+          await this.logActivity("bulk_sync", user, { stats: syncResult });
+
+          return this.success({
+            action: "sync_all",
+            stats: syncResult,
           });
       }
     });
@@ -66,8 +72,8 @@ class SyncHandler extends BaseApiHandler {
           provider: providerInfo.provider,
           supports_callback: providerInfo.supportsCallback,
           supports_credentials: providerInfo.supportsCredentials,
-          supports_sync: providerInfo.supportsSync
-        }
+          supports_sync: providerInfo.supportsSync,
+        },
       });
     });
   }

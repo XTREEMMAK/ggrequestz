@@ -3,8 +3,8 @@
  * Manage authentication provider settings
  */
 
-import { BaseApiHandler } from '$lib/integrations/api/base-handler.js';
-import { authManager } from '$lib/integrations/auth-manager.js';
+import { BaseApiHandler } from "$lib/integrations/api/base-handler.js";
+import { authManager } from "$lib/integrations/auth-manager.js";
 
 class ConfigurationHandler extends BaseApiHandler {
   /** @type {import('./$types').RequestHandler} */
@@ -18,7 +18,7 @@ class ConfigurationHandler extends BaseApiHandler {
       const providerInfo = authManager.getProviderInfo();
       const availableProviders = authManager.getAvailableProviders();
 
-      await this.logActivity('config_viewed', user);
+      await this.logActivity("config_viewed", user);
 
       return this.success({
         provider: providerInfo.provider,
@@ -28,9 +28,9 @@ class ConfigurationHandler extends BaseApiHandler {
           supports_callback: providerInfo.supportsCallback,
           supports_credentials: providerInfo.supportsCredentials,
           supports_sync: providerInfo.supportsSync,
-          validation: providerInfo.validation
+          validation: providerInfo.validation,
         },
-        available_providers: availableProviders
+        available_providers: availableProviders,
       });
     });
   }
@@ -44,27 +44,43 @@ class ConfigurationHandler extends BaseApiHandler {
 
       // Parse and validate request body
       const data = await this.parseRequestBody(request, {
-        provider: { required: true, type: 'string', enum: ['authentik', 'oidc_generic', 'api_integration', 'webhook_integration', 'local_auth'] },
-        config: { required: false, type: 'object' }
+        provider: {
+          required: true,
+          type: "string",
+          enum: [
+            "authentik",
+            "oidc_generic",
+            "api_integration",
+            "webhook_integration",
+            "local_auth",
+          ],
+        },
+        config: { required: false, type: "object" },
       });
       if (data.error) return data;
 
       // Switch to new provider
-      const result = await authManager.switchProvider(data.provider, data.config || {});
+      const result = await authManager.switchProvider(
+        data.provider,
+        data.config || {},
+      );
 
       if (!result.valid) {
         return this.error(result.message, 400);
       }
 
-      await this.logActivity('provider_changed', user, { 
+      await this.logActivity("provider_changed", user, {
         new_provider: data.provider,
-        previous_provider: authManager.currentProvider 
+        previous_provider: authManager.currentProvider,
       });
 
-      return this.success({
-        provider: data.provider,
-        validation: result
-      }, `Authentication provider changed to ${data.provider}`);
+      return this.success(
+        {
+          provider: data.provider,
+          validation: result,
+        },
+        `Authentication provider changed to ${data.provider}`,
+      );
     });
   }
 }

@@ -9,9 +9,9 @@ export default defineConfig({
     port: 5174,
     allowedHosts: [
       process.env.DOMAIN || "localhost",
-      process.env.GGREQUESTZ_HOST || "localhost", 
-      "localhost", 
-      "127.0.0.1"
+      process.env.GGREQUESTZ_HOST || "localhost",
+      "localhost",
+      "127.0.0.1",
     ],
   },
   build: {
@@ -19,28 +19,48 @@ export default defineConfig({
       output: {
         // Split vendor libraries into separate chunks for better caching
         manualChunks: {
-          vendor: ['svelte'],
-          icons: ['@iconify/svelte'],
-          utils: ['$lib/utils.js', '$lib/auth.client.js', '$lib/api.client.js']
-        }
-      }
+          vendor: ["svelte"],
+          icons: ["@iconify/svelte"],
+          utils: ["$lib/utils.js", "$lib/auth.js", "$lib/api.client.js"],
+          cache: ["$lib/gameCache.js", "$lib/cache.js"],
+          integrations: ["$lib/clientServices.js"],
+          performance: ["$lib/performance.js"],
+        },
+      },
     },
     // Reduce chunk size warning threshold to catch large bundles
     chunkSizeWarningLimit: 600,
     // Enable source maps for better debugging (remove in production)
     sourcemap: false,
     // Enable minification for smaller bundle sizes
-    minify: 'terser',
+    minify: "terser",
     terserOptions: {
       compress: {
         drop_console: true, // Remove console.log in production
-        drop_debugger: true
-      }
-    }
+        drop_debugger: true,
+      },
+    },
   },
   // Optimize dependencies
   optimizeDeps: {
-    include: ['@iconify/svelte'],
-    exclude: ['@iconify-json/*'] // Don't pre-bundle icon sets
-  }
+    include: ["@iconify/svelte"],
+    exclude: ["@iconify-json/*"], // Don't pre-bundle icon sets
+  },
+
+  // Performance optimizations
+  performance: {
+    hints: "warning",
+    maxEntrypointSize: 500000,
+    maxAssetSize: 300000,
+  },
+
+  // Define server-only modules to prevent client-side bundling
+  define: {
+    global: "globalThis",
+  },
+
+  // External server-only dependencies for client build
+  ssr: {
+    noExternal: [],
+  },
 });

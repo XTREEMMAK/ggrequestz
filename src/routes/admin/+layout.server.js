@@ -21,29 +21,29 @@ export async function load({ parent }) {
   try {
     let localUserId;
     let userResult;
-    
+
     // Handle basic auth users vs Authentik users - both now in unified ggr_users table
-    if (user.sub?.startsWith('basic_auth_')) {
-      const basicAuthId = user.sub.replace('basic_auth_', '');
-      
+    if (user.sub?.startsWith("basic_auth_")) {
+      const basicAuthId = user.sub.replace("basic_auth_", "");
+
       // Query the unified users table for basic auth users
       userResult = await query(
         "SELECT id, is_admin FROM ggr_users WHERE id = $1 AND is_active = TRUE AND password_hash IS NOT NULL",
         [parseInt(basicAuthId)],
       );
-      
+
       if (userResult.rows.length === 0) {
         throw redirect(302, "/api/auth/login");
       }
-      
+
       localUserId = userResult.rows[0].id;
-      
+
       const isBasicAdmin = userResult.rows[0].is_admin;
-      
+
       if (!isBasicAdmin) {
         throw redirect(302, "/?error=unauthorized");
       }
-      
+
       let pendingRequestsCount = 0;
       try {
         const pendingResult = await query(
@@ -52,31 +52,33 @@ export async function load({ parent }) {
         );
         pendingRequestsCount = parseInt(pendingResult.rows[0].count) || 0;
       } catch (error) {
-        console.warn("Failed to get pending requests count for basic auth:", error);
+        console.warn(
+          "Failed to get pending requests count for basic auth:",
+          error,
+        );
       }
-      
+
       return {
         userPermissions: [
-          'admin.panel',
-          'request.view_all', 
-          'user.view',
-          'user.manage',
-          'user.edit',
-          'user.create',
-          'user.delete',
-          'system.settings',
-          'analytics.view',
-          'navigation.manage',
-          'request.manage',
-          'request.edit',
-          'request.approve',
-          'request.reject',
-          'request.delete'
+          "admin.panel",
+          "request.view_all",
+          "user.view",
+          "user.manage",
+          "user.edit",
+          "user.create",
+          "user.delete",
+          "system.settings",
+          "analytics.view",
+          "navigation.manage",
+          "request.manage",
+          "request.edit",
+          "request.approve",
+          "request.reject",
+          "request.delete",
         ], // Grant full admin permissions for basic auth admins
         localUserId,
         pendingRequestsCount,
       };
-      
     } else {
       // Handle Authentik users - query the ggr_users table including is_admin flag
       userResult = await query(
@@ -89,19 +91,18 @@ export async function load({ parent }) {
       }
 
       localUserId = userResult.rows[0].id;
-      
+
       const isAuthentikDirectAdmin = userResult.rows[0].is_admin;
-      
+
       let hasCurrentAdminGroup = false;
       if (user.groups && Array.isArray(user.groups)) {
         hasCurrentAdminGroup = user.groups.includes("gg-requestz-admins");
       }
-      
+
       const hasAdminAccess = isAuthentikDirectAdmin || hasCurrentAdminGroup;
-      
+
       // If user has admin access through either method, grant full admin access
       if (hasAdminAccess) {
-        
         let pendingRequestsCount = 0;
         try {
           const pendingResult = await query(
@@ -110,26 +111,29 @@ export async function load({ parent }) {
           );
           pendingRequestsCount = parseInt(pendingResult.rows[0].count) || 0;
         } catch (error) {
-          console.warn("Failed to get pending requests count for Authentik admin:", error);
+          console.warn(
+            "Failed to get pending requests count for Authentik admin:",
+            error,
+          );
         }
-        
+
         return {
           userPermissions: [
-            'admin.panel',
-            'request.view_all', 
-            'user.view',
-            'user.manage',
-            'user.edit',
-            'user.create',
-            'user.delete',
-            'system.settings',
-            'analytics.view',
-            'navigation.manage',
-            'request.manage',
-            'request.edit',
-            'request.approve',
-            'request.reject',
-            'request.delete'
+            "admin.panel",
+            "request.view_all",
+            "user.view",
+            "user.manage",
+            "user.edit",
+            "user.create",
+            "user.delete",
+            "system.settings",
+            "analytics.view",
+            "navigation.manage",
+            "request.manage",
+            "request.edit",
+            "request.approve",
+            "request.reject",
+            "request.delete",
           ], // Grant full admin permissions for direct admin flag
           localUserId,
           pendingRequestsCount,

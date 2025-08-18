@@ -8,11 +8,10 @@ import {
   getUserInfo,
   createSessionToken,
   createSessionCookie,
-} from "$lib/auth.js";
+} from "$lib/auth.server.js";
 import { upsertUserFromAuthentik } from "$lib/userProfile.js";
 
 export async function GET({ url, cookies, getClientAddress, request, locals }) {
-
   try {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
@@ -39,7 +38,6 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
       throw redirect(302, "/?error=invalid_state");
     }
 
-
     // Clear state cookie
     cookies.delete("auth_state", { path: "/" });
 
@@ -47,7 +45,6 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
       console.error("❌ No authorization code received");
       throw redirect(302, "/?error=no_code");
     }
-
 
     // Build redirect URI
     const redirectUri = `${url.origin}/api/auth/callback`;
@@ -60,7 +57,6 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
       throw redirect(302, "/?error=no_token");
     }
 
-
     // Get user information
     const userInfo = await getUserInfo(tokens.access_token);
 
@@ -68,7 +64,6 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
       console.error("❌ Failed to get user info");
       throw redirect(302, "/?error=no_user_info");
     }
-
 
     // Create or update user profile in database
     const user = await upsertUserFromAuthentik(userInfo);
@@ -78,23 +73,21 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
       throw redirect(302, "/?error=profile_creation_failed");
     }
 
-
     // Create session token
     const sessionToken = await createSessionToken(
       userInfo,
-      tokens.access_token,
-      user.id // Add local user ID to session
+      user.id, // Add local user ID to session
     );
 
     // Set session cookie with Docker-compatible settings
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", 
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours
       path: "/",
     };
-    
+
     // Don't set domain explicitly - let browser determine it
     // This ensures it works in both Docker and local environments
     cookies.set("session", sessionToken, cookieOptions);

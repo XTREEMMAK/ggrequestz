@@ -4,7 +4,7 @@
 
 import { json, error } from "@sveltejs/kit";
 import { customNavigation } from "$lib/database.js";
-import { getSession } from "$lib/auth.js";
+import { getSession } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { query } from "$lib/database.js";
 
@@ -17,31 +17,31 @@ async function getUserId(cookies) {
     if (user) {
       const result = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
       return result.rows.length > 0 ? result.rows[0].id : null;
     }
   }
-  
+
   // Try basic auth session
   const basicAuthSessionCookie = cookies.get("basic_auth_session");
   if (basicAuthSessionCookie) {
     try {
-      const { getBasicAuthUser } = await import('$lib/basicAuth.js');
+      const { getBasicAuthUser } = await import("$lib/basicAuth.js");
       const user = getBasicAuthUser(basicAuthSessionCookie);
-      if (user && user.sub?.startsWith('basic_auth_')) {
-        const basicAuthId = user.sub.replace('basic_auth_', '');
+      if (user && user.sub?.startsWith("basic_auth_")) {
+        const basicAuthId = user.sub.replace("basic_auth_", "");
         const result = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)]
+          [parseInt(basicAuthId)],
         );
         return result.rows.length > 0 ? result.rows[0].id : null;
       }
     } catch (error) {
-      console.warn('Failed to get basic auth user:', error);
+      console.warn("Failed to get basic auth user:", error);
     }
   }
-  
+
   return null;
 }
 
@@ -86,8 +86,10 @@ export async function POST({ request, cookies }) {
     let allowedRoles = [];
     if (data.minimum_role && !data.visible_to_all) {
       // Define role hierarchy (highest to lowest)
-      const roleHierarchy = ['admin', 'manager', 'moderator', 'user', 'viewer'];
-      const minimumIndex = roleHierarchy.findIndex(role => role === data.minimum_role);
+      const roleHierarchy = ["admin", "manager", "moderator", "user", "viewer"];
+      const minimumIndex = roleHierarchy.findIndex(
+        (role) => role === data.minimum_role,
+      );
       if (minimumIndex !== -1) {
         // Include all roles from minimum level and above (higher hierarchy)
         allowedRoles = roleHierarchy.slice(0, minimumIndex + 1);
@@ -104,7 +106,7 @@ export async function POST({ request, cookies }) {
       visible_to_all: data.visible_to_all !== false, // Default to true
       visible_to_guests: data.visible_to_guests !== false, // Default to true
       allowed_roles: allowedRoles,
-      minimum_role: data.minimum_role || 'viewer', // Store the minimum role for UI
+      minimum_role: data.minimum_role || "viewer", // Store the minimum role for UI
       created_by: userId,
     };
 
@@ -148,8 +150,10 @@ export async function PUT({ request, cookies }) {
     let allowedRoles = [];
     if (data.minimum_role && !data.visible_to_all) {
       // Define role hierarchy (highest to lowest)
-      const roleHierarchy = ['admin', 'manager', 'moderator', 'user', 'viewer'];
-      const minimumIndex = roleHierarchy.findIndex(role => role === data.minimum_role);
+      const roleHierarchy = ["admin", "manager", "moderator", "user", "viewer"];
+      const minimumIndex = roleHierarchy.findIndex(
+        (role) => role === data.minimum_role,
+      );
       if (minimumIndex !== -1) {
         // Include all roles from minimum level and above (higher hierarchy)
         allowedRoles = roleHierarchy.slice(0, minimumIndex + 1);
@@ -166,7 +170,7 @@ export async function PUT({ request, cookies }) {
       visible_to_all: data.visible_to_all !== false, // Default to true
       visible_to_guests: data.visible_to_guests !== false, // Default to true
       allowed_roles: allowedRoles,
-      minimum_role: data.minimum_role || 'viewer', // Store the minimum role for UI
+      minimum_role: data.minimum_role || "viewer", // Store the minimum role for UI
     };
 
     const success = await customNavigation.update(data.id, updates);

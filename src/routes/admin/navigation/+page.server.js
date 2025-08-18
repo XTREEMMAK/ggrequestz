@@ -19,7 +19,7 @@ export async function load({ parent }) {
 
     // Get available roles for role-based visibility
     const rolesResult = await query(
-      "SELECT id, name, display_name FROM ggr_roles WHERE is_active = true ORDER BY display_name"
+      "SELECT id, name, display_name FROM ggr_roles WHERE is_active = true ORDER BY display_name",
     );
     const availableRoles = rolesResult.rows;
 

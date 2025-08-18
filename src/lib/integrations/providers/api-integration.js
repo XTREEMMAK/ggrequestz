@@ -3,9 +3,17 @@
  * Refactored to use shared utilities and HTTP client
  */
 
-import { createSessionToken, verifyJWT, extractUserFromPayload } from '../utils/jwt-utils.js';
-import { createApiClient } from '../utils/http-client.js';
-import { normalizeUserData, syncUserToDatabase, batchSyncUsers } from '../utils/user-sync.js';
+import {
+  createSessionToken,
+  verifyJWT,
+  extractUserFromPayload,
+} from "../utils/jwt-utils.js";
+import { createApiClient } from "../utils/http-client.js";
+import {
+  normalizeUserData,
+  syncUserToDatabase,
+  batchSyncUsers,
+} from "../utils/user-sync.js";
 
 /**
  * Authenticate user via external API
@@ -14,42 +22,42 @@ export async function authenticate(credentials, config) {
   try {
     const client = createApiClient(config.baseUrl, {
       apiKey: config.apiKey,
-      timeout: config.timeout
+      timeout: config.timeout,
     });
 
-    const response = await client.post('/api/auth/login', credentials);
+    const response = await client.post("/api/auth/login", credentials);
 
     if (!response.success) {
       return {
         success: false,
-        error: response.data?.message || 'Authentication failed'
+        error: response.data?.message || "Authentication failed",
       };
     }
 
     const result = response.data;
-    
+
     // Normalize and sync user to local database
-    const normalized = normalizeUserData(result.user, 'api_integration');
+    const normalized = normalizeUserData(result.user, "api_integration");
     const localUser = await syncUserToDatabase(normalized);
-    
+
     // Create session token
     const sessionToken = await createSessionToken(result.user, {
-      provider: 'api_integration',
+      provider: "api_integration",
       localUserId: localUser.id,
-      externalToken: result.access_token
+      externalToken: result.access_token,
     });
-    
+
     return {
       success: true,
       user: result.user,
       localUser,
-      sessionToken
+      sessionToken,
     };
   } catch (error) {
-    console.error('API authentication error:', error);
+    console.error("API authentication error:", error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
     };
   }
 }
@@ -61,28 +69,28 @@ export async function verifySession(token, config) {
   try {
     const payload = await verifyJWT(token);
     if (!payload) return null;
-    
+
     // Optional: Verify with external API for active session
     if (config.verifyEndpoint) {
       const client = createApiClient(config.baseUrl, {
         apiKey: config.apiKey,
-        timeout: config.timeout
+        timeout: config.timeout,
       });
-      
+
       const response = await client.get(config.verifyEndpoint, {
         headers: {
-          'Authorization': `Bearer ${payload.external_token}`
-        }
+          Authorization: `Bearer ${payload.external_token}`,
+        },
       });
-      
+
       if (!response.success) {
         return null; // Session invalid on external system
       }
     }
-    
+
     return extractUserFromPayload(payload);
   } catch (error) {
-    console.error('API session verification error:', error);
+    console.error("API session verification error:", error);
     return null;
   }
 }
@@ -94,7 +102,7 @@ export async function syncUser(config, userId) {
   try {
     const client = createApiClient(config.baseUrl, {
       apiKey: config.apiKey,
-      timeout: config.timeout
+      timeout: config.timeout,
     });
 
     const response = await client.get(`${config.userEndpoint}/${userId}`);
@@ -103,7 +111,7 @@ export async function syncUser(config, userId) {
       throw new Error(`Failed to fetch user ${userId}: ${response.status}`);
     }
 
-    const normalized = normalizeUserData(response.data, 'api_integration');
+    const normalized = normalizeUserData(response.data, "api_integration");
     return await syncUserToDatabase(normalized);
   } catch (error) {
     console.error(`Failed to sync user ${userId}:`, error);
@@ -118,7 +126,7 @@ export async function syncAllUsers(config) {
   try {
     const client = createApiClient(config.baseUrl, {
       apiKey: config.apiKey,
-      timeout: config.timeout * 5 // Longer timeout for bulk sync
+      timeout: config.timeout * 5, // Longer timeout for bulk sync
     });
 
     const response = await client.get(config.syncEndpoint);
@@ -128,9 +136,9 @@ export async function syncAllUsers(config) {
     }
 
     const { users } = response.data;
-    return await batchSyncUsers(users, 'api_integration');
+    return await batchSyncUsers(users, "api_integration");
   } catch (error) {
-    console.error('Failed to sync all users:', error);
+    console.error("Failed to sync all users:", error);
     throw error;
   }
 }
@@ -142,26 +150,26 @@ export async function logout(token, config) {
   try {
     const payload = await verifyJWT(token);
     if (!payload) {
-      return { success: true, message: 'Session already invalid' };
+      return { success: true, message: "Session already invalid" };
     }
 
     // Optional: Call external logout endpoint
     if (config.logoutEndpoint) {
       const client = createApiClient(config.baseUrl, {
         apiKey: config.apiKey,
-        timeout: config.timeout
+        timeout: config.timeout,
       });
-      
+
       await client.post(config.logoutEndpoint, null, {
         headers: {
-          'Authorization': `Bearer ${payload.external_token}`
-        }
+          Authorization: `Bearer ${payload.external_token}`,
+        },
       });
     }
 
-    return { success: true, message: 'Logged out successfully' };
+    return { success: true, message: "Logged out successfully" };
   } catch (error) {
-    console.error('API logout error:', error);
+    console.error("API logout error:", error);
     return { success: false, error: error.message };
   }
 }

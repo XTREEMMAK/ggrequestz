@@ -15,22 +15,22 @@ export async function load({ parent }) {
   }
 
   try {
-    // Get user's local database ID 
+    // Get user's local database ID
     let userResult;
     let localUserId;
-    
-    if (user.sub?.startsWith('basic_auth_')) {
+
+    if (user.sub?.startsWith("basic_auth_")) {
       // For basic auth, extract ID from the user.sub format: basic_auth_123
-      const basicAuthId = user.sub.replace('basic_auth_', '');
+      const basicAuthId = user.sub.replace("basic_auth_", "");
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       // For Authentik users
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
@@ -38,7 +38,7 @@ export async function load({ parent }) {
       console.error("Profile load: User not found in database");
       throw redirect(302, "/login");
     }
-    
+
     localUserId = userResult.rows[0].id;
 
     // Fetch user's watchlist and requests in parallel
@@ -63,7 +63,7 @@ export async function load({ parent }) {
     if (error.status === 302) {
       throw error;
     }
-    
+
     return {
       userWatchlist: [],
       userRequests: [],

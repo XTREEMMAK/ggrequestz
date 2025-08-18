@@ -5,7 +5,10 @@
       "Bash(mv:*)",
       "Bash(redis-cli:*)",
       "Bash(rm:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npm run format:*)",
+      "Bash(npm run build:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

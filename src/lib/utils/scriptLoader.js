@@ -21,29 +21,31 @@ export function loadScript(src, globalName = null, timeout = 10000) {
     // Check if script is already loading/loaded
     const existingScript = document.querySelector(`script[src="${src}"]`);
     if (existingScript) {
-      if (existingScript.dataset.loaded === 'true') {
+      if (existingScript.dataset.loaded === "true") {
         resolve();
         return;
       }
-      
+
       // Wait for existing script to load
-      existingScript.addEventListener('load', () => resolve());
-      existingScript.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)));
+      existingScript.addEventListener("load", () => resolve());
+      existingScript.addEventListener("error", () =>
+        reject(new Error(`Failed to load ${src}`)),
+      );
       return;
     }
 
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = src;
-    script.dataset.loaded = 'false';
-    
+    script.dataset.loaded = "false";
+
     const timeoutId = setTimeout(() => {
       reject(new Error(`Script loading timeout: ${src}`));
     }, timeout);
 
     script.onload = () => {
       clearTimeout(timeoutId);
-      script.dataset.loaded = 'true';
-      
+      script.dataset.loaded = "true";
+
       // If we're checking for a global, wait for it to be available
       if (globalName) {
         const checkGlobal = () => {
@@ -87,16 +89,16 @@ export async function loadVantaWaves() {
   try {
     // Load Three.js first (r134 specifically for Vanta compatibility)
     await loadScript(
-      'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js',
-      'THREE'
+      "https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js",
+      "THREE",
     );
-    
+
     // Then load Vanta.js
     await loadScript(
-      'https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js',
-      'VANTA'
+      "https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js",
+      "VANTA",
     );
-    
+
     return true;
   } catch (error) {
     throw error;

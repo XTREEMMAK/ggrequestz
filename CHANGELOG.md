@@ -5,9 +5,130 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-01-18
+
+### Added
+
+- **New Components & Services**
+  - LoadMoreButton component with preloading support and loading states
+  - SkeletonLoader component with multiple variants (card, list, circle, text, image)
+  - Client-side services for progressive enhancement (clientServices.js)
+  - Performance optimization utilities with lazy loading (performance module)
+  - RommCrossReferenceService for client-side ROMM integration
+  - WatchlistService with optimistic updates and caching
+
+- **Advanced Performance Features**
+  - Modular performance system with lazy-loaded utilities
+  - Image proxy endpoint with Redis caching for external images
+  - Lazy loader with intersection observer for better image loading
+  - Prefetcher service for predictive data loading
+  - Performance metrics collection system
+  - Bundle optimization with dynamic imports
+
+- **Enhanced API Endpoints**
+  - Individual game API endpoint (/api/games/[id]) with caching
+  - Image proxy API (/api/images/proxy) for external image caching
+  - ROMM cross-reference API for library availability checks
+  - Enhanced game data endpoints with improved error handling
+
+- **Server-Side Optimizations**
+  - Server-only auth utilities (auth.server.js) with proper browser guards
+  - Server-only ROMM integration (romm.server.js) with batched operations
+  - Improved separation of server and client code
+  - Enhanced environment variable management
+
+- **Documentation & Project Structure**
+  - Reorganized documentation into logical sections (docs/setup/, docs/guides/)
+  - Enhanced README with better project structure
+  - Improved API documentation
+  - Developer notes and troubleshooting guides
+  - Consolidated and organized project files for better maintainability
+
+### Improved
+
+- **UI/UX Enhancements**
+  - Dark theme optimization for skeleton loaders (bg-gray-300 → bg-gray-600)
+  - Enhanced game card hover effects with image rotation
+  - Better loading states and animations
+  - Improved visual feedback throughout the application
+  - Fixed homepage state persistence for load more functionality
+  - Resolved back navigation state issues after page refresh
+  - Fixed Popular Games section not loading in Docker environments
+
+- **Performance Optimizations**
+  - Reduced bundle size through lazy loading and code splitting
+  - Optimized image loading with proxy caching
+  - Better memory management with modular architecture
+  - Reduced server load through client-side optimizations
+
+- **Code Quality & Architecture**
+  - Better separation of concerns between client and server code
+  - Improved error handling and resilience
+  - Enhanced type safety and validation
+  - More maintainable and scalable codebase structure
+
+### Technical Improvements
+
+- **State Management**
+  - Enhanced homepage state persistence across navigation
+  - Intelligent state validation for page refresh scenarios
+  - Session-aware cache management with timestamp validation
+  - Fixed load more content restoration after back navigation
+  - Improved state synchronization between page loads
+
+- **Caching Strategy**
+  - Redis-backed image caching with 7-day TTL
+  - Intelligent cache invalidation and warming
+  - Client-side service caching with TTL management
+  - Optimized batch processing for ROMM integration
+
+- **Docker & Environment Improvements**
+  - Fixed environment variable loading in Docker production environments
+  - Improved dotenv handling for development vs production
+  - Enhanced IGDB API integration for containerized deployments
+  - Better error handling for missing environment variables
+
+- **Security Enhancements**
+  - Proper domain validation for image proxy
+  - Enhanced authentication flow separation
+  - Better session management and token handling
+  - Improved CSRF protection and validation
+
+### Refactored & Removed
+
+- **Code Deduplication & Cleanup**
+  - Consolidated authentication modules (removed auth.client.js, authHelper.js, authUnified.js)
+  - Merged ROMM functionality into server-specific modules (romm.js → romm.server.js)
+  - Removed legacy TypeSense integration (typesense.js → typesense.server.js)
+  - Eliminated obsolete IGDB client (igdb-node.js) in favor of improved igdb.js
+
+- **Script Consolidation**
+  - Restructured database scripts into organized modules (scripts/database/)
+  - Removed duplicate deployment scripts (deploy-production.sh, docker-cleanup.sh, etc.)
+  - Consolidated migration management into unified db-manager.js
+  - Removed redundant setup and utility scripts
+
+- **Documentation Organization**
+  - Moved root-level documentation files into structured directories
+  - Consolidated setup guides into docs/setup/ (DATABASE_SETUP.md, DOCKER_SETUP.md, etc.)
+  - Moved troubleshooting guides into docs/guides/ (ROMM_TROUBLESHOOTING.md, INTEGRATION_GUIDE.md)
+  - Removed outdated documentation (README_OLD.md, custom-navigation-setup.md)
+  - Archived legacy documentation into docs/dev-notes/
+
+- **Route Cleanup**
+  - Removed dedicated auth login routes (consolidated into unified login system)
+  - Streamlined authentication flow by removing redundant pages
+  - Better separation between setup, login, and application routes
+
+- **Library Reorganization**
+  - Split client/server concerns (auth.js + auth.server.js)
+  - Removed unused utility modules (lib/index.js)
+  - Better module boundaries and cleaner imports
+
 ## [1.0.0] - 2025-01-13
 
 ### Added
+
 - **Performance Optimizations**
   - Hover preloading for instant navigation (200ms+ improvement)
   - Server-side cache warming on startup
@@ -16,6 +137,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Session-based preload caching
   - Smart timeout protection with graceful fallbacks
 
+- **UI/UX Improvements**
+  - Enhanced SkeletonLoader component with improved dark theme colors
+  - Changed skeleton placeholder colors from light gray to darker gray for better contrast
+
 - **Authentication Enhancements**
   - Generic OIDC provider support (not Authentik-specific)
   - Support for Keycloak, Auth0, Okta, Azure AD
@@ -23,12 +148,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Basic auth with bcrypt password hashing
 
 ### Changed
+
 - Converted GameCard components to use direct links for native preloading
 - Optimized homepage data fetching with parallel loading
 - Improved error handling with timeout protection
 - Updated hooks for proper header mutability
 
 ### Fixed
+
 - Search input focus loss issues
 - Headers immutability errors in hooks.server.js
 - Missing variable references in preloaders
@@ -37,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] - 2024-12-15
 
 ### Added
+
 - Multi-page first-run setup wizard with system checks
 - Welcome page with feature overview and IGDB backgrounds
 - System connectivity checks for database, Redis, IGDB API, and ROMM
@@ -54,6 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive .env.example with all configuration options
 
 ### Changed
+
 - Updated main navigation to hide on login and setup pages
 - Enhanced authentication flow with better error handling
 - Improved Docker entrypoint with graceful startup and health checks
@@ -61,6 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restructured environment configuration for better organization
 
 ### Fixed
+
 - Admin users filters now work correctly using URL parameter detection
 - Login page navigation properly hidden on all devices
 - Setup flow properly redirects from old auth/setup route
@@ -68,6 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment variable handling in Docker containers
 
 ### Security
+
 - Enhanced input validation throughout the application
 - Secure session management with configurable secrets
 - Protection against common web vulnerabilities
@@ -76,6 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2024-12-XX
 
 ### Added
+
 - Initial release of GameRequest
 - SvelteKit 5 application framework
 - Authentik OIDC authentication support
@@ -106,6 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Logging and monitoring capabilities
 
 ### Technical Details
+
 - Node.js 18+ requirement
 - PostgreSQL 12+ database
 - Redis 6+ caching (optional)
@@ -125,13 +258,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Migration Guides
 
 ### Upgrading to v1.1.0
+
 When upgrading from v1.0.0:
+
 1. Update your .env file with new configuration options
 2. Run database migrations: `npm run db:migrate`
 3. Restart your application
 
 ### Docker Updates
+
 For Docker deployments:
+
 1. Pull the latest images: `docker compose pull`
 2. Restart with migrations: `docker compose up -d`
 3. Check health status: `docker compose ps`
@@ -139,7 +276,7 @@ For Docker deployments:
 ## Support and Documentation
 
 - **Installation Guide**: See README.md
-- **Docker Guide**: See DOCKER_TESTING.md  
+- **Docker Guide**: See DOCKER_TESTING.md
 - **Contributing**: See CONTRIBUTING.md
 - **API Documentation**: Available at `/api/docs` (when enabled)
 - **Issue Tracker**: GitHub Issues
@@ -150,7 +287,7 @@ For Docker deployments:
 Special thanks to all contributors who have helped make GameRequest possible:
 
 - Core development team
-- Community contributors  
+- Community contributors
 - Beta testers and feedback providers
 - Open source projects that make GameRequest possible:
   - SvelteKit and the Svelte ecosystem

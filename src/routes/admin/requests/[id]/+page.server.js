@@ -45,10 +45,11 @@ export async function load({ params, parent }) {
 
     // Get user details - handle both legacy (authentik_sub/email) and new (integer id) user_id formats
     let requestUser = null;
-    
+
     // Try to get user by integer ID first (new format)
     if (!isNaN(request.user_id)) {
-      const userByIdResult = await query(`
+      const userByIdResult = await query(
+        `
         SELECT 
           u.id,
           u.name,
@@ -72,14 +73,17 @@ export async function load({ params, parent }) {
         LEFT JOIN ggr_roles r ON ur.role_id = r.id AND r.is_active = true
         WHERE u.id = $1
         GROUP BY u.id, u.name, u.email, u.preferred_username, u.created_at, u.last_login, u.authentik_sub
-      `, [parseInt(request.user_id)]);
-      
+      `,
+        [parseInt(request.user_id)],
+      );
+
       requestUser = userByIdResult.rows[0] || null;
     }
-    
+
     // If not found by ID, try by authentik_sub (legacy format)
     if (!requestUser) {
-      const userBySubResult = await query(`
+      const userBySubResult = await query(
+        `
         SELECT 
           u.id,
           u.name,
@@ -103,8 +107,10 @@ export async function load({ params, parent }) {
         LEFT JOIN ggr_roles r ON ur.role_id = r.id AND r.is_active = true
         WHERE u.authentik_sub = $1 OR u.email = $1
         GROUP BY u.id, u.name, u.email, u.preferred_username, u.created_at, u.last_login, u.authentik_sub
-      `, [request.user_id]);
-      
+      `,
+        [request.user_id],
+      );
+
       requestUser = userBySubResult.rows[0] || null;
     }
 
@@ -117,18 +123,20 @@ export async function load({ params, parent }) {
     if (!requestUser) {
       const fallbackUser = {
         id: null,
-        name: request.user_name || 'Unknown User',
+        name: request.user_name || "Unknown User",
         email: null,
         preferred_username: request.user_name,
         authentik_sub: request.user_id,
         created_at: null,
         last_login: null,
         roles: [],
-        is_fallback: true
+        is_fallback: true,
       };
-      
-      console.warn(`User not found for request ${requestId}, user_id: ${request.user_id}, using fallback`);
-      
+
+      console.warn(
+        `User not found for request ${requestId}, user_id: ${request.user_id}, using fallback`,
+      );
+
       return {
         request,
         requestUser: fallbackUser,

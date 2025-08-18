@@ -4,10 +4,13 @@
 
 import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
-import { sendRequestStatusNotification, sendRequestCancelledDeletedNotification } from "$lib/gotify.js";
+import {
+  sendRequestStatusNotification,
+  sendRequestCancelledDeletedNotification,
+} from "$lib/gotify.js";
 import { invalidateCache } from "$lib/cache.js";
 
 export async function POST({ request, cookies }) {
@@ -15,7 +18,7 @@ export async function POST({ request, cookies }) {
     // Verify authentication - support both auth types
     const sessionCookie = cookies.get("session");
     const basicAuthSessionCookie = cookies.get("basic_auth_session");
-    
+
     if (!sessionCookie && !basicAuthSessionCookie) {
       return json(
         { success: false, error: "Authentication required" },
@@ -29,7 +32,7 @@ export async function POST({ request, cookies }) {
     } else if (basicAuthSessionCookie) {
       user = getBasicAuthUser(basicAuthSessionCookie);
     }
-    
+
     if (!user) {
       return json(
         { success: false, error: "Invalid session" },
@@ -39,16 +42,16 @@ export async function POST({ request, cookies }) {
 
     // Get user's local ID - support both basic auth and Authentik users
     let userResult;
-    if (user.sub?.startsWith('basic_auth_')) {
-      const basicAuthId = user.sub.replace('basic_auth_', '');
+    if (user.sub?.startsWith("basic_auth_")) {
+      const basicAuthId = user.sub.replace("basic_auth_", "");
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
@@ -125,14 +128,14 @@ export async function POST({ request, cookies }) {
       "SELECT status, title, user_name FROM ggr_game_requests WHERE id = $1",
       [request_id],
     );
-    
+
     if (oldStatusResult.rows.length === 0) {
       return json(
         { success: false, error: "Request not found" },
         { status: 404 },
       );
     }
-    
+
     const oldStatus = oldStatusResult.rows[0].status;
     const requestTitle = oldStatusResult.rows[0].title;
     const requestUserName = oldStatusResult.rows[0].user_name;
@@ -184,17 +187,20 @@ export async function POST({ request, cookies }) {
 
     // Send Gotify notification for status change (asynchronously)
     if (oldStatus !== status) {
-      if (status === 'cancelled') {
+      if (status === "cancelled") {
         // Use specific notification function for cancelled requests
         sendRequestCancelledDeletedNotification({
           id: updatedRequest.id,
           title: requestTitle,
           user_name: requestUserName,
-          action: 'cancelled',
-          reason: admin_notes || '',
+          action: "cancelled",
+          reason: admin_notes || "",
           admin_name: user.name || user.email,
         }).catch((error) => {
-          console.warn('Failed to send Gotify cancellation notification:', error);
+          console.warn(
+            "Failed to send Gotify cancellation notification:",
+            error,
+          );
           // Don't fail the request if notification fails
         });
       } else {
@@ -207,7 +213,7 @@ export async function POST({ request, cookies }) {
           user_name: requestUserName,
           admin_notes: admin_notes,
         }).catch((error) => {
-          console.warn('Failed to send Gotify status notification:', error);
+          console.warn("Failed to send Gotify status notification:", error);
           // Don't fail the request if notification fails
         });
       }
@@ -219,16 +225,16 @@ export async function POST({ request, cookies }) {
     // Invalidate cache for the affected user and general request caches
     try {
       const cacheKeysToInvalidate = [
-        'game-requests', // General request cache
-        'recent-requests', // Recent requests
+        "game-requests", // General request cache
+        "recent-requests", // Recent requests
       ];
-      
+
       // Add user-specific cache keys
       if (updatedRequest.user_id) {
         cacheKeysToInvalidate.push(`user-${updatedRequest.user_id}-requests`);
         cacheKeysToInvalidate.push(`user-${updatedRequest.user_id}-watchlist`);
       }
-      
+
       await invalidateCache(cacheKeysToInvalidate);
     } catch (cacheError) {
       console.warn("Failed to invalidate cache:", cacheError);
@@ -255,4 +261,3 @@ export async function POST({ request, cookies }) {
     );
   }
 }
-

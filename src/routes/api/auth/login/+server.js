@@ -3,11 +3,10 @@
  */
 
 import { redirect } from "@sveltejs/kit";
-import { getAuthorizationUrl } from "$lib/auth.js";
+import { getAuthorizationUrl } from "$lib/auth.server.js";
 import { generateId } from "$lib/utils.js";
 
 export async function GET({ url, cookies }) {
-
   try {
     // Generate state parameter for security
     const state = generateId();

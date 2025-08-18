@@ -62,20 +62,28 @@ function formatForCache(igdbGame) {
  * @returns {Object} - Formatted game data
  */
 function formatFromCache(cachedGame) {
+  // Helper function to convert IGDB URLs to proxy URLs
+  const toProxyUrl = (url) => {
+    if (!url || !url.includes('igdb.com') || url.includes('/api/images/proxy')) {
+      return url;
+    }
+    return `/api/images/proxy?url=${encodeURIComponent(url)}`;
+  };
+  
   return {
     id: cachedGame.igdb_id,
     igdb_id: cachedGame.igdb_id,
     title: cachedGame.title,
     slug: cachedGame.slug || generateSlug(cachedGame.title),
     summary: cachedGame.summary,
-    cover_url: cachedGame.cover_url,
+    cover_url: toProxyUrl(cachedGame.cover_url),
     rating: cachedGame.rating,
     release_date: cachedGame.release_date
       ? new Date(cachedGame.release_date).getTime()
       : null,
     platforms: cachedGame.platforms || [],
     genres: cachedGame.genres || [],
-    screenshots: cachedGame.screenshots || [],
+    screenshots: (cachedGame.screenshots || []).map(toProxyUrl),
     videos: cachedGame.videos || [],
     companies: cachedGame.companies || [],
     game_modes: cachedGame.game_modes || [],
@@ -83,13 +91,42 @@ function formatFromCache(cachedGame) {
   };
 }
 
+// Request deduplication map to prevent parallel fetches of the same game
+const pendingRequests = new Map();
+
 /**
- * Get game by ID with cache-first strategy
+ * Get game by ID with cache-first strategy and request deduplication
  * @param {string} igdbId - IGDB game ID
  * @param {boolean} forceRefresh - Force refresh from IGDB
  * @returns {Promise<Object|null>} - Game data or null
  */
 export async function getGameById(igdbId, forceRefresh = false) {
+  // Check if there's already a pending request for this game
+  const requestKey = `${igdbId}-${forceRefresh}`;
+  if (pendingRequests.has(requestKey)) {
+    console.log(`♻️ Reusing pending request for game ${igdbId}`);
+    return pendingRequests.get(requestKey);
+  }
+
+  // Create the request promise
+  const requestPromise = _getGameByIdInternal(igdbId, forceRefresh);
+
+  // Store it in the pending requests map
+  pendingRequests.set(requestKey, requestPromise);
+
+  // Clean up after completion (whether success or failure)
+  requestPromise.finally(() => {
+    pendingRequests.delete(requestKey);
+  });
+
+  return requestPromise;
+}
+
+/**
+ * Internal implementation of getGameById
+ * @private
+ */
+async function _getGameByIdInternal(igdbId, forceRefresh = false) {
   try {
     // Try cache first (if not forcing refresh)
     if (!forceRefresh) {
@@ -380,5 +417,99 @@ export async function getCacheStats() {
       hasStaleGames: false,
       cacheActive: false,
     };
+  }
+}
+
+// ========================================
+// CLIENT-SAFE FUNCTIONS
+// ========================================
+
+import { browser } from "$app/environment";
+
+/**
+ * Client-safe version of getGameById
+ * @param {string} igdbId - IGDB game ID
+ * @param {boolean} forceRefresh - Force refresh from IGDB
+ * @returns {Promise<Object|null>} - Game data or null
+ */
+export async function getGameByIdClient(igdbId, forceRefresh = false) {
+  if (!browser) {
+    console.warn("getGameByIdClient called on server side");
+    return null;
+  }
+
+  try {
+    // First try to get from API endpoint (which has proper caching)
+    const response = await fetch(
+      `/api/games/${igdbId}${forceRefresh ? "?refresh=true" : ""}`,
+    );
+    if (response.ok) {
+      return await response.json();
+    }
+
+    // If API fails, try the cache module as fallback
+    try {
+      return await getGameById(igdbId, forceRefresh);
+    } catch (error) {
+      console.warn("Fallback to server cache failed:", error);
+      return null;
+    }
+  } catch (error) {
+    console.warn("Client-side getGameById failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Client-safe version of searchGames
+ * @param {string} query - Search query
+ * @param {number} limit - Number of results
+ * @returns {Promise<Array>} - Array of games
+ */
+export async function searchGamesClient(query, limit = 20) {
+  if (!browser) return [];
+
+  try {
+    const response = await fetch(
+      `/api/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    );
+    if (response.ok) {
+      const data = await response.json();
+      return data.games || [];
+    }
+    return [];
+  } catch (error) {
+    console.warn("Client-side searchGames failed:", error);
+    return [];
+  }
+}
+
+/**
+ * Warm cache for visible games (client-side only)
+ * @param {Array} gameIds - Array of game IDs to warm
+ * @returns {Promise<void>}
+ */
+export async function warmGameCacheClient(gameIds) {
+  if (!browser || !gameIds?.length) return;
+
+  // Batch the requests to avoid overwhelming the server
+  const batchSize = 5;
+  const batches = [];
+
+  for (let i = 0; i < gameIds.length; i += batchSize) {
+    batches.push(gameIds.slice(i, i + batchSize));
+  }
+
+  for (const batch of batches) {
+    try {
+      await Promise.all(batch.map((id) => getGameByIdClient(id)));
+
+      // Small delay between batches
+      if (batches.length > 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    } catch (error) {
+      console.warn("Batch cache warming failed:", error);
+    }
   }
 }

@@ -135,7 +135,15 @@
     <!-- Modal content -->
     <div
       class="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden"
+      role="dialog"
+      aria-labelledby="modal-title"
+      tabindex="-1"
       onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => {
+        if (e.key === 'Escape') {
+          closeModal();
+        }
+      }}
       in:scale={{ duration: 200, easing: quintOut, start: 0.95 }}
       out:scale={{ duration: 150, easing: quintOut, start: 0.95 }}
     >

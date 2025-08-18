@@ -185,7 +185,15 @@
       <!-- Background overlay -->
       <div 
         class="fixed inset-0 bg-black bg-opacity-50 transition-opacity z-[95]"
+        role="button"
+        aria-label="Close modal"
+        tabindex="0"
         onclick={closePermissionModal}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            closePermissionModal();
+          }
+        }}
       ></div>
 
       <!-- Modal panel -->

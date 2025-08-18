@@ -4,7 +4,7 @@
 
 import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
 
@@ -13,7 +13,7 @@ export async function POST({ request, cookies }) {
     // Verify authentication - support both auth types
     const sessionCookie = cookies.get("session");
     const basicAuthSessionCookie = cookies.get("basic_auth_session");
-    
+
     if (!sessionCookie && !basicAuthSessionCookie) {
       return json(
         { success: false, error: "Authentication required" },
@@ -27,7 +27,7 @@ export async function POST({ request, cookies }) {
     } else if (basicAuthSessionCookie) {
       user = getBasicAuthUser(basicAuthSessionCookie);
     }
-    
+
     if (!user) {
       return json(
         { success: false, error: "Invalid session" },
@@ -37,16 +37,16 @@ export async function POST({ request, cookies }) {
 
     // Get user's local ID - support both basic auth and Authentik users
     let userResult;
-    if (user.sub?.startsWith('basic_auth_')) {
-      const basicAuthId = user.sub.replace('basic_auth_', '');
+    if (user.sub?.startsWith("basic_auth_")) {
+      const basicAuthId = user.sub.replace("basic_auth_", "");
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
@@ -136,8 +136,9 @@ export async function POST({ request, cookies }) {
         [user_id],
       );
 
-      const isTargetAdmin = targetUserAdminCheck.rows.length > 0 && 
-                           parseInt(targetUserAdminCheck.rows[0].is_admin_count) > 0;
+      const isTargetAdmin =
+        targetUserAdminCheck.rows.length > 0 &&
+        parseInt(targetUserAdminCheck.rows[0].is_admin_count) > 0;
 
       if (isTargetAdmin) {
         // Count total active admins (both role-based and is_admin flag)
@@ -306,7 +307,7 @@ export async function POST({ request, cookies }) {
     } catch (analyticsError) {
       console.warn("Failed to log analytics:", analyticsError);
     }
-console.log(
+    console.log(
       `✅ User ${user_id} updated (${action}) by admin ${user.name || user.email}`,
     );
 

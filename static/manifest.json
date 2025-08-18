@@ -19,7 +19,7 @@
       "purpose": "maskable any"
     },
     {
-      "src": "/GGR_icon.webp", 
+      "src": "/GGR_icon.webp",
       "sizes": "512x512",
       "type": "image/webp",
       "purpose": "maskable any"
@@ -27,15 +27,15 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshot-wide.png",
-      "sizes": "2880x1800",
-      "type": "image/png",
+      "src": "/screenshot-wide.webp",
+      "sizes": "2541x1291",
+      "type": "image/webp",
       "form_factor": "wide"
     },
     {
-      "src": "/screenshot-narrow.png",
-      "sizes": "720x1280",
-      "type": "image/png",
+      "src": "/screenshot-narrow.webp",
+      "sizes": "720x366",
+      "type": "image/webp",
       "form_factor": "narrow"
     }
   ],

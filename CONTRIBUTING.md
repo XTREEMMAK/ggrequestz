@@ -48,27 +48,31 @@ Before contributing, ensure you have:
 ### Local Development
 
 1. **Fork and Clone the Repository**
+
    ```bash
    git clone https://github.com/yourusername/ggrequestz.git
    cd ggrequestz
    ```
 
 2. **Install Dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Set Up Environment**
+
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
 4. **Set Up Database**
+
    ```bash
    # Option 1: Use Docker
    docker compose --profile database up -d
-   
+
    # Option 2: Local PostgreSQL
    createdb ggrequestz
    npm run db:init
@@ -99,6 +103,7 @@ docker compose build ggrequestz
 ### Branching Strategy
 
 1. **Create a Feature Branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    # or
@@ -112,7 +117,7 @@ docker compose build ggrequestz
 
 3. **Branch Naming Convention**
    - `feature/description` - New features
-   - `fix/description` - Bug fixes  
+   - `fix/description` - Bug fixes
    - `docs/description` - Documentation updates
    - `refactor/description` - Code refactoring
    - `test/description` - Adding/fixing tests
@@ -129,6 +134,7 @@ git commit -m "test: add integration tests for auth"
 ```
 
 **Commit Types:**
+
 - `feat` - New features
 - `fix` - Bug fixes
 - `docs` - Documentation changes
@@ -157,28 +163,30 @@ npm run test:coverage
 ### Writing Tests
 
 1. **Unit Tests** - Test individual components/functions
+
    ```javascript
    // src/lib/utils.test.js
-   import { formatDate } from './utils.js';
-   
-   describe('formatDate', () => {
-     test('formats date correctly', () => {
-       expect(formatDate('2023-01-01')).toBe('Jan 1, 2023');
+   import { formatDate } from "./utils.js";
+
+   describe("formatDate", () => {
+     test("formats date correctly", () => {
+       expect(formatDate("2023-01-01")).toBe("Jan 1, 2023");
      });
    });
    ```
 
 2. **Integration Tests** - Test API endpoints and database operations
+
    ```javascript
    // tests/integration/auth.test.js
-   import { test, expect } from '@playwright/test';
-   
-   test('user can log in', async ({ page }) => {
-     await page.goto('/login');
-     await page.fill('[data-testid="username"]', 'testuser');
-     await page.fill('[data-testid="password"]', 'password');
+   import { test, expect } from "@playwright/test";
+
+   test("user can log in", async ({ page }) => {
+     await page.goto("/login");
+     await page.fill('[data-testid="username"]', "testuser");
+     await page.fill('[data-testid="password"]', "password");
      await page.click('[data-testid="login-button"]');
-     await expect(page).toHaveURL('/dashboard');
+     await expect(page).toHaveURL("/dashboard");
    });
    ```
 
@@ -194,6 +202,7 @@ npm run test:coverage
 ### Pull Request Process
 
 1. **Ensure Tests Pass**
+
    ```bash
    npm run check
    npm run lint
@@ -217,20 +226,24 @@ When creating a PR, include:
 
 ```markdown
 ## Description
+
 Brief description of changes
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
 
 ## Testing
+
 - [ ] Tests pass locally
 - [ ] New tests added for functionality
 - [ ] Manual testing completed
 
 ## Checklist
+
 - [ ] Code follows style guidelines
 - [ ] Self-review completed
 - [ ] Documentation updated
@@ -257,27 +270,28 @@ npm run lint:fix
 ### Svelte/JavaScript Guidelines
 
 1. **Component Structure**
+
    ```svelte
    <!-- Component.svelte -->
    <script>
      // Props and state first
      let { data } = $props();
      let loading = $state(false);
-     
+
      // Derived values
      let processedData = $derived(data.map(item => transform(item)));
-     
+
      // Functions
      function handleClick() {
        // Implementation
      }
    </script>
-   
+
    <!-- Template -->
    <div class="component">
      <!-- Content -->
    </div>
-   
+
    <style>
      /* Component-specific styles */
    </style>
@@ -290,16 +304,17 @@ npm run lint:fix
    - Use SCREAMING_SNAKE_CASE for constants
 
 3. **Import Organization**
+
    ```javascript
    // External libraries first
-   import { onMount } from 'svelte';
-   import { page } from '$app/stores';
-   
+   import { onMount } from "svelte";
+   import { page } from "$app/stores";
+
    // Internal utilities
-   import { formatDate } from '$lib/utils.js';
-   
+   import { formatDate } from "$lib/utils.js";
+
    // Components last
-   import Button from '$components/Button.svelte';
+   import Button from "$components/Button.svelte";
    ```
 
 ### CSS Guidelines
@@ -313,7 +328,7 @@ npm run lint:fix
 /* Good */
 .component {
   @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm;
-  
+
   /* Custom properties for consistency */
   border-color: var(--border-color);
 }
@@ -384,7 +399,7 @@ CREATE INDEX idx_user_preferences_key ON ggr_user_preferences(preference_key);
 
 - **Tables**: `ggr_table_name` (plural, snake_case)
 - **Columns**: `column_name` (snake_case)
-- **Indexes**: `idx_table_column` 
+- **Indexes**: `idx_table_column`
 - **Foreign Keys**: `fk_table_column`
 - **Primary Keys**: `id` (SERIAL)
 
@@ -404,21 +419,21 @@ CREATE INDEX idx_user_preferences_key ON ggr_user_preferences(preference_key);
 // Good - Server-side validation
 export async function POST({ request }) {
   const data = await request.json();
-  
+
   // Validate required fields
-  if (!data.title || typeof data.title !== 'string') {
-    return json({ error: 'Invalid title' }, { status: 400 });
+  if (!data.title || typeof data.title !== "string") {
+    return json({ error: "Invalid title" }, { status: 400 });
   }
-  
+
   // Sanitize input
   const sanitizedTitle = data.title.trim().slice(0, 200);
-  
+
   // Use parameterized query
   const result = await query(
-    'INSERT INTO ggr_games (title) VALUES ($1) RETURNING id',
-    [sanitizedTitle]
+    "INSERT INTO ggr_games (title) VALUES ($1) RETURNING id",
+    [sanitizedTitle],
   );
-  
+
   return json({ success: true, id: result.rows[0].id });
 }
 ```

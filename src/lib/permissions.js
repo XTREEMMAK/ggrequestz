@@ -294,5 +294,5 @@ export async function getNavigationMenu(session) {
 }
 
 // Re-export getSession for convenience
-import { getSession } from "./auth.js";
+import { getSession } from "$lib/auth.server.js";
 export { getSession };

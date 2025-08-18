@@ -108,9 +108,9 @@ export async function load({ url, parent }) {
 
     // Fetch cover URLs from games cache for requests with igdb_id
     const igdbIds = requestsResult.rows
-      .filter(row => row.igdb_id)
-      .map(row => row.igdb_id);
-    
+      .filter((row) => row.igdb_id)
+      .map((row) => row.igdb_id);
+
     let gameCovers = {};
     if (igdbIds.length > 0) {
       try {
@@ -125,7 +125,7 @@ export async function load({ url, parent }) {
           return acc;
         }, {});
       } catch (error) {
-        console.error('Error fetching game covers:', error);
+        console.error("Error fetching game covers:", error);
       }
     }
 

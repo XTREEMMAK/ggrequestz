@@ -7,7 +7,7 @@ import {
   searchGames,
   getAutocompleteSuggestions,
   initializeGamesCollection,
-} from "$lib/typesense.js";
+} from "$lib/typesense.server.js";
 import { normalizeTitle, createSearchVariations } from "$lib/utils.js";
 
 // Initialize Typesense collection on server start

@@ -18,8 +18,14 @@ export async function findUserByAuthentikSub(authentikSub) {
 
     return result.rows.length > 0 ? result.rows[0] : null;
   } catch (error) {
-    console.error("❌ AUTH DEBUG: Database error in findUserByAuthentikSub:", error.message);
-    console.error("❌ AUTH DEBUG: Query was: SELECT * FROM ggr_users WHERE authentik_sub = $1 with param:", authentikSub);
+    console.error(
+      "❌ AUTH DEBUG: Database error in findUserByAuthentikSub:",
+      error.message,
+    );
+    console.error(
+      "❌ AUTH DEBUG: Query was: SELECT * FROM ggr_users WHERE authentik_sub = $1 with param:",
+      authentikSub,
+    );
     return null;
   }
 }
@@ -120,9 +126,9 @@ async function assignRolesFromAuthentikGroups(userId, authentikGroups) {
     // Update the direct is_admin flag based on group membership
     await query(
       "UPDATE ggr_users SET is_admin = $1, updated_at = NOW() WHERE id = $2",
-      [hasAdminGroup, userId]
+      [hasAdminGroup, userId],
     );
-    
+
     // Find which roles to assign
     const rolesToAssign = [];
     for (const group of authentikGroups) {
@@ -152,7 +158,6 @@ async function assignRolesFromAuthentikGroups(userId, authentikGroups) {
         `,
           [userId, roleName],
         );
-
       } catch (roleError) {
         console.warn(
           `⚠️ Failed to assign role '${roleName}':`,
@@ -332,13 +337,18 @@ export async function upsertUserFromAuthentik(userInfo) {
     }
 
     if (!user) {
-      console.error("❌ AUTH DEBUG: Failed to create or update user - user is null");
+      console.error(
+        "❌ AUTH DEBUG: Failed to create or update user - user is null",
+      );
       return null;
     }
 
     return user;
   } catch (error) {
-    console.error("❌ AUTH DEBUG: Failed to upsert user from Authentik:", error.message);
+    console.error(
+      "❌ AUTH DEBUG: Failed to upsert user from Authentik:",
+      error.message,
+    );
     console.error("❌ AUTH DEBUG: Error stack:", error.stack);
     return null;
   }

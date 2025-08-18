@@ -15,17 +15,17 @@ export async function load({ params, parent }) {
 
   try {
     const userId = params.id;
-    
+
     // Validate userId parameter
-    if (!userId || userId === 'undefined' || userId === 'null') {
-      console.error('Invalid user ID parameter:', userId);
+    if (!userId || userId === "undefined" || userId === "null") {
+      console.error("Invalid user ID parameter:", userId);
       throw error(400, "Invalid user ID");
     }
-    
+
     // Convert to integer and validate
     const userIdInt = parseInt(userId, 10);
     if (isNaN(userIdInt) || userIdInt <= 0) {
-      console.error('User ID is not a valid positive integer:', userId);
+      console.error("User ID is not a valid positive integer:", userId);
       throw error(400, "User ID must be a valid number");
     }
 
@@ -103,13 +103,18 @@ export async function load({ params, parent }) {
     } catch (e) {
       // Analytics table might not exist or user_id format mismatch
       console.warn("Analytics query failed:", e.message);
-      
+
       // Try with string conversion if it was a data type issue
       try {
-        const stringAnalyticsResult = await query(analyticsQuery, [userIdInt.toString()]);
+        const stringAnalyticsResult = await query(analyticsQuery, [
+          userIdInt.toString(),
+        ]);
         analytics = stringAnalyticsResult.rows;
       } catch (e2) {
-        console.warn("Analytics query with string conversion also failed:", e2.message);
+        console.warn(
+          "Analytics query with string conversion also failed:",
+          e2.message,
+        );
       }
     }
 
@@ -140,9 +145,9 @@ export async function load({ params, parent }) {
       message: err.message,
       code: err.code,
       position: err.position,
-      userId: userIdInt
+      userId: userIdInt,
     });
-    
+
     if (err.status) throw err;
     throw error(500, `Failed to load user details: ${err.message}`);
   }

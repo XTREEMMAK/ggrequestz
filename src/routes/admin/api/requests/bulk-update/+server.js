@@ -4,7 +4,7 @@
 
 import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { invalidateCache } from "$lib/cache.js";
@@ -14,7 +14,7 @@ export async function POST({ request, cookies }) {
     // Verify authentication - support both auth types
     const sessionCookie = cookies.get("session");
     const basicAuthSessionCookie = cookies.get("basic_auth_session");
-    
+
     if (!sessionCookie && !basicAuthSessionCookie) {
       return json(
         { success: false, error: "Authentication required" },
@@ -28,7 +28,7 @@ export async function POST({ request, cookies }) {
     } else if (basicAuthSessionCookie) {
       user = getBasicAuthUser(basicAuthSessionCookie);
     }
-    
+
     if (!user) {
       return json(
         { success: false, error: "Invalid session" },
@@ -38,16 +38,16 @@ export async function POST({ request, cookies }) {
 
     // Get user's local ID - support both basic auth and Authentik users
     let userResult;
-    if (user.sub?.startsWith('basic_auth_')) {
-      const basicAuthId = user.sub.replace('basic_auth_', '');
+    if (user.sub?.startsWith("basic_auth_")) {
+      const basicAuthId = user.sub.replace("basic_auth_", "");
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)]
+        [parseInt(basicAuthId)],
       );
     } else {
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
     }
 
@@ -199,24 +199,26 @@ export async function POST({ request, cookies }) {
     } catch (notificationError) {
       console.warn("Failed to send bulk notification:", notificationError);
     }
-      console.log(
+    console.log(
       `✅ Bulk updated ${updatedCount} requests to ${status} by admin ${user.name || user.email}`,
     );
 
     // Invalidate cache for all affected users and general request caches
     try {
       const cacheKeysToInvalidate = [
-        'game-requests', // General request cache
-        'recent-requests', // Recent requests
+        "game-requests", // General request cache
+        "recent-requests", // Recent requests
       ];
-      
+
       // Add user-specific cache keys for each affected user
-      const affectedUserIds = [...new Set(updatedRequests.map(req => req.user_id).filter(Boolean))];
+      const affectedUserIds = [
+        ...new Set(updatedRequests.map((req) => req.user_id).filter(Boolean)),
+      ];
       for (const userId of affectedUserIds) {
         cacheKeysToInvalidate.push(`user-${userId}-requests`);
         cacheKeysToInvalidate.push(`user-${userId}-watchlist`);
       }
-      
+
       await invalidateCache(cacheKeysToInvalidate);
     } catch (cacheError) {
       console.warn("Failed to invalidate cache:", cacheError);
@@ -309,7 +311,6 @@ async function sendBulkNotificationForRequests(requests, status, admin) {
         `Gotify API error: ${response.status} ${response.statusText}`,
       );
     }
-
   } catch (error) {
     console.error("❌ Failed to send bulk notification:", error);
     throw error;

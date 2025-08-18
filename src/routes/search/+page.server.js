@@ -3,21 +3,21 @@
  */
 
 import { searchGames as searchCachedGames } from "$lib/gameCache.js";
-import { searchGames } from "$lib/typesense.js";
-import { watchlist } from "$lib/database.js";
+import { searchGames } from "$lib/typesense.server.js";
+import { watchlist, query } from "$lib/database.js";
 
 import { redirect } from "@sveltejs/kit";
 
 export async function load({ url, parent }) {
   const { user } = await parent();
-  
+
   // Redirect unauthenticated users to login page
   if (!user) {
     throw redirect(302, "/login");
   }
 
   // Get search parameters from URL
-  const query = url.searchParams.get("q") || "";
+  const searchQuery = url.searchParams.get("q") || "";
   const platforms =
     url.searchParams.get("platforms")?.split(",").filter(Boolean) || [];
   const genres =
@@ -30,8 +30,8 @@ export async function load({ url, parent }) {
   let userWatchlist = [];
 
   try {
-    // Perform initial search if query or filters are present
-    if (query || platforms.length > 0 || genres.length > 0) {
+    // Perform initial search if searchQuery or filters are present
+    if (searchQuery || platforms.length > 0 || genres.length > 0) {
       // Build filters
       let filters = [];
       if (platforms.length > 0) {
@@ -52,14 +52,14 @@ export async function load({ url, parent }) {
 
       try {
         // Try Typesense first for advanced search
-        searchResults = await searchGames(query, searchOptions);
+        searchResults = await searchGames(searchQuery, searchOptions);
       } catch (error) {
         console.error(
           "Typesense search failed, falling back to cache search:",
           error,
         );
         // Fallback to cached games search
-        const cachedResults = await searchCachedGames(query, perPage);
+        const cachedResults = await searchCachedGames(searchQuery, perPage);
         searchResults = {
           hits: cachedResults.map((game) => ({ document: game })),
           found: cachedResults.length,
@@ -71,21 +71,21 @@ export async function load({ url, parent }) {
     // Get user's watchlist if authenticated - handle both auth types properly
     if (user) {
       let userId;
-      
-      if (user.sub?.startsWith('basic_auth_')) {
+
+      if (user.sub?.startsWith("basic_auth_")) {
         // For Basic Auth users, extract actual user ID from sub
-        userId = user.sub.replace('basic_auth_', '');
+        userId = user.sub.replace("basic_auth_", "");
       } else {
         // For Authentik users, look up database ID by authentik_sub
         const userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [user.sub]
+          [user.sub],
         );
         if (userResult.rows.length > 0) {
           userId = userResult.rows[0].id;
         }
       }
-      
+
       if (userId) {
         userWatchlist = await watchlist.get(userId).catch(() => []);
       }
@@ -96,7 +96,7 @@ export async function load({ url, parent }) {
   }
 
   return {
-    query,
+    query: searchQuery,
     searchResults,
     userWatchlist,
     initialFilters: {

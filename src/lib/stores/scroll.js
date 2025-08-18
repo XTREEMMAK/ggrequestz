@@ -27,6 +27,7 @@ class ScrollManager {
 
     this.positions.set(path, data);
     this.saveToStorage();
+    console.log(
       "📍 Saved scroll position for",
       path,
       ":",
@@ -56,6 +57,7 @@ class ScrollManager {
       );
       const targetScroll = Math.min(data.scrollY, maxScroll);
 
+      console.log("📊 Scroll restore attempt:", {
         path,
         targetScrollY: data.scrollY,
         currentMaxScroll: maxScroll,
@@ -82,9 +84,9 @@ class ScrollManager {
           window.scrollTo({ top: targetScroll, behavior: "instant" });
         }
 
-          "📍 Restored scroll position for",
-          path,
-          ":",
+        console.log("📍 Restored scroll position for", path, ":");
+        console.log(
+          "✅ Restored scroll position to",
           targetScroll,
           "(mobile:",
           isMobile,

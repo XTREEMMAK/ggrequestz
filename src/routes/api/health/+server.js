@@ -42,7 +42,7 @@ export async function GET() {
     try {
       if (process.env.TYPESENSE_HOST && process.env.TYPESENSE_API_KEY) {
         const typesenseUrl = `${process.env.TYPESENSE_PROTOCOL || "http"}://${process.env.TYPESENSE_HOST}:${process.env.TYPESENSE_PORT || 8108}/health`;
-        
+
         const searchResponse = await fetch(typesenseUrl, {
           headers: {
             "X-TYPESENSE-API-KEY": process.env.TYPESENSE_API_KEY,
@@ -68,9 +68,11 @@ export async function GET() {
     try {
       const cacheStats = await getCacheStats();
       health.services.cache = "healthy";
-      health.services.redis = cacheStats.redis.connected ? "healthy" : "disconnected";
+      health.services.redis = cacheStats.redis.connected
+        ? "healthy"
+        : "disconnected";
       health.cache_stats = cacheStats;
-      
+
       const memUsage = process.memoryUsage();
       health.memory = {
         used: Math.round(memUsage.heapUsed / 1024 / 1024) + "MB",

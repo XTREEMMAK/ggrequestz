@@ -9,10 +9,10 @@
 
   let { data } = $props();
 
-  let isLoading = false;
-  let errorMessage = '';
-  let successMessage = '';
-  let showPassword = false;
+  let isLoading = $state(false);
+  let errorMessage = $state('');
+  let successMessage = $state('');
+  let showPassword = $state(false);
 
   // Form data
   let adminData = {
@@ -33,7 +33,7 @@
   onMount(() => {
     // If setup is not needed, redirect to login
     if (!data.needsSetup) {
-      goto('/auth/login');
+      goto('/login');
     }
   });
 
@@ -80,7 +80,7 @@
       if (response.ok) {
         successMessage = 'Admin account created successfully! You can now log in.';
         setTimeout(() => {
-          goto('/auth/login');
+          goto('/login');
         }, 2000);
       } else {
         errorMessage = result.error || 'Setup failed';
@@ -158,7 +158,7 @@
       {/if}
 
       <!-- Setup Form -->
-      <form on:submit|preventDefault={handleSubmit} class="space-y-6">
+      <form onsubmit={(e) => { e.preventDefault(); handleSubmit(e); }} class="space-y-6">
         <!-- Username Field -->
         <div>
           <label for="username" class="block text-sm font-medium text-gray-700">
@@ -222,7 +222,7 @@
             <button
               type="button"
               class="absolute inset-y-0 right-0 pr-3 flex items-center"
-              on:click={() => showPassword = !showPassword}
+              onclick={() => showPassword = !showPassword}
             >
               <svg class="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 {#if showPassword}
@@ -310,7 +310,7 @@
       <!-- Back to Login Link -->
       <div class="mt-6 text-center">
         <a
-          href="/auth/login"
+          href="/login"
           class="text-sm text-gray-600 hover:text-gray-900"
         >
           ← Back to login

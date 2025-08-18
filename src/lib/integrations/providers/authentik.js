@@ -3,7 +3,7 @@
  * Enhanced wrapper around existing auth.js functionality
  */
 
-import * as auth from '../../auth.js';
+import * as auth from "$lib/auth.server.js";
 
 /**
  * Get authorization URL for Authentik
@@ -19,24 +19,27 @@ export async function handleCallback(code, redirectUri) {
   try {
     // Exchange code for tokens
     const tokens = await auth.exchangeCodeForTokens(code, redirectUri);
-    
+
     // Get user info
     const userInfo = await auth.getUserInfo(tokens.access_token);
-    
+
     // Create session token
-    const sessionToken = await auth.createSessionToken(userInfo, tokens.access_token);
-    
+    const sessionToken = await auth.createSessionToken(
+      userInfo,
+      tokens.access_token,
+    );
+
     return {
       success: true,
       user: userInfo,
       sessionToken,
-      tokens
+      tokens,
     };
   } catch (error) {
-    console.error('Authentik callback error:', error);
+    console.error("Authentik callback error:", error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
     };
   }
 }
@@ -56,16 +59,16 @@ export async function logout(token) {
     // Get session info to extract access token
     const session = await auth.verifySessionToken(token);
     if (!session || !session.access_token) {
-      return { success: true, message: 'Session already invalid' };
+      return { success: true, message: "Session already invalid" };
     }
 
     // Optional: Call Authentik logout endpoint
     // This depends on your Authentik configuration
     // For now, just invalidate local session
-    
-    return { success: true, message: 'Logged out successfully' };
+
+    return { success: true, message: "Logged out successfully" };
   } catch (error) {
-    console.error('Authentik logout error:', error);
+    console.error("Authentik logout error:", error);
     return { success: false, error: error.message };
   }
 }

@@ -5,8 +5,10 @@
 <script>
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { getLoginUrl, getLogoutUrl, getUserInitials } from '$lib/auth.client.js';
+  import { getLoginUrl, getLogoutUrl, getUserInitials } from '$lib/auth.js';
   import Icon from '@iconify/svelte';
+  import { prefetcher } from '$lib/performance.js';
+  import { onMount } from 'svelte';
   
   let { user = null } = $props();
   
@@ -43,6 +45,20 @@
   const userNavItems = [
     { path: '/profile', label: 'Profile', icon: 'user' }
   ];
+  
+  // Preload critical navigation targets on mount
+  onMount(() => {
+    // Prefetch commonly accessed pages
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        prefetcher.prefetch('/search', 'fetch');
+        if (user) {
+          prefetcher.prefetch('/profile', 'fetch');
+          prefetcher.prefetch('/request', 'fetch');
+        }
+      }, 1000); // Delay to not interfere with initial page load
+    }
+  });
 </script>
 
 <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
@@ -68,6 +84,7 @@
             <button
               type="button"
               onclick={() => goto(item.path)}
+              onmouseenter={() => prefetcher.prefetch(item.path, 'fetch', true)}
               class="inline-flex items-center px-1 pt-1 text-sm font-medium border-b-2 transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-0"
               class:border-blue-500={isActivePath(item.path)}
               class:text-gray-900={isActivePath(item.path)}
@@ -102,6 +119,7 @@
               <button
                 type="button"
                 onclick={() => goto(item.path)}
+                onmouseenter={() => prefetcher.prefetch(item.path, 'fetch', true)}
                 class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-2 rounded-md text-sm font-medium transition-colors bg-transparent hover:bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 class:text-gray-900={isActivePath(item.path)}
                 class:dark:text-white={isActivePath(item.path)}

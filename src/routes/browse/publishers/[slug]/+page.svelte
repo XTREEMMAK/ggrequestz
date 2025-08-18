@@ -6,6 +6,7 @@
   import GameCard from '../../../../components/GameCard.svelte';
   import LoadingSpinner from '../../../../components/LoadingSpinner.svelte';
   import SEOHead from '../../../../components/SEOHead.svelte';
+  import LoadMoreButton from '../../../../components/LoadMoreButton.svelte';
   import { goto } from '$app/navigation';
   
   let { data } = $props();
@@ -117,20 +118,12 @@
     
     <!-- Load More Button -->
     <div class="flex justify-center">
-      <button
-        class="bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 px-8 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={loadMoreGames}
+      <LoadMoreButton
+        loading={loading}
         disabled={loading}
-      >
-        {#if loading}
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            Loading...
-          </div>
-        {:else}
-          Load More Games
-        {/if}
-      </button>
+        text="Load More Games"
+        on:load={loadMoreGames}
+      />
     </div>
   {:else}
     <div class="text-center py-12 text-gray-400">

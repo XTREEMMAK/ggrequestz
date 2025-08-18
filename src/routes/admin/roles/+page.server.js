@@ -4,7 +4,7 @@
 
 import { error, redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 
 // Helper function to get user ID from session - support both auth types
@@ -16,31 +16,31 @@ async function getUserId(cookies) {
     if (user) {
       const result = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub]
+        [user.sub],
       );
       return result.rows.length > 0 ? result.rows[0].id : null;
     }
   }
-  
+
   // Try basic auth session
   const basicAuthSessionCookie = cookies.get("basic_auth_session");
   if (basicAuthSessionCookie) {
     try {
-      const { getBasicAuthUser } = await import('$lib/basicAuth.js');
+      const { getBasicAuthUser } = await import("$lib/basicAuth.js");
       const user = await getBasicAuthUser(basicAuthSessionCookie);
-      if (user && user.sub?.startsWith('basic_auth_')) {
-        const basicAuthId = user.sub.replace('basic_auth_', '');
+      if (user && user.sub?.startsWith("basic_auth_")) {
+        const basicAuthId = user.sub.replace("basic_auth_", "");
         const result = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)]
+          [parseInt(basicAuthId)],
         );
         return result.rows.length > 0 ? result.rows[0].id : null;
       }
     } catch (error) {
-      console.warn('Failed to get basic auth user:', error);
+      console.warn("Failed to get basic auth user:", error);
     }
   }
-  
+
   return null;
 }
 
@@ -80,9 +80,9 @@ export async function load({ cookies }) {
     `;
 
     const rolesResult = await query(rolesQuery);
-    const roles = rolesResult.rows.map(role => ({
+    const roles = rolesResult.rows.map((role) => ({
       ...role,
-      permissions: role.permissions || []
+      permissions: role.permissions || [],
     }));
 
     // Get all available permissions
@@ -98,8 +98,8 @@ export async function load({ cookies }) {
 
     // Group permissions by category
     const permissionsByCategory = {};
-    availablePermissions.forEach(permission => {
-      const category = permission.category || 'other';
+    availablePermissions.forEach((permission) => {
+      const category = permission.category || "other";
       if (!permissionsByCategory[category]) {
         permissionsByCategory[category] = [];
       }
@@ -109,11 +109,11 @@ export async function load({ cookies }) {
     return {
       roles,
       availablePermissions,
-      permissionsByCategory
+      permissionsByCategory,
     };
   } catch (err) {
     console.error("Roles page load error:", err);
-    
+
     if (err.status) throw err;
     throw error(500, `Failed to load roles: ${err.message}`);
   }
@@ -139,7 +139,7 @@ export const actions = {
       // Check if role is system role and prevent modification of critical system roles
       const roleCheck = await query(
         "SELECT name, is_system FROM ggr_roles WHERE id = $1",
-        [roleId]
+        [roleId],
       );
 
       if (roleCheck.rows.length === 0) {
@@ -153,36 +153,33 @@ export const actions = {
 
       try {
         // Remove all current permissions for this role
-        await query(
-          "DELETE FROM ggr_role_permissions WHERE role_id = $1",
-          [roleId]
-        );
+        await query("DELETE FROM ggr_role_permissions WHERE role_id = $1", [
+          roleId,
+        ]);
 
         // Add selected permissions
         for (const permissionId of permissionIds) {
-          if (permissionId && permissionId.trim() !== '') {
+          if (permissionId && permissionId.trim() !== "") {
             await query(
               "INSERT INTO ggr_role_permissions (role_id, permission_id) VALUES ($1, $2)",
-              [roleId, parseInt(permissionId)]
+              [roleId, parseInt(permissionId)],
             );
           }
         }
 
         await query("COMMIT");
 
-
-        return { 
-          success: true, 
-          message: `Role permissions updated successfully for ${role.name}` 
+        return {
+          success: true,
+          message: `Role permissions updated successfully for ${role.name}`,
         };
       } catch (transactionError) {
         await query("ROLLBACK");
         throw transactionError;
       }
-
     } catch (err) {
       console.error("❌ Role permissions update error:", err);
       return { success: false, error: "Failed to update role permissions" };
     }
-  }
+  },
 };

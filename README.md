@@ -34,7 +34,6 @@ A modern game discovery and request management platform with IGDB integration, R
 <img src=".github/resources/screenshots/08.jpg" alt="Mobile Preview - 08" />
 <img src=".github/resources/screenshots/09.jpg" alt="Mobile Preview - 09" />
 
-
 ## 🚀 Quick Start
 
 ### Docker Compose (Recommended)
@@ -51,7 +50,7 @@ cp .env.example .env.docker
 # Edit .env.docker with your settings
 
 # Step 4: Run the deploy script
-sudo ./scripts/deploy-production.sh
+sudo ./scripts/deployment/deploy-production.sh
 ```
 
 ### Local Development
@@ -73,6 +72,7 @@ npm run dev
 - [Performance Guide](docs/PERFORMANCE.md) - Caching and optimization
 
 ### Authentication Guides
+
 - [Generic OIDC Setup](docs/OIDC_SETUP.md) - Configure any OIDC provider
 - [Authentik Setup](docs/AUTHENTIK_ADMIN_SETUP.md) - Specific Authentik configuration
 
@@ -124,6 +124,17 @@ IGDB (Internet Game Database) provides the game data for G.G. Requestz. To get y
    - The IGDB API uses Twitch's OAuth system for authentication
 
 **Note**: These credentials are required for the application to fetch game data, search results, and cover images.
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
+
+- **[Setup Guide](SETUP.md)** - Quick start and configuration
+- **[Documentation Index](docs/README.md)** - Complete documentation overview
+- **[Setup Guides](docs/setup/)** - Database, Docker, authentication setup
+- **[Integration Guides](docs/guides/)** - ROMM integration and troubleshooting
+- **[Architecture](docs/ARCHITECTURE.md)** - System design overview
+- **[API Documentation](docs/API.md)** - API endpoints and usage
 
 ## 🤝 Contributing
 

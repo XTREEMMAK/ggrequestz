@@ -85,45 +85,10 @@ export async function submitGameRequest(requestData) {
   return response.json();
 }
 
-/**
- * Add game to watchlist
- * @param {string} gameId - Game ID
- * @param {Object} gameData - Game data
- * @returns {Promise<Object>} - Response
- */
-export async function addToWatchlist(gameId, gameData) {
-  const response = await fetch("/api/watchlist/add", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      game_id: gameId,
-      game_data: gameData,
-    }),
-  });
-
-  return response.json();
-}
-
-/**
- * Remove game from watchlist
- * @param {string} gameId - Game ID
- * @returns {Promise<Object>} - Response
- */
-export async function removeFromWatchlist(gameId) {
-  const response = await fetch("/api/watchlist/remove", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      game_id: gameId,
-    }),
-  });
-
-  return response.json();
-}
+// Watchlist functions moved to clientServices.js for better caching and optimistic updates
+// Import from: import { watchlistService } from '$lib/clientServices.js';
+// Usage: await watchlistService.addToWatchlist(gameId, gameData)
+//        await watchlistService.removeFromWatchlist(gameId)
 
 /**
  * Send notification webhook

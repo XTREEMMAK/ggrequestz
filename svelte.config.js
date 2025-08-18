@@ -20,7 +20,12 @@ const config = {
     },
     csp: {
       directives: {
-        "script-src": ["self", "https://cdnjs.cloudflare.com", "https://cdn.jsdelivr.net"],
+        "script-src": [
+          "self",
+          "https://cdnjs.cloudflare.com",
+          "https://cdn.jsdelivr.net",
+          "unsafe-hashes"
+        ],
         "object-src": ["none"],
         "base-uri": ["self"],
       },

@@ -3,7 +3,7 @@
  * Centralized JWT operations with caching and performance optimizations
  */
 
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify } from "jose";
 
 // Cache for JWT secrets to avoid repeated TextEncoder operations
 const secretCache = new Map();
@@ -14,12 +14,12 @@ const secretCache = new Map();
  * @returns {Uint8Array} - Encoded secret
  */
 function getSecret(secretKey = null) {
-  const key = secretKey || process.env.SESSION_SECRET || 'fallback-secret-key';
-  
+  const key = secretKey || process.env.SESSION_SECRET || "fallback-secret-key";
+
   if (!secretCache.has(key)) {
     secretCache.set(key, new TextEncoder().encode(key));
   }
-  
+
   return secretCache.get(key);
 }
 
@@ -32,15 +32,15 @@ function getSecret(secretKey = null) {
 export async function createJWT(payload, options = {}) {
   const {
     expiresIn = 24 * 60 * 60, // 24 hours default
-    issuer = 'gamerequest',
-    secretKey = null
+    issuer = "gamerequest",
+    secretKey = null,
   } = options;
-  
+
   const now = Math.floor(Date.now() / 1000);
   const secret = getSecret(secretKey);
 
   return await new SignJWT(payload)
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: "HS256" })
     .setIssuer(issuer)
     .setIssuedAt(now)
     .setExpirationTime(now + expiresIn)
@@ -55,13 +55,13 @@ export async function createJWT(payload, options = {}) {
  */
 export async function verifyJWT(token, options = {}) {
   const { secretKey = null } = options;
-  
+
   try {
     const secret = getSecret(secretKey);
     const { payload } = await jwtVerify(token, secret);
     return payload;
   } catch (error) {
-    console.error('JWT verification failed:', error.message);
+    console.error("JWT verification failed:", error.message);
     return null;
   }
 }
@@ -74,10 +74,10 @@ export async function verifyJWT(token, options = {}) {
  */
 export async function createSessionToken(user, options = {}) {
   const {
-    provider = 'unknown',
+    provider = "unknown",
     localUserId = null,
     externalToken = null,
-    customClaims = {}
+    customClaims = {},
   } = options;
 
   const payload = {
@@ -86,7 +86,7 @@ export async function createSessionToken(user, options = {}) {
     email: user.email,
     name: user.name || user.preferred_username,
     provider,
-    ...customClaims
+    ...customClaims,
   };
 
   // Add external token if provided (for API integrations)
@@ -117,7 +117,7 @@ export function extractUserFromPayload(payload) {
     provider: payload.provider,
     is_admin: payload.is_admin || false,
     external_id: payload.sub !== payload.user_id ? payload.sub : null,
-    external_token: payload.external_token || null
+    external_token: payload.external_token || null,
   };
 }
 
@@ -128,7 +128,7 @@ export function extractUserFromPayload(payload) {
  */
 export function isTokenExpired(payload) {
   if (!payload || !payload.exp) return true;
-  
+
   const now = Math.floor(Date.now() / 1000);
   return payload.exp <= now;
 }

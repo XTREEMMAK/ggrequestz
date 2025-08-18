@@ -8,7 +8,7 @@ import { redirect } from "@sveltejs/kit";
 
 export async function load({ url, parent }) {
   const { user } = await parent();
-  
+
   // Redirect unauthenticated users to login page
   if (!user) {
     throw redirect(302, "/login");

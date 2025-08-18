@@ -7,8 +7,10 @@ import { query } from "$lib/database.js";
 import { env } from "$env/dynamic/private";
 
 // Use dynamic environment variables for runtime configuration
-const GOTIFY_URL = env.GOTIFY_URL || process.env.GOTIFY_URL || process.env.VITE_GOTIFY_URL;
-const GOTIFY_TOKEN = env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN || process.env.VITE_GOTIFY_TOKEN;
+const GOTIFY_URL =
+  env.GOTIFY_URL || process.env.GOTIFY_URL || process.env.VITE_GOTIFY_URL;
+const GOTIFY_TOKEN =
+  env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN || process.env.VITE_GOTIFY_TOKEN;
 
 /**
  * Send a notification via Gotify
@@ -37,15 +39,15 @@ export async function sendGotifyNotification({
       gotifyToken = GOTIFY_TOKEN;
     } else {
       // Fallback to database settings
-      
-      const settingsKeys = ['gotify.url', 'gotify.token'];
+
+      const settingsKeys = ["gotify.url", "gotify.token"];
       if (type) {
         settingsKeys.push(`gotify.notifications.${type}`);
       }
-      
+
       const settingsResult = await query(
         "SELECT key, value FROM ggr_system_settings WHERE key = ANY($1)",
-        [settingsKeys]
+        [settingsKeys],
       );
 
       const settings = {};
@@ -55,10 +57,12 @@ export async function sendGotifyNotification({
 
       gotifyUrl = settings["gotify.url"];
       gotifyToken = settings["gotify.token"];
-      
+
       // Check if basic Gotify is configured
       if (!gotifyUrl || !gotifyToken) {
-        console.warn("⚠️ Gotify not configured in environment or database - skipping notification");
+        console.warn(
+          "⚠️ Gotify not configured in environment or database - skipping notification",
+        );
         return false;
       }
 
@@ -66,14 +70,13 @@ export async function sendGotifyNotification({
       if (type) {
         const typeSettingKey = `gotify.notifications.${type}`;
         const typeEnabled = settings[typeSettingKey];
-        
+
         // Default to true if setting doesn't exist (for backward compatibility)
         // But if it exists and is 'false', skip the notification
-        if (typeEnabled === 'false') {
+        if (typeEnabled === "false") {
           return false;
         }
       }
-      
     }
 
     if (!gotifyUrl || !gotifyToken) {
@@ -109,7 +112,6 @@ export async function sendGotifyNotification({
     // Send notification
     const notificationUrl = `${parsedUrl.toString().replace(/\/$/, "")}/message?token=${gotifyToken}`;
 
-
     const response = await fetch(notificationUrl, {
       method: "POST",
       headers: {
@@ -128,7 +130,6 @@ export async function sendGotifyNotification({
     }
 
     const result = await response.json();
-
 
     return true;
   } catch (error) {
@@ -206,14 +207,13 @@ export async function sendNewRequestNotification({
       break;
   }
 
-
   return await sendGotifyNotification({
     title: requestTitle,
     message,
     priority: gotifyPriority,
-    type: 'new_requests',
+    type: "new_requests",
     extras: {
-      "game_request": {
+      game_request: {
         id,
         title,
         request_type,
@@ -303,9 +303,9 @@ export async function sendRequestStatusNotification({
     title: requestTitle,
     message,
     priority: gotifyPriority,
-    type: 'status_changes',
+    type: "status_changes",
     extras: {
-      "request_status_change": {
+      request_status_change: {
         id,
         title,
         old_status,
@@ -334,11 +334,8 @@ export async function sendAdminActionNotification({
   extras = {},
 }) {
   const notificationTitle = `⚙️ ${title}`;
-  
-  const messageLines = [
-    message,
-    `**Admin:** ${admin_name}`,
-  ];
+
+  const messageLines = [message, `**Admin:** ${admin_name}`];
 
   const finalMessage = messageLines.join("\n");
 
@@ -346,9 +343,9 @@ export async function sendAdminActionNotification({
     title: notificationTitle,
     message: finalMessage,
     priority: priority,
-    type: 'admin_actions',
+    type: "admin_actions",
     extras: {
-      "admin_action": {
+      admin_action: {
         title,
         admin_name,
         ...extras,
@@ -360,7 +357,7 @@ export async function sendAdminActionNotification({
 /**
  * Send a notification specifically for cancelled/deleted requests
  * @param {Object} request - Request data
- * @param {string} request.id - Request ID  
+ * @param {string} request.id - Request ID
  * @param {string} request.title - Game title
  * @param {string} request.user_name - User who submitted the request
  * @param {string} request.action - Action type ('cancelled' or 'deleted')
@@ -376,9 +373,9 @@ export async function sendRequestCancelledDeletedNotification({
   reason = "",
   admin_name = "Admin",
 }) {
-  const actionEmoji = action === 'deleted' ? "🗑️" : "🚫";
-  const actionLabel = action === 'deleted' ? "Deleted" : "Cancelled";
-  
+  const actionEmoji = action === "deleted" ? "🗑️" : "🚫";
+  const actionLabel = action === "deleted" ? "Deleted" : "Cancelled";
+
   const notificationTitle = `${actionEmoji} Request ${actionLabel}`;
 
   const messageLines = [
@@ -397,15 +394,15 @@ export async function sendRequestCancelledDeletedNotification({
   const message = messageLines.join("\n");
 
   // Higher priority for deletions, medium for cancellations
-  const gotifyPriority = action === 'deleted' ? 6 : 4;
+  const gotifyPriority = action === "deleted" ? 6 : 4;
 
   return await sendGotifyNotification({
     title: notificationTitle,
     message,
     priority: gotifyPriority,
-    type: 'admin_actions',
+    type: "admin_actions",
     extras: {
-      "request_cancelled_deleted": {
+      request_cancelled_deleted: {
         id,
         title,
         user_name,

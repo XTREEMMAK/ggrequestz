@@ -3,86 +3,90 @@
  * Manages authentication providers with lazy loading and dynamic resolution
  */
 
-import { validateProviderConfig, validateEnvironment } from './utils/validation-utils.js';
+import {
+  validateProviderConfig,
+  validateEnvironment,
+} from "./utils/validation-utils.js";
 
 /**
  * Provider definitions with metadata and lazy loading
  */
 const PROVIDER_DEFINITIONS = {
   authentik: {
-    name: 'Authentik OIDC',
-    description: 'Direct integration with Authentik identity provider',
-    category: 'oidc',
+    name: "Authentik OIDC",
+    description: "Direct integration with Authentik identity provider",
+    category: "oidc",
     capabilities: {
       supportsCallback: true,
       supportsCredentials: false,
       supportsSync: false,
-      requiresRedirect: true
+      requiresRedirect: true,
     },
-    configFields: ['clientId', 'clientSecret', 'issuer'],
-    envPrefix: 'AUTHENTIK_',
-    loader: () => import('./providers/authentik.js')
+    configFields: ["clientId", "clientSecret", "issuer"],
+    envPrefix: "AUTHENTIK_",
+    loader: () => import("./providers/authentik.js"),
   },
-  
+
   oidc_generic: {
-    name: 'Generic OIDC',
-    description: 'Support for any OIDC-compliant provider (Keycloak, Auth0, etc.)',
-    category: 'oidc',
+    name: "Generic OIDC",
+    description:
+      "Support for any OIDC-compliant provider (Keycloak, Auth0, etc.)",
+    category: "oidc",
     capabilities: {
       supportsCallback: true,
       supportsCredentials: false,
       supportsSync: false,
-      requiresRedirect: true
+      requiresRedirect: true,
     },
-    configFields: ['clientId', 'clientSecret', 'issuer'],
-    envPrefix: 'OIDC_',
-    loader: () => import('./providers/oidc-generic.js')
+    configFields: ["clientId", "clientSecret", "issuer"],
+    envPrefix: "OIDC_",
+    loader: () => import("./providers/oidc-generic.js"),
   },
-  
+
   api_integration: {
-    name: 'API Integration',
-    description: 'Sync users via REST API calls',
-    category: 'api',
+    name: "API Integration",
+    description: "Sync users via REST API calls",
+    category: "api",
     capabilities: {
       supportsCallback: false,
       supportsCredentials: true,
       supportsSync: true,
-      requiresRedirect: false
+      requiresRedirect: false,
     },
-    configFields: ['baseUrl', 'apiKey'],
-    envPrefix: 'API_',
-    loader: () => import('./providers/api-integration.js')
+    configFields: ["baseUrl", "apiKey"],
+    envPrefix: "API_",
+    loader: () => import("./providers/api-integration.js"),
   },
-  
+
   webhook_integration: {
-    name: 'Webhook Integration',
-    description: 'Receive real-time user updates via webhooks',
-    category: 'webhook',
+    name: "Webhook Integration",
+    description: "Receive real-time user updates via webhooks",
+    category: "webhook",
     capabilities: {
       supportsCallback: false,
       supportsCredentials: false,
       supportsSync: true,
-      requiresRedirect: false
+      requiresRedirect: false,
     },
-    configFields: ['secret'],
-    envPrefix: 'WEBHOOK_',
-    loader: () => import('./providers/webhook-integration.js')
+    configFields: ["secret"],
+    envPrefix: "WEBHOOK_",
+    loader: () => import("./providers/webhook-integration.js"),
   },
-  
+
   local_auth: {
-    name: 'Local Authentication',
-    description: 'Traditional username/password authentication',
-    category: 'local',
+    name: "Local Authentication",
+    description: "Traditional username/password authentication",
+    category: "local",
     capabilities: {
       supportsCallback: false,
       supportsCredentials: true,
       supportsSync: false,
-      requiresRedirect: false
+      requiresRedirect: false,
     },
     configFields: [],
     envPrefix: null,
-    loader: () => import('./providers/local-auth.js')
-  }
+    loader: () => import("./providers/local-auth.js"),
+  },
 };
 
 /**
@@ -131,10 +135,10 @@ export class ProviderRegistry {
     try {
       // Dynamically import provider module
       const module = await definition.loader();
-      
+
       // Cache the loaded provider
       this.loadedProviders.set(providerId, module);
-      
+
       return module;
     } catch (error) {
       console.error(`❌ Failed to load provider ${providerId}:`, error);
@@ -160,7 +164,7 @@ export class ProviderRegistry {
 
     // Build configuration from environment variables
     const config = {};
-    
+
     if (definition.envPrefix) {
       // Map common configuration fields
       const fieldMap = {
@@ -171,7 +175,7 @@ export class ProviderRegistry {
         baseUrl: `${definition.envPrefix}BASE_URL`,
         apiKey: `${definition.envPrefix}API_KEY`,
         secret: `${definition.envPrefix}SECRET`,
-        scope: `${definition.envPrefix}SCOPE`
+        scope: `${definition.envPrefix}SCOPE`,
       };
 
       for (const [field, envVar] of Object.entries(fieldMap)) {
@@ -181,23 +185,25 @@ export class ProviderRegistry {
       }
 
       // Provider-specific configuration
-      if (providerId === 'api_integration') {
-        config.userEndpoint = process.env.API_USER_ENDPOINT || '/api/users';
-        config.syncEndpoint = process.env.API_SYNC_ENDPOINT || '/api/users/sync';
-        config.timeout = parseInt(process.env.API_TIMEOUT || '5000');
-        config.enableUserSync = process.env.ENABLE_AUTO_SYNC === 'true';
-        config.syncInterval = parseInt(process.env.SYNC_INTERVAL || '300000');
-      } else if (providerId === 'webhook_integration') {
-        config.enableSignatureValidation = process.env.WEBHOOK_VALIDATE_SIGNATURE !== 'false';
+      if (providerId === "api_integration") {
+        config.userEndpoint = process.env.API_USER_ENDPOINT || "/api/users";
+        config.syncEndpoint =
+          process.env.API_SYNC_ENDPOINT || "/api/users/sync";
+        config.timeout = parseInt(process.env.API_TIMEOUT || "5000");
+        config.enableUserSync = process.env.ENABLE_AUTO_SYNC === "true";
+        config.syncInterval = parseInt(process.env.SYNC_INTERVAL || "300000");
+      } else if (providerId === "webhook_integration") {
+        config.enableSignatureValidation =
+          process.env.WEBHOOK_VALIDATE_SIGNATURE !== "false";
         config.verifyToken = process.env.WEBHOOK_VERIFY_TOKEN;
-      } else if (providerId.includes('oidc')) {
-        config.scope = config.scope || 'openid profile email';
+      } else if (providerId.includes("oidc")) {
+        config.scope = config.scope || "openid profile email";
       }
     }
 
     // Cache configuration
     this.configCache.set(providerId, config);
-    
+
     return config;
   }
 
@@ -215,7 +221,7 @@ export class ProviderRegistry {
 
     // Use provided config or get from environment
     const providerConfig = config || this.getProviderConfig(providerId);
-    
+
     // Validate configuration
     const configResult = validateProviderConfig(providerId, providerConfig);
     if (!configResult.valid) {
@@ -228,11 +234,11 @@ export class ProviderRegistry {
       return envResult;
     }
 
-    return { 
-      valid: true, 
+    return {
+      valid: true,
       message: `${definition.name} configuration valid`,
       config: providerConfig,
-      capabilities: definition.capabilities
+      capabilities: definition.capabilities,
     };
   }
 
@@ -247,16 +253,21 @@ export class ProviderRegistry {
     try {
       // Load provider if not already loaded
       const provider = await this.loadProvider(providerId);
-      
+
       // Check if method exists
-      if (!provider[method] || typeof provider[method] !== 'function') {
-        throw new Error(`Method ${method} not available for provider ${providerId}`);
+      if (!provider[method] || typeof provider[method] !== "function") {
+        throw new Error(
+          `Method ${method} not available for provider ${providerId}`,
+        );
       }
 
       // Execute method
       return await provider[method](...args);
     } catch (error) {
-      console.error(`Provider method execution failed (${providerId}.${method}):`, error);
+      console.error(
+        `Provider method execution failed (${providerId}.${method}):`,
+        error,
+      );
       throw error;
     }
   }
@@ -296,7 +307,9 @@ export class ProviderRegistry {
    * @param {Array} providerIds - Provider IDs to pre-load
    */
   async preloadProviders(providerIds = []) {
-    const promises = providerIds.map(id => this.loadProvider(id).catch(() => null));
+    const promises = providerIds.map((id) =>
+      this.loadProvider(id).catch(() => null),
+    );
     await Promise.all(promises);
   }
 
@@ -309,12 +322,15 @@ export class ProviderRegistry {
       totalProviders: Object.keys(PROVIDER_DEFINITIONS).length,
       loadedProviders: this.loadedProviders.size,
       cachedConfigs: this.configCache.size,
-      categories: [...new Set(Object.values(PROVIDER_DEFINITIONS).map(d => d.category))],
+      categories: [
+        ...new Set(Object.values(PROVIDER_DEFINITIONS).map((d) => d.category)),
+      ],
       capabilities: {
-        callback: this.getProvidersByCapability('supportsCallback').length,
-        credentials: this.getProvidersByCapability('supportsCredentials').length,
-        sync: this.getProvidersByCapability('supportsSync').length
-      }
+        callback: this.getProvidersByCapability("supportsCallback").length,
+        credentials: this.getProvidersByCapability("supportsCredentials")
+          .length,
+        sync: this.getProvidersByCapability("supportsSync").length,
+      },
     };
   }
 }
@@ -327,16 +343,16 @@ export { PROVIDER_DEFINITIONS };
 
 // Export commonly used capabilities
 export const PROVIDER_CAPABILITIES = {
-  CALLBACK: 'supportsCallback',
-  CREDENTIALS: 'supportsCredentials', 
-  SYNC: 'supportsSync',
-  REDIRECT: 'requiresRedirect'
+  CALLBACK: "supportsCallback",
+  CREDENTIALS: "supportsCredentials",
+  SYNC: "supportsSync",
+  REDIRECT: "requiresRedirect",
 };
 
 // Export provider categories
 export const PROVIDER_CATEGORIES = {
-  OIDC: 'oidc',
-  API: 'api',
-  WEBHOOK: 'webhook',
-  LOCAL: 'local'
+  OIDC: "oidc",
+  API: "api",
+  WEBHOOK: "webhook",
+  LOCAL: "local",
 };

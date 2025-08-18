@@ -55,9 +55,8 @@ COPY --from=builder --chown=ggrequestz:nodejs /app/src ./src
 RUN mkdir -p /app/logs && chown -R ggrequestz:nodejs /app/logs
 
 # Set proper permissions for scripts
-RUN chmod +x scripts/init-database.js
-RUN chmod +x scripts/run-migrations.js || echo "Migration script not found, skipping"
-RUN chmod +x scripts/docker-entrypoint.js
+RUN chmod +x scripts/database/db-manager.js
+RUN chmod +x scripts/deployment/docker-entrypoint.js
 
 # Switch to non-root user
 USER ggrequestz
@@ -70,4 +69,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Use custom entrypoint for better startup handling
-CMD ["node", "scripts/docker-entrypoint.js"]
+CMD ["node", "scripts/deployment/docker-entrypoint.js"]

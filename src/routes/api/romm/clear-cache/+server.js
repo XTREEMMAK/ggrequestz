@@ -3,8 +3,8 @@
  */
 
 import { json } from "@sveltejs/kit";
-import { clearRommSession } from "$lib/romm.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { clearRommSession } from "$lib/romm.server.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { query } from "$lib/database.js";
 
@@ -15,7 +15,7 @@ export async function POST({ cookies }) {
     if (!sessionCookie) {
       return json(
         { success: false, error: "Authentication required" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -23,14 +23,14 @@ export async function POST({ cookies }) {
     if (!user) {
       return json(
         { success: false, error: "Invalid session" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     // Get user's local ID and check admin permissions
     const userResult = await query(
       "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-      [user.sub]
+      [user.sub],
     );
 
     if (userResult.rows.length === 0) {
@@ -38,12 +38,15 @@ export async function POST({ cookies }) {
     }
 
     const localUserId = userResult.rows[0].id;
-    const hasAdminPermission = await userHasPermission(localUserId, "admin.panel");
+    const hasAdminPermission = await userHasPermission(
+      localUserId,
+      "admin.panel",
+    );
 
     if (!hasAdminPermission) {
       return json(
         { success: false, error: "Admin permissions required" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -60,20 +63,19 @@ export async function POST({ cookies }) {
 
     const clearedCount = clearResult.rowCount || 0;
 
-
     return json({
       success: true,
       message: `ROMM cache cleared successfully. ${clearedCount} cached entries removed.`,
-      cleared_entries: clearedCount
+      cleared_entries: clearedCount,
     });
   } catch (error) {
     console.error("❌ ROMM cache clear error:", error);
     return json(
       {
         success: false,
-        error: "Failed to clear ROMM cache"
+        error: "Failed to clear ROMM cache",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

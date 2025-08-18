@@ -3,18 +3,21 @@
  * Unified authentication system with provider registry and factory pattern
  */
 
-import { browser } from '$app/environment';
-import { providerRegistry, PROVIDER_CAPABILITIES } from './provider-registry.js';
+import { browser } from "$app/environment";
+import {
+  providerRegistry,
+  PROVIDER_CAPABILITIES,
+} from "./provider-registry.js";
 
 /**
  * Available authentication providers (maintained for backward compatibility)
  */
 export const AUTH_PROVIDERS = {
-  AUTHENTIK: 'authentik',
-  OIDC_GENERIC: 'oidc_generic', 
-  API_INTEGRATION: 'api_integration',
-  WEBHOOK_INTEGRATION: 'webhook_integration',
-  LOCAL_AUTH: 'local_auth'
+  AUTHENTIK: "authentik",
+  OIDC_GENERIC: "oidc_generic",
+  API_INTEGRATION: "api_integration",
+  WEBHOOK_INTEGRATION: "webhook_integration",
+  LOCAL_AUTH: "local_auth",
 };
 
 /**
@@ -27,7 +30,7 @@ export class AuthManager {
     this.providerConfig = {};
     this.userSyncEnabled = false;
     this.syncInterval = null;
-    
+
     // Caching for performance
     this.sessionCache = new Map();
     this.validationCache = new Map();
@@ -39,27 +42,31 @@ export class AuthManager {
    */
   async initialize(options = {}) {
     // Determine provider from environment or options
-    this.currentProvider = options.provider || 
-                          process.env.AUTH_PROVIDER || 
-                          AUTH_PROVIDERS.LOCAL_AUTH;
+    this.currentProvider =
+      options.provider ||
+      process.env.AUTH_PROVIDER ||
+      AUTH_PROVIDERS.LOCAL_AUTH;
 
     // Get provider configuration from registry
-    this.providerConfig = providerRegistry.getProviderConfig(this.currentProvider);
-    
+    this.providerConfig = providerRegistry.getProviderConfig(
+      this.currentProvider,
+    );
+
     // Override with provided options
     if (options.config) {
       this.providerConfig = { ...this.providerConfig, ...options.config };
     }
 
     // Initialize user sync for supporting providers
-    const capabilities = providerRegistry.getProviderDefinition(this.currentProvider)?.capabilities;
+    const capabilities = providerRegistry.getProviderDefinition(
+      this.currentProvider,
+    )?.capabilities;
     if (capabilities?.supportsSync && options.enableUserSync && !browser) {
       this.userSyncEnabled = true;
       const syncInterval = options.syncInterval || 300000; // 5 minutes
       this.startUserSync(syncInterval);
     }
 
-    
     return this.validateConfiguration();
   }
 
@@ -68,18 +75,21 @@ export class AuthManager {
    */
   validateConfiguration() {
     const cacheKey = `${this.currentProvider}:${JSON.stringify(this.providerConfig)}`;
-    
+
     // Return cached result if available
     if (this.validationCache.has(cacheKey)) {
       return this.validationCache.get(cacheKey);
     }
 
     // Validate using provider registry
-    const result = providerRegistry.validateProvider(this.currentProvider, this.providerConfig);
-    
+    const result = providerRegistry.validateProvider(
+      this.currentProvider,
+      this.providerConfig,
+    );
+
     // Cache result for performance
     this.validationCache.set(cacheKey, result);
-    
+
     return result;
   }
 
@@ -90,21 +100,25 @@ export class AuthManager {
    */
   async getAuthorizationUrl(redirectUri, state) {
     // Check if provider supports callbacks
-    const capabilities = providerRegistry.getProviderDefinition(this.currentProvider)?.capabilities;
+    const capabilities = providerRegistry.getProviderDefinition(
+      this.currentProvider,
+    )?.capabilities;
     if (!capabilities?.supportsCallback) {
       if (this.currentProvider === AUTH_PROVIDERS.LOCAL_AUTH) {
         return `/login?redirect=${encodeURIComponent(redirectUri)}`;
       }
-      throw new Error(`Provider ${this.currentProvider} does not support authorization URL`);
+      throw new Error(
+        `Provider ${this.currentProvider} does not support authorization URL`,
+      );
     }
 
     // Use registry to execute provider method
     return await providerRegistry.executeProviderMethod(
-      this.currentProvider, 
-      'getAuthorizationUrl',
+      this.currentProvider,
+      "getAuthorizationUrl",
       this.providerConfig,
-      redirectUri, 
-      state
+      redirectUri,
+      state,
     );
   }
 
@@ -115,17 +129,21 @@ export class AuthManager {
    * @param {string} redirectUri - Redirect URI
    */
   async handleCallback(code, state, redirectUri) {
-    const capabilities = providerRegistry.getProviderDefinition(this.currentProvider)?.capabilities;
+    const capabilities = providerRegistry.getProviderDefinition(
+      this.currentProvider,
+    )?.capabilities;
     if (!capabilities?.supportsCallback) {
-      throw new Error(`Provider ${this.currentProvider} does not support callbacks`);
+      throw new Error(
+        `Provider ${this.currentProvider} does not support callbacks`,
+      );
     }
 
     return await providerRegistry.executeProviderMethod(
       this.currentProvider,
-      'handleCallback',
+      "handleCallback",
       this.providerConfig,
       code,
-      redirectUri
+      redirectUri,
     );
   }
 
@@ -134,16 +152,20 @@ export class AuthManager {
    * @param {Object} credentials - User credentials
    */
   async authenticate(credentials) {
-    const capabilities = providerRegistry.getProviderDefinition(this.currentProvider)?.capabilities;
+    const capabilities = providerRegistry.getProviderDefinition(
+      this.currentProvider,
+    )?.capabilities;
     if (!capabilities?.supportsCredentials) {
-      throw new Error(`Provider ${this.currentProvider} does not support credential authentication`);
+      throw new Error(
+        `Provider ${this.currentProvider} does not support credential authentication`,
+      );
     }
 
     return await providerRegistry.executeProviderMethod(
       this.currentProvider,
-      'authenticate',
+      "authenticate",
       credentials,
-      this.providerConfig
+      this.providerConfig,
     );
   }
 
@@ -157,29 +179,30 @@ export class AuthManager {
     // Check session cache first (short-term caching)
     const cacheKey = `${this.currentProvider}:${token.substring(0, 20)}`;
     const cachedSession = this.sessionCache.get(cacheKey);
-    if (cachedSession && Date.now() - cachedSession.timestamp < 60000) { // 1 minute cache
+    if (cachedSession && Date.now() - cachedSession.timestamp < 60000) {
+      // 1 minute cache
       return cachedSession.session;
     }
 
     try {
       const session = await providerRegistry.executeProviderMethod(
         this.currentProvider,
-        'verifySession',
+        "verifySession",
         token,
-        this.providerConfig
+        this.providerConfig,
       );
 
       // Cache successful session verification
       if (session) {
         this.sessionCache.set(cacheKey, {
           session,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
       }
 
       return session;
     } catch (error) {
-      console.error('Session verification failed:', error);
+      console.error("Session verification failed:", error);
       return null;
     }
   }
@@ -189,7 +212,9 @@ export class AuthManager {
    * @param {string} userId - User ID to sync
    */
   async syncUser(userId) {
-    const capabilities = providerRegistry.getProviderDefinition(this.currentProvider)?.capabilities;
+    const capabilities = providerRegistry.getProviderDefinition(
+      this.currentProvider,
+    )?.capabilities;
     if (!capabilities?.supportsSync) {
       return null;
     }
@@ -201,9 +226,9 @@ export class AuthManager {
 
     return await providerRegistry.executeProviderMethod(
       this.currentProvider,
-      'syncUser',
+      "syncUser",
       this.providerConfig,
-      userId
+      userId,
     );
   }
 
@@ -214,15 +239,17 @@ export class AuthManager {
    */
   async handleWebhook(payload, signature = null) {
     if (this.currentProvider !== AUTH_PROVIDERS.WEBHOOK_INTEGRATION) {
-      throw new Error('Webhook handling is only available for webhook integration');
+      throw new Error(
+        "Webhook handling is only available for webhook integration",
+      );
     }
 
     return await providerRegistry.executeProviderMethod(
       this.currentProvider,
-      'handleWebhook',
+      "handleWebhook",
       this.providerConfig,
       payload,
-      signature
+      signature,
     );
   }
 
@@ -234,12 +261,12 @@ export class AuthManager {
     try {
       return await providerRegistry.executeProviderMethod(
         this.currentProvider,
-        'logout',
+        "logout",
         token,
-        this.providerConfig
+        this.providerConfig,
       );
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
       return { success: true }; // Default success for providers without logout
     }
   }
@@ -259,31 +286,35 @@ export class AuthManager {
       try {
         await this.syncAllUsers();
       } catch (error) {
-        console.error('User sync error:', error);
+        console.error("User sync error:", error);
       }
     }, interval);
-
   }
 
   /**
    * Sync all users (for periodic sync)
    */
   async syncAllUsers() {
-    const capabilities = providerRegistry.getProviderDefinition(this.currentProvider)?.capabilities;
-    if (!capabilities?.supportsSync || this.currentProvider !== AUTH_PROVIDERS.API_INTEGRATION) {
+    const capabilities = providerRegistry.getProviderDefinition(
+      this.currentProvider,
+    )?.capabilities;
+    if (
+      !capabilities?.supportsSync ||
+      this.currentProvider !== AUTH_PROVIDERS.API_INTEGRATION
+    ) {
       return null;
     }
 
     try {
       const result = await providerRegistry.executeProviderMethod(
         this.currentProvider,
-        'syncAllUsers',
-        this.providerConfig
+        "syncAllUsers",
+        this.providerConfig,
       );
-      
+
       return result;
     } catch (error) {
-      console.error('Failed to sync all users:', error);
+      console.error("Failed to sync all users:", error);
       throw error;
     }
   }
@@ -310,23 +341,26 @@ export class AuthManager {
    * Get current provider information with enhanced metadata
    */
   getProviderInfo() {
-    const definition = providerRegistry.getProviderDefinition(this.currentProvider);
+    const definition = providerRegistry.getProviderDefinition(
+      this.currentProvider,
+    );
     const validation = this.validateConfiguration();
-    
+
     return {
       provider: this.currentProvider,
       name: definition?.name || this.currentProvider,
-      description: definition?.description || 'Unknown provider',
-      category: definition?.category || 'unknown',
+      description: definition?.description || "Unknown provider",
+      category: definition?.category || "unknown",
       config: this.providerConfig,
       userSyncEnabled: this.userSyncEnabled,
       capabilities: definition?.capabilities || {},
       validation,
-      
+
       // Backward compatibility
       supportsCallback: definition?.capabilities?.supportsCallback || false,
-      supportsCredentials: definition?.capabilities?.supportsCredentials || false,
-      supportsSync: definition?.capabilities?.supportsSync || false
+      supportsCredentials:
+        definition?.capabilities?.supportsCredentials || false,
+      supportsSync: definition?.capabilities?.supportsSync || false,
     };
   }
 
@@ -343,12 +377,12 @@ export class AuthManager {
   async switchProvider(providerId, config = {}) {
     this.stopUserSync(); // Stop current sync if active
     this.clearCaches(); // Clear all caches
-    
-    return await this.initialize({ 
-      provider: providerId, 
+
+    return await this.initialize({
+      provider: providerId,
       config,
       enableUserSync: config.enableUserSync,
-      syncInterval: config.syncInterval
+      syncInterval: config.syncInterval,
     });
   }
 }
@@ -358,7 +392,7 @@ export const authManager = new AuthManager();
 
 // Auto-initialize if not in browser
 if (!browser) {
-  authManager.initialize().catch(error => {
-    console.error('Failed to initialize AuthManager:', error);
+  authManager.initialize().catch((error) => {
+    console.error("Failed to initialize AuthManager:", error);
   });
 }

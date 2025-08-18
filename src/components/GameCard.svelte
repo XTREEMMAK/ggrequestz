@@ -3,13 +3,19 @@
 -->
 
 <script>
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import StatusBadge from './StatusBadge.svelte';
+  import SkeletonLoader from './SkeletonLoader.svelte';
   import { truncateText, formatDate } from '$lib/utils.js';
   import Icon from '@iconify/svelte';
   import { browser } from '$app/environment';
+  import { getGameByIdClient } from '$lib/gameCache.js';
+  import { lazyLoader } from '$lib/performance.js';
   
   let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null, preserveState = false, enablePreloading = false } = $props();
+  
+  // Detect if we're on a mobile device
+  const isMobile = browser && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   
   const dispatch = createEventDispatcher();
   
@@ -19,6 +25,9 @@
   
   // Ghost click effect state
   let isClicked = $state(false);
+  
+  // Cache warming state
+  let hasWarmedCache = false;
   
   function getGameStatus(game) {
     if (game.status) return game.status;
@@ -89,9 +98,11 @@
       const screenshots = Array.isArray(game.screenshots) ? game.screenshots : [];
       images.push(...screenshots.map(screenshot => {
         // Handle both string URLs and objects with url property
+        // Handle different screenshot data formats
         const url = typeof screenshot === 'string' ? screenshot : 
-                   screenshot?.url || screenshot?.image_id ? 
-                   `https://images.igdb.com/igdb/image/upload/t_screenshot_med/${screenshot.image_id}.jpg` : 
+                   screenshot?.url ? screenshot.url :
+                   screenshot?.image_id ? 
+                   `/api/images/proxy?url=${encodeURIComponent(`https://images.igdb.com/igdb/image/upload/t_screenshot_med/${screenshot.image_id}.jpg`)}` : 
                    null;
         return url ? { url, type: 'screenshot' } : null;
       }).filter(Boolean));
@@ -127,30 +138,35 @@
     imageLoaded = true;
   }
   
-  // Lazy loading intersection observer
-  function lazyLoad(node) {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const img = entry.target;
-          if (img.dataset.src) {
-            img.src = img.dataset.src;
-            img.onload = () => handleImageLoad();
-            img.removeAttribute('data-src');
-          }
-          observer.unobserve(entry.target);
+  // Warm cache for game when it comes into view
+  async function warmGameCache() {
+    if (!hasWarmedCache && enablePreloading) {
+      hasWarmedCache = true;
+      const gameId = game.igdb_id || game.id;
+      if (gameId) {
+        try {
+          await getGameByIdClient(gameId.toString());
+        } catch (error) {
+          // Silently fail pre-caching
         }
-      });
-    }, { 
-      rootMargin: '50px',  // Start loading 50px before image enters viewport
-      threshold: 0.1
-    });
+      }
+    }
+  }
+
+  // Enhanced lazy loading with performance monitoring
+  function lazyLoad(node) {
+    // Set up lazy loading for the node
+    lazyLoader.observe(node);
     
-    observer.observe(node);
+    // Add custom event listener for when lazy loading completes
+    node.addEventListener('lazyload', () => {
+      handleImageLoad();
+      warmGameCache();
+    });
     
     return {
       destroy() {
-        observer.disconnect();
+        lazyLoader.unobserve(node);
       }
     };
   }
@@ -206,16 +222,17 @@
   onmouseleave={() => handleMouseLeave()}
   onclick={handleClick}
   aria-label="View details for {game.title || 'Unknown Game'}"
-  data-sveltekit-preload-data={enablePreloading ? "hover" : "off"}
+  data-sveltekit-preload-data={enablePreloading ? (isMobile ? "tap" : "hover") : "off"}
+  data-game-id={game.igdb_id || game.id}
 >
   <!-- Poster Image with rotation -->
   <div class="relative w-full h-full overflow-hidden">
     {#if currentImage?.url && !imageError}
-      <!-- Lazy loading placeholder -->
+      <!-- Enhanced lazy loading with skeleton -->
       <div class="relative w-full h-full">
         {#if !imageLoaded}
-          <div class="absolute inset-0 bg-gray-700 animate-pulse flex items-center justify-center">
-            <Icon icon="heroicons:photo" class="w-12 h-12 text-gray-500" />
+          <div class="absolute inset-0">
+            <SkeletonLoader variant="image" width="100%" height="100%" rounded="lg" />
           </div>
         {/if}
         
@@ -223,10 +240,11 @@
           use:lazyLoad
           data-src={currentImage.url}
           alt="{game.title} {currentImage.type}"
-          class="w-full h-full object-cover transition-opacity duration-300 {imageLoaded ? 'opacity-100' : 'opacity-0'}"
-          onerror={handleImageError}
+          class="w-full h-full object-cover transition-opacity duration-500 {imageLoaded ? 'opacity-100' : 'opacity-0'}"
           loading="lazy"
           decoding="async"
+          onerror={handleImageError}
+          onload={() => imageLoaded = true}
         />
       </div>
     {:else}
@@ -282,7 +300,7 @@
             class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors opacity-90 hover:opacity-100"
             title="Remove from watchlist"
           >
-            <Icon icon="heroicons:heart-solid" class="w-4 h-4" />
+            <Icon icon="heroicons:heart-solid" class="w-5 h-5" />
           </button>
         {:else}
           <!-- Add to watchlist button -->
@@ -291,7 +309,7 @@
             class="bg-gray-800 bg-opacity-70 hover:bg-green-600 text-white p-2 rounded-full transition-all opacity-90 hover:opacity-100"
             title="Add to watchlist"
           >
-            <Icon icon="heroicons:heart" class="w-4 h-4" />
+            <Icon icon="heroicons:heart" class="w-5 h-5" />
           </button>
         {/if}
       </div>

@@ -4,7 +4,7 @@
 
 import { json, error } from "@sveltejs/kit";
 import { getPopularGames } from "$lib/igdb.js";
-import { isRommAvailable, crossReferenceWithROMM } from "$lib/romm.js";
+import { isRommAvailable, crossReferenceWithROMM } from "$lib/romm.server.js";
 import { cachePopularGames, invalidateCache } from "$lib/cache.js";
 
 export async function GET({ url }) {
@@ -22,38 +22,55 @@ export async function GET({ url }) {
 
     // Force cache refresh if we detect corrupted cache (< 20 games)
     const forceRefresh = searchParams.get("refresh") === "true";
-    
+
     if (forceRefresh) {
-      console.log('🧹 FORCING CACHE REFRESH...');
-      await invalidateCache('popular-games');
+      console.log("🧹 FORCING CACHE REFRESH...");
+      await invalidateCache("popular-games");
     }
-    
+
     // Get popular games with optional cache bypass
-    let allGames = await cachePopularGames(async () => {
-      console.log('🔄 Fetching fresh popular games from IGDB...');
+    let allGames;
+    allGames = await cachePopularGames(async () => {
+      console.log("🔄 Fetching fresh popular games from IGDB...");
       const freshGames = await getPopularGames(50, 0); // Get more for pagination
-      console.log('📊 First 3 popular games:', freshGames.slice(0, 3).map(g => g.title));
+      console.log(
+        "📊 First 3 popular games:",
+        freshGames.slice(0, 3).map((g) => g.title),
+      );
       return freshGames;
     });
-    
+
     // If we get too few games, the cache might be corrupted - refresh it
     if (allGames.length < 20 && !forceRefresh) {
-      console.log('⚠️ Cache appears corrupted (only', allGames.length, 'games), refreshing...');
-      await invalidateCache('popular-games');
+      console.log(
+        "⚠️ Cache appears corrupted (only",
+        allGames.length,
+        "games), refreshing...",
+      );
+      await invalidateCache("popular-games");
       allGames = await cachePopularGames(async () => {
-        console.log('🔄 Re-fetching fresh popular games from IGDB...');
+        console.log("🔄 Re-fetching fresh popular games from IGDB...");
         const freshGames = await getPopularGames(50, 0); // Get more for pagination
-        console.log('📊 Refreshed - First 3 popular games:', freshGames.slice(0, 3).map(g => g.title));
+        console.log(
+          "📊 Refreshed - First 3 popular games:",
+          freshGames.slice(0, 3).map((g) => g.title),
+        );
         return freshGames;
       });
     }
-    
-    console.log('📊 Cached popular games total:', allGames.length);
-    console.log('📊 First 3 cached games:', allGames.slice(0, 3).map(g => g.title));
-    
+
+    console.log("📊 Cached popular games total:", allGames.length);
+    console.log(
+      "📊 First 3 cached games:",
+      allGames.slice(0, 3).map((g) => g.title),
+    );
+
     // Apply pagination to cached results
     let games = allGames.slice(offset, offset + limit);
-    console.log(`📊 Page ${page} (offset ${offset}, limit ${limit}):`, games.map(g => g.title));
+    console.log(
+      `📊 Page ${page} (offset ${offset}, limit ${limit}):`,
+      games.map((g) => g.title),
+    );
 
     // Cross-reference with ROMM if available
     if (rommAvailable && games.length > 0) {

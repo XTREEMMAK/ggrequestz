@@ -16,10 +16,10 @@ function getHttpClient(baseUrl) {
     connectionPool.set(baseUrl, {
       baseUrl,
       keepAlive: true,
-      timeout: 30000
+      timeout: 30000,
     });
   }
-  
+
   return connectionPool.get(baseUrl);
 }
 
@@ -31,11 +31,11 @@ function getHttpClient(baseUrl) {
  */
 export async function makeRequest(url, options = {}) {
   const {
-    method = 'GET',
+    method = "GET",
     headers = {},
     body = null,
     timeout = 30000,
-    validateStatus = (status) => status >= 200 && status < 300
+    validateStatus = (status) => status >= 200 && status < 300,
   } = options;
 
   const controller = new AbortController();
@@ -45,11 +45,11 @@ export async function makeRequest(url, options = {}) {
     const response = await fetch(url, {
       method,
       headers: {
-        'Content-Type': 'application/json',
-        ...headers
+        "Content-Type": "application/json",
+        ...headers,
       },
       body: body ? JSON.stringify(body) : null,
-      signal: controller.signal
+      signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
@@ -59,12 +59,12 @@ export async function makeRequest(url, options = {}) {
       statusText: response.statusText,
       headers: Object.fromEntries(response.headers.entries()),
       data: null,
-      success: validateStatus(response.status)
+      success: validateStatus(response.status),
     };
 
     // Parse response body
-    const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
+    const contentType = response.headers.get("content-type");
+    if (contentType?.includes("application/json")) {
       responseData.data = await response.json();
     } else {
       responseData.data = await response.text();
@@ -73,11 +73,11 @@ export async function makeRequest(url, options = {}) {
     return responseData;
   } catch (error) {
     clearTimeout(timeoutId);
-    
-    if (error.name === 'AbortError') {
+
+    if (error.name === "AbortError") {
       throw new Error(`Request timeout after ${timeout}ms`);
     }
-    
+
     throw new Error(`Request failed: ${error.message}`);
   }
 }
@@ -87,7 +87,7 @@ export async function makeRequest(url, options = {}) {
  */
 export class ApiClient {
   constructor(baseUrl, options = {}) {
-    this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
+    this.baseUrl = baseUrl.replace(/\/$/, ""); // Remove trailing slash
     this.defaultHeaders = options.headers || {};
     this.timeout = options.timeout || 30000;
     this.apiKey = options.apiKey;
@@ -100,23 +100,23 @@ export class ApiClient {
    * @returns {Promise<Object>} - API response
    */
   async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-    
+    const url = `${this.baseUrl}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
+
     const headers = {
       ...this.defaultHeaders,
-      ...options.headers
+      ...options.headers,
     };
 
     // Add API key authentication
     if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
-      headers['X-API-Key'] = this.apiKey;
+      headers["Authorization"] = `Bearer ${this.apiKey}`;
+      headers["X-API-Key"] = this.apiKey;
     }
 
     return await makeRequest(url, {
       ...options,
       headers,
-      timeout: options.timeout || this.timeout
+      timeout: options.timeout || this.timeout,
     });
   }
 
@@ -124,17 +124,17 @@ export class ApiClient {
    * GET request
    */
   async get(endpoint, options = {}) {
-    return await this.request(endpoint, { ...options, method: 'GET' });
+    return await this.request(endpoint, { ...options, method: "GET" });
   }
 
   /**
    * POST request
    */
   async post(endpoint, body, options = {}) {
-    return await this.request(endpoint, { 
-      ...options, 
-      method: 'POST', 
-      body 
+    return await this.request(endpoint, {
+      ...options,
+      method: "POST",
+      body,
     });
   }
 
@@ -142,10 +142,10 @@ export class ApiClient {
    * PUT request
    */
   async put(endpoint, body, options = {}) {
-    return await this.request(endpoint, { 
-      ...options, 
-      method: 'PUT', 
-      body 
+    return await this.request(endpoint, {
+      ...options,
+      method: "PUT",
+      body,
     });
   }
 
@@ -153,7 +153,7 @@ export class ApiClient {
    * DELETE request
    */
   async delete(endpoint, options = {}) {
-    return await this.request(endpoint, { ...options, method: 'DELETE' });
+    return await this.request(endpoint, { ...options, method: "DELETE" });
   }
 }
 
@@ -165,35 +165,41 @@ export class OidcClient extends ApiClient {
     super(config.issuer);
     this.clientId = config.clientId;
     this.clientSecret = config.clientSecret;
-    this.scope = config.scope || 'openid profile email';
+    this.scope = config.scope || "openid profile email";
   }
 
   /**
    * Exchange authorization code for tokens
    */
   async exchangeCodeForTokens(code, redirectUri) {
-    const response = await this.post('/token', {
-      grant_type: 'authorization_code',
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-      code,
-      redirect_uri: redirectUri
-    }, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      // Convert JSON body to form data for OIDC token endpoint
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
+    const response = await this.post(
+      "/token",
+      {
+        grant_type: "authorization_code",
         client_id: this.clientId,
         client_secret: this.clientSecret,
         code,
-        redirect_uri: redirectUri
-      }).toString()
-    });
+        redirect_uri: redirectUri,
+      },
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        // Convert JSON body to form data for OIDC token endpoint
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          code,
+          redirect_uri: redirectUri,
+        }).toString(),
+      },
+    );
 
     if (!response.success) {
-      throw new Error(`Token exchange failed: ${response.status} ${response.data?.error || response.statusText}`);
+      throw new Error(
+        `Token exchange failed: ${response.status} ${response.data?.error || response.statusText}`,
+      );
     }
 
     return response.data;
@@ -203,14 +209,16 @@ export class OidcClient extends ApiClient {
    * Get user info from access token
    */
   async getUserInfo(accessToken) {
-    const response = await this.get('/userinfo', {
+    const response = await this.get("/userinfo", {
       headers: {
-        'Authorization': `Bearer ${accessToken}`
-      }
+        Authorization: `Bearer ${accessToken}`,
+      },
     });
 
     if (!response.success) {
-      throw new Error(`Failed to get user info: ${response.status} ${response.data?.error || response.statusText}`);
+      throw new Error(
+        `Failed to get user info: ${response.status} ${response.data?.error || response.statusText}`,
+      );
     }
 
     return response.data;
@@ -221,11 +229,11 @@ export class OidcClient extends ApiClient {
    */
   getAuthorizationUrl(redirectUri, state) {
     const params = new URLSearchParams({
-      response_type: 'code',
+      response_type: "code",
       client_id: this.clientId,
       redirect_uri: redirectUri,
       scope: this.scope,
-      state: state || crypto.randomUUID()
+      state: state || crypto.randomUUID(),
     });
 
     return `${this.baseUrl}/auth?${params.toString()}`;

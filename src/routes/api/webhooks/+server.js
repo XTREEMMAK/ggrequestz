@@ -25,7 +25,10 @@ export async function POST({ request }) {
     };
 
     // Send Gotify notification
-    if ((env.GOTIFY_URL || process.env.GOTIFY_URL) && (env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN)) {
+    if (
+      (env.GOTIFY_URL || process.env.GOTIFY_URL) &&
+      (env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN)
+    ) {
       try {
         const gotifyResponse = await sendGotifyNotification({
           title,
@@ -81,19 +84,22 @@ export async function POST({ request }) {
  * Send notification to Gotify
  */
 async function sendGotifyNotification({ title, message, priority, extras }) {
-  const response = await fetch(`${env.GOTIFY_URL || process.env.GOTIFY_URL}/message`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Gotify-Key": env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN,
+  const response = await fetch(
+    `${env.GOTIFY_URL || process.env.GOTIFY_URL}/message`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Gotify-Key": env.GOTIFY_TOKEN || process.env.GOTIFY_TOKEN,
+      },
+      body: JSON.stringify({
+        title,
+        message,
+        priority,
+        extras,
+      }),
     },
-    body: JSON.stringify({
-      title,
-      message,
-      priority,
-      extras,
-    }),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Gotify API error: ${response.statusText}`);
@@ -106,13 +112,16 @@ async function sendGotifyNotification({ title, message, priority, extras }) {
  * Send webhook to n8n
  */
 async function sendN8nWebhook(payload) {
-  const response = await fetch(env.N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    env.N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`n8n webhook error: ${response.statusText}`);

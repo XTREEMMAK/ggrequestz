@@ -9,7 +9,7 @@
   import StatusBadge from '../../../components/StatusBadge.svelte';
   import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
   import { formatDate, truncateText } from '$lib/utils.js';
-  import { addToWatchlist, removeFromWatchlist } from '$lib/api.client.js';
+  import { watchlistService } from '$lib/clientServices.js';
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
   
@@ -20,9 +20,11 @@
   let isInWatchlist = $derived(data?.isInWatchlist || false);
   let loading = $state(false);
   
-  if (!game) {
-    goto('/search');
-  }
+  $effect(() => {
+    if (!game) {
+      goto('/search');
+    }
+  });
   
   let showFullDescription = $state(false);
   let activeImageIndex = $state(0);
@@ -73,9 +75,9 @@
       
       let result;
       if (isInWatchlist) {
-        result = await removeFromWatchlist(game.igdb_id);
+        result = { success: await watchlistService.removeFromWatchlist(game.igdb_id) };
       } else {
-        result = await addToWatchlist(game.igdb_id, gameData);
+        result = { success: await watchlistService.addToWatchlist(game.igdb_id, gameData) };
       }
       
       if (result.success) {
@@ -200,13 +202,19 @@
         <!-- Main Image -->
         <div class="relative aspect-[3/4] bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-4">
           {#if images.length > 0}
-            <img
-              src={images[activeImageIndex]}
-              alt="{game.title} screenshot {activeImageIndex + 1}"
-              class="w-full h-full object-cover cursor-pointer"
-              loading="lazy"
+            <button
+              type="button"
+              class="w-full h-full block"
               onclick={() => openImageModal(activeImageIndex)}
-            />
+              aria-label="Open image in full screen"
+            >
+              <img
+                src={images[activeImageIndex]}
+                alt="{game.title} screenshot {activeImageIndex + 1}"
+                class="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </button>
             
             {#if images.length > 1}
               <!-- Image Navigation -->
@@ -620,7 +628,6 @@
         onclick={closeImageModal}
         class="close-btn"
         aria-label="Close modal"
-        autofocus
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>

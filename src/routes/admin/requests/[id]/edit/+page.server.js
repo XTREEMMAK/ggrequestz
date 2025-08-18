@@ -4,7 +4,7 @@
 
 import { error, redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { verifySessionToken } from "$lib/auth.js";
+import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 
 export async function load({ params, parent }) {
@@ -74,16 +74,16 @@ export const actions = {
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith('basic_auth_')) {
-        const basicAuthId = user.sub.replace('basic_auth_', '');
+      if (user.sub?.startsWith("basic_auth_")) {
+        const basicAuthId = user.sub.replace("basic_auth_", "");
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)]
+          [parseInt(basicAuthId)],
         );
       } else {
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [user.sub]
+          [user.sub],
         );
       }
 
@@ -222,7 +222,7 @@ export const actions = {
       } catch (analyticsError) {
         console.warn("Failed to log analytics:", analyticsError);
       }
-console.log(
+      console.log(
         `✅ Request ${requestId} updated by admin ${user.name || user.email}`,
       );
 

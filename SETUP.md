@@ -20,6 +20,16 @@ The app will be available at `http://localhost:5173` (or the next available port
 cp .env.example .env
 ```
 
+## 📚 Detailed Setup Guides
+
+For detailed setup instructions, see the documentation in `/docs/setup/`:
+
+- [Database Setup](docs/setup/DATABASE_SETUP.md) - PostgreSQL and database configuration
+- [Docker Setup](docs/setup/DOCKER_SETUP.md) - Docker deployment guide
+- [Authentication Setup](docs/setup/AUTHENTIK_ADMIN_SETUP.md) - OIDC authentication
+- [Navigation Setup](docs/setup/NAVIGATION_SETUP.md) - Custom navigation configuration
+- [Deployment Guide](docs/setup/DEPLOYMENT.md) - Production deployment
+
 ### 3. Service Configuration Priority
 
 For **basic functionality** (UI and navigation), no external services are required. The app will use mock data.
@@ -35,6 +45,7 @@ IGDB_CLIENT_SECRET=your_igdb_client_secret
 ```
 
 **Getting IGDB Credentials:**
+
 1. Create a Twitch developer account at [dev.twitch.tv/console](https://dev.twitch.tv/console)
 2. Register your application with OAuth redirect URL: `http://localhost:5173`
 3. Use the Client ID and Client Secret as your IGDB credentials
@@ -155,5 +166,13 @@ npm run format      # Format code
 2. **Set up authentication** for user features
 3. **Deploy to production** using `npm run build`
 4. **Add external services** for full functionality
+
+## 🔗 Additional Documentation
+
+- [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
+- [API Documentation](docs/API.md) - API endpoints and usage
+- [Integration Guide](docs/guides/INTEGRATION_GUIDE.md) - Third-party integrations
+- [ROMM Troubleshooting](docs/guides/ROMM_TROUBLESHOOTING.md) - ROMM integration help
+- [Contributing Guide](CONTRIBUTING.md) - Development guidelines
 
 The application is designed to work gracefully with or without external services!
