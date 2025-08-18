@@ -203,6 +203,45 @@ async function initializeDatabase() {
   // Legacy init script disabled - migrations handle all table creation
 }
 
+async function warmCaches() {
+  console.log("🔥 Warming application caches...");
+  
+  try {
+    // Create a simple cache warming script
+    await runCommand("node", [
+      "-e",
+      `
+      async function warmUp() {
+        try {
+          console.log('📦 Pre-warming caches for faster initial load...');
+          
+          // Warm popular games cache
+          const popularResp = await fetch('http://localhost:3000/api/games/popular?page=1&limit=8');
+          if (popularResp.ok) {
+            console.log('✅ Popular games cache warmed');
+          }
+          
+          // Warm recent games cache  
+          const recentResp = await fetch('http://localhost:3000/api/games/recent?page=1&limit=8');
+          if (recentResp.ok) {
+            console.log('✅ Recent games cache warmed');
+          }
+          
+          console.log('🔥 Cache warming complete');
+        } catch (error) {
+          console.log('⚠️ Cache warming failed (non-critical):', error.message);
+        }
+      }
+      
+      // Wait for app to be ready then warm caches
+      setTimeout(warmUp, 5000);
+      `
+    ]);
+  } catch (error) {
+    console.log("⚠️ Cache warming failed (non-critical):", error.message);
+  }
+}
+
 async function startApplication() {
   console.log("🚀 Starting G.G Requestz application...");
   console.log("================================");
@@ -216,7 +255,31 @@ async function startApplication() {
   }
 
   try {
-    await runCommand("pm2-runtime", pm2Args);
+    // Start the application first
+    const appProcess = spawn("pm2-runtime", pm2Args, {
+      stdio: "inherit",
+      env: process.env,
+    });
+    
+    // Warm caches after a delay (non-blocking)
+    if (process.env.NODE_ENV === "production") {
+      setTimeout(() => {
+        warmCaches().catch(console.error);
+      }, 10000); // Wait 10 seconds for app to fully start
+    }
+    
+    // Handle process events
+    appProcess.on("close", (code) => {
+      if (code !== 0) {
+        console.error(`❌ Application exited with code ${code}`);
+        process.exit(code);
+      }
+    });
+    
+    appProcess.on("error", (error) => {
+      console.error("❌ Failed to start application:", error.message);
+      process.exit(1);
+    });
   } catch (error) {
     console.error("❌ Failed to start application:", error.message);
     process.exit(1);

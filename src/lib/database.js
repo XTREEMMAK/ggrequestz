@@ -367,8 +367,15 @@ export const gamesCache = {
     try {
       const cutoffDate = new Date(Date.now() - maxAge).toISOString();
 
+      // Only delete cache entries that aren't referenced by watchlist
       const result = await query(
-        "DELETE FROM ggr_games_cache WHERE last_updated < $1",
+        `DELETE FROM ggr_games_cache 
+         WHERE last_updated < $1 
+         AND igdb_id NOT IN (
+           SELECT DISTINCT igdb_id 
+           FROM ggr_user_watchlist 
+           WHERE igdb_id IS NOT NULL
+         )`,
         [cutoffDate],
       );
 

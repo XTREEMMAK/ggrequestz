@@ -24,10 +24,6 @@ class HybridCache {
   }
 
   async initRedis() {
-    // Redis environment check (debug mode only)
-    if (process.env.NODE_ENV === "development") {
-    }
-
     // Skip Redis initialization on client-side
     if (browser) {
       return;
@@ -35,32 +31,49 @@ class HybridCache {
 
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
-      if (process.env.NODE_ENV === "development") {
-      }
       return;
     }
 
     try {
       // Parse Redis URL (handle http:// prefix)
       const parsedRedisUrl = redisUrl.replace("http://", "redis://");
-      this.redisClient = createClient({ url: parsedRedisUrl });
+      
+      // Configure Redis client with Docker-friendly settings
+      this.redisClient = createClient({ 
+        url: parsedRedisUrl,
+        socket: {
+          connectTimeout: 5000,
+          reconnectStrategy: (retries) => {
+            if (retries > 10) {
+              console.warn("🚨 Redis: Max reconnection attempts reached");
+              return false;
+            }
+            // Exponential backoff with max 3 seconds
+            return Math.min(retries * 100, 3000);
+          }
+        }
+      });
 
       this.redisClient.on("error", (err) => {
-        console.warn("🚨 Redis connection error:", err.message);
+        // Only log non-connection errors
+        if (!err.message.includes("ECONNREFUSED") && !err.message.includes("ETIMEDOUT")) {
+          console.warn("🚨 Redis error:", err.message);
+        }
         this.redisConnected = false;
       });
 
       this.redisClient.on("connect", () => {
-        if (process.env.NODE_ENV === "development") {
-        }
+        console.log("✅ Redis connected successfully");
         this.redisConnected = true;
+      });
+      
+      this.redisClient.on("reconnecting", () => {
+        console.log("🔄 Redis reconnecting...");
       });
 
       await this.redisClient.connect();
     } catch (error) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn("🚨 Failed to connect to Redis:", error.message);
-      }
+      // Silently fail and fall back to memory cache
       this.redisConnected = false;
     }
   }

@@ -189,11 +189,16 @@ export async function getPopularGames(limit = 20, offset = 0) {
       `🎯 getPopularGames called with limit=${limit}, offset=${offset}`,
     );
 
+    // Request more than needed to account for games without covers
+    // For larger offsets, request even more to ensure we get enough games
+    const multiplier = offset > 100 ? 3 : 2; // Request 3x for high offsets, 2x for low
+    const fetchLimit = Math.min(limit * multiplier, 500); // Increase cap to 500
+    
     // Use IGDB popularity_primitives endpoint for true popularity
     const popularityQuery = `fields game_id,value,popularity_type;
 sort value desc;
 offset ${offset};
-limit ${limit};
+limit ${fetchLimit};
 where popularity_type = 1;`;
 
     const popularityData = await igdbRequest(
@@ -206,6 +211,12 @@ where popularity_type = 1;`;
       console.log("No popularity data found, falling back to high rated games");
       return await getHighRatedGames(limit, offset);
     }
+    
+    // If we're requesting beyond available popularity data, mix strategies
+    if (offset >= popularityData.length) {
+      console.log(`Offset ${offset} beyond popularity data (${popularityData.length}), using high-rated games`);
+      return await getHighRatedGames(limit, offset - popularityData.length);
+    }
 
     // Extract game IDs from popularity data
     const gameIds = popularityData.map((item) => item.game_id);
@@ -214,7 +225,7 @@ where popularity_type = 1;`;
     // Get game details for these IDs
     const gameQuery = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count;
 where id = (${gameIds.join(",")}) & cover != null;
-limit ${limit};`;
+limit ${fetchLimit};`;
 
     const games = await igdbRequest("games", gameQuery);
     console.log(`📊 Got ${games.length} game details`);
@@ -222,12 +233,22 @@ limit ${limit};`;
     // Sort games by their popularity order
     const sortedGames = gameIds
       .map((id) => games.find((game) => game.id === id))
-      .filter(Boolean);
+      .filter(Boolean)
+      .slice(0, limit); // Only return requested amount
 
     console.log(
       `🎯 Final sorted games:`,
       sortedGames.slice(0, 3).map((g) => `${g.name} (${g.id})`),
     );
+    
+    // If we still don't have enough games, supplement with high-rated games
+    if (sortedGames.length < limit) {
+      console.log(`⚠️ Only got ${sortedGames.length} popular games, supplementing with high-rated games`);
+      // Calculate offset for high-rated games (account for popular games already fetched)
+      const highRatedOffset = Math.max(0, offset - 50); // Assume ~50 popular games available
+      const additionalGames = await getHighRatedGames(limit - sortedGames.length, highRatedOffset);
+      return [...sortedGames.map(formatGameData), ...additionalGames];
+    }
 
     return sortedGames.map(formatGameData);
   } catch (error) {

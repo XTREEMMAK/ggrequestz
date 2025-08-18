@@ -36,6 +36,7 @@
   let showNewInLibrary = $state(true); // Show ROMM first
   let showNewReleases = $state(false); // Show second
   let showPopularGames = $state(false); // Show last
+  let progressiveLoadingComplete = $state(false); // Track if progressive loading is done
   let recentRequests = $derived(data?.recentRequests || []);
   let userWatchlist = $state(data?.userWatchlist || []);
   let rommAvailable = $derived(data?.rommAvailable || false);
@@ -440,11 +441,20 @@
       // Performance timing for load more operation
       const startTime = performance.now();
       
-      // Try to use preloaded data first
-      let data = popularGamesPreloader.getCached();
+      // Clear any stale cached data for the current page
+      const currentCacheKey = `popular-games-${popularPage + 1}`;
+      
+      // Try to use preloaded data first (only if it's for the right page)
+      let data = null;
+      const cachedData = popularGamesPreloader.getCached();
+      
+      // Verify cached data is for the correct page
+      if (cachedData && cachedData.page === popularPage + 1) {
+        data = cachedData;
+      }
       
       if (!data) {
-        // Fallback to manual fetch if no preloaded data
+        // Fallback to manual fetch if no valid preloaded data
         const response = await fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}`);
         if (response.ok) {
           data = await response.json();
@@ -464,6 +474,11 @@
           popularGames = updatedGames;
         });
         popularPage += 1;
+        
+        // Clear the cache for the page we just loaded to prevent stale data
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem(currentCacheKey);
+        }
       }
       
       // Log performance timing
@@ -585,21 +600,32 @@
   
   // Progressive loading to prevent image overload - ROMM first, then New Releases, then Popular
   onMount(() => {
-    if (browser && !isNavigatingBack) {
+    if (browser && !isNavigatingBack && !progressiveLoadingComplete) {
       // Only do progressive loading if not navigating back from cache
-      // Load New Releases after ROMM loads
-      setTimeout(() => {
-        if (!isNavigatingBack) { // Double-check in case cache was restored during timeout
+      // Use Promise-based approach to avoid race conditions
+      const progressiveLoad = async () => {
+        // Wait a bit for ROMM to render
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        if (!isNavigatingBack && !progressiveLoadingComplete) {
           showNewReleases = true;
         }
-      }, 800);
-      
-      // Load Popular Games last
-      setTimeout(() => {
-        if (!isNavigatingBack) { // Double-check in case cache was restored during timeout
+        
+        // Wait for New Releases to render
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        if (!isNavigatingBack && !progressiveLoadingComplete) {
           showPopularGames = true;
+          progressiveLoadingComplete = true;
         }
-      }, 1600);
+      };
+      
+      progressiveLoad().catch(console.error);
+    } else if (isNavigatingBack) {
+      // When navigating back, show all sections immediately
+      showNewReleases = true;
+      showPopularGames = true;
+      progressiveLoadingComplete = true;
     }
   });
   
@@ -719,7 +745,7 @@
   {:else}
     
     <!-- New in Library from ROMM -->
-{#if rommAvailable && newInLibrary.length > 0 && showNewInLibrary}
+{#if rommAvailable && showNewInLibrary}
   <section class="mb-10">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
       <div class="flex items-center gap-3">
@@ -753,67 +779,61 @@
       </div>
     </div>
 
-    {#if rommsExpanded}
-      <!-- Expanded vertical grid layout -->
-      <div 
-        class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4 transition-all duration-500 ease-out"
-        in:slide={{ duration: 500, easing: quintOut, axis: 'y' }}
-      >
-        {#each newInLibrary as game, index}
-          <div 
-            in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
-          >
-            <GameCard 
-              {game} 
-              {user}
-              isInWatchlist={isGameInWatchlist(game)}
-              enablePreloading={true}
-              on:request={handleGameRequest}
-              on:watchlist={handleWatchlist}
-              on:show-modal={handleShowModal}
-            />
-          </div>
-        {/each}
-      </div>
+    {#if newInLibrary.length > 0}
+      {#if rommsExpanded}
+        <!-- Expanded vertical grid layout -->
+        <div 
+          class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4 transition-all duration-500 ease-out"
+          in:slide={{ duration: 500, easing: quintOut, axis: 'y' }}
+        >
+          {#each newInLibrary as game, index}
+            <div 
+              in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
+            >
+              <GameCard 
+                {game} 
+                {user}
+                isInWatchlist={isGameInWatchlist(game)}
+                enablePreloading={true}
+                on:request={handleGameRequest}
+                on:watchlist={handleWatchlist}
+                on:show-modal={handleShowModal}
+              />
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <!-- Default horizontal scroll layout -->
+        <div 
+          class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[420px]" 
+          bind:this={rommsScroll}
+          in:slide={{ duration: 300, easing: quintOut }}
+        >
+          {#each newInLibrary as game, index}
+            <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
+              <GameCard 
+                {game} 
+                {user}
+                isInWatchlist={isGameInWatchlist(game)}
+                enablePreloading={true}
+                on:request={handleGameRequest}
+                on:watchlist={handleWatchlist}
+                on:show-modal={handleShowModal}
+              />
+            </div>
+          {/each}
+        </div>
+      {/if}
     {:else}
-      <!-- Default horizontal scroll layout -->
-      <div 
-        class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[420px]" 
-        bind:this={rommsScroll}
-        in:slide={{ duration: 300, easing: quintOut }}
-      >
-        {#each newInLibrary as game, index}
-          <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
-            <GameCard 
-              {game} 
-              {user}
-              isInWatchlist={isGameInWatchlist(game)}
-              enablePreloading={true}
-              on:request={handleGameRequest}
-              on:watchlist={handleWatchlist}
-              on:show-modal={handleShowModal}
-            />
-          </div>
+      <!-- Loading skeleton when no games yet -->
+      <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
+        {#each Array(8) as _, i}
+          <SkeletonLoader variant="card" rounded="lg" />
         {/each}
       </div>
     {/if}
 
     
-  </section>
-{:else if rommAvailable && newInLibrary.length === 0}
-  <!-- New in Library Skeleton -->
-  <section class="mb-10">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
-      <div class="flex items-center gap-3">
-        <h2 class="text-4xl font-bold text-white">New in Library</h2>
-        <span class="text-xs bg-green-600 text-white px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0">ROMM Library</span>
-      </div>
-    </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-      {#each Array(8) as _, i}
-        <SkeletonLoader variant="card" rounded="lg" />
-      {/each}
-    </div>
   </section>
 {/if}
 

@@ -5,7 +5,31 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.2] - 2025-01-18
+## [1.0.2] - 2025-08-18
+
+### Fixed
+
+- **Docker-Specific Issues**
+  - Fixed ROMM section not displaying on mobile first login
+  - Fixed Popular Games section returning "No popular games available" in Docker
+  - Fixed Load More button double-firing on mobile touch events
+  - Fixed Load More pagination for Popular Games (was only caching 8 games instead of 50)
+  - Added retry logic with exponential backoff for ROMM API requests
+  - Improved timeout handling for Docker container network latency
+  - Fixed progressive loading race conditions between sections
+  - Fixed cache corruption detection triggering incorrectly in Docker
+  - Added cache warming on Docker startup for faster initial loads
+  - Improved Redis connection handling with Docker-friendly settings
+
+### Improved
+
+- **Performance Optimizations**
+  - Load More buttons now fetch sufficient data for multiple pages
+  - Better cache management for paginated content
+  - Increased timeouts for Docker environments by 50%
+  - Debounced touch events to prevent double-triggering
+
+## [1.0.1] - 2025-08-15
 
 ### Added
 
@@ -24,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prefetcher service for predictive data loading
   - Performance metrics collection system
   - Bundle optimization with dynamic imports
+  - Hover preloading for instant navigation (200ms+ improvement)
+  - Server-side cache warming on startup
+  - Progressive data loading with prioritization
+  - Custom hover preloading for Load More buttons
+  - Session-based preload caching
+  - Smart timeout protection with graceful fallbacks
 
 - **Enhanced API Endpoints**
   - Individual game API endpoint (/api/games/[id]) with caching
@@ -44,6 +74,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Developer notes and troubleshooting guides
   - Consolidated and organized project files for better maintainability
 
+- **Authentication Enhancements**
+  - Generic OIDC provider support (not Authentik-specific)
+  - Support for Keycloak, Auth0, Okta, Azure AD
+  - Provider registry system with lazy loading
+  - Basic auth with bcrypt password hashing
+
 ### Improved
 
 - **UI/UX Enhancements**
@@ -53,19 +89,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved visual feedback throughout the application
   - Fixed homepage state persistence for load more functionality
   - Resolved back navigation state issues after page refresh
-  - Fixed Popular Games section not loading in Docker environments
+  - Enhanced SkeletonLoader component with improved dark theme colors
+  - Changed skeleton placeholder colors from light gray to darker gray for better contrast
 
 - **Performance Optimizations**
   - Reduced bundle size through lazy loading and code splitting
   - Optimized image loading with proxy caching
   - Better memory management with modular architecture
   - Reduced server load through client-side optimizations
+  - Converted GameCard components to use direct links for native preloading
+  - Optimized homepage data fetching with parallel loading
+  - Improved error handling with timeout protection
 
 - **Code Quality & Architecture**
   - Better separation of concerns between client and server code
   - Improved error handling and resilience
   - Enhanced type safety and validation
   - More maintainable and scalable codebase structure
+  - Updated hooks for proper header mutability
 
 ### Technical Improvements
 
@@ -93,6 +134,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enhanced authentication flow separation
   - Better session management and token handling
   - Improved CSRF protection and validation
+
+### Fixed
+
+- Search input focus loss issues
+- Headers immutability errors in hooks.server.js
+- Missing variable references in preloaders
+- ROMM cross-reference API errors
 
 ### Refactored & Removed
 
@@ -125,46 +173,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed unused utility modules (lib/index.js)
   - Better module boundaries and cleaner imports
 
-## [1.0.0] - 2025-01-13
+## [1.0.0] - 2025-08-11
 
 ### Added
 
-- **Performance Optimizations**
-  - Hover preloading for instant navigation (200ms+ improvement)
-  - Server-side cache warming on startup
-  - Progressive data loading with prioritization
-  - Custom hover preloading for Load More buttons
-  - Session-based preload caching
-  - Smart timeout protection with graceful fallbacks
-
-- **UI/UX Improvements**
-  - Enhanced SkeletonLoader component with improved dark theme colors
-  - Changed skeleton placeholder colors from light gray to darker gray for better contrast
-
-- **Authentication Enhancements**
-  - Generic OIDC provider support (not Authentik-specific)
-  - Support for Keycloak, Auth0, Okta, Azure AD
-  - Provider registry system with lazy loading
-  - Basic auth with bcrypt password hashing
-
-### Changed
-
-- Converted GameCard components to use direct links for native preloading
-- Optimized homepage data fetching with parallel loading
-- Improved error handling with timeout protection
-- Updated hooks for proper header mutability
-
-### Fixed
-
-- Search input focus loss issues
-- Headers immutability errors in hooks.server.js
-- Missing variable references in preloaders
-- ROMM cross-reference API errors
-
-## [0.9.0] - 2024-12-15
-
-### Added
-
+- Initial release of GG Requestz
+- SvelteKit 5 application framework
+- Authentik OIDC authentication support
+- Basic authentication with admin user creation
+- IGDB API integration for game data
+- Advanced search with Typesense integration
+- Redis caching with memory fallback
+- PostgreSQL database with connection pooling
+- Game request management system
+- User role and permission system
+- Admin panel for user and request management
+- ROMM library integration for game collections
+- Gotify notification support
+- n8n webhook automation
+- Responsive design with Tailwind CSS
+- Dark mode support
+- PWA capabilities
+- Docker containerization
+- PM2 process management
+- Comprehensive API endpoints
+- Real-time search with autocomplete
+- Personal watchlists and favorites
+- Request status tracking
+- Priority-based request handling
+- Multi-platform game support
+- Cache optimization for performance
+- Health check endpoints
+- Logging and monitoring capabilities
 - Multi-page first-run setup wizard with system checks
 - Welcome page with feature overview and IGDB backgrounds
 - System connectivity checks for database, Redis, IGDB API, and ROMM
@@ -204,39 +244,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Protection against common web vulnerabilities
 - Safe database migration execution with rollback support
 
-## [1.0.0] - 2024-12-XX
-
-### Added
-
-- Initial release of GameRequest
-- SvelteKit 5 application framework
-- Authentik OIDC authentication support
-- Basic authentication with admin user creation
-- IGDB API integration for game data
-- Advanced search with Typesense integration
-- Redis caching with memory fallback
-- PostgreSQL database with connection pooling
-- Game request management system
-- User role and permission system
-- Admin panel for user and request management
-- ROMM library integration for game collections
-- Gotify notification support
-- n8n webhook automation
-- Responsive design with Tailwind CSS
-- Dark mode support
-- PWA capabilities
-- Docker containerization
-- PM2 process management
-- Comprehensive API endpoints
-- Real-time search with autocomplete
-- Personal watchlists and favorites
-- Request status tracking
-- Priority-based request handling
-- Multi-platform game support
-- Cache optimization for performance
-- Health check endpoints
-- Logging and monitoring capabilities
-
 ### Technical Details
 
 - Node.js 18+ requirement
@@ -250,14 +257,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- **v1.0.0**: Initial stable release with core functionality
+- **v1.0.0** (2025-08-11): Initial stable release with core functionality
+- **v1.0.1** (2025-08-15): Major performance improvements and project reorganization
+- **v1.0.2** (2025-08-18): Docker-specific fixes and mobile improvements
 - **v1.1.0** (Planned): Advanced user integrations and API enhancements
 - **v1.2.0** (Planned): Enhanced admin features and analytics
 - **v2.0.0** (Planned): Major UI/UX improvements and new integrations
 
 ## Migration Guides
 
-### Upgrading to v1.1.0
+### Upgrading to v1.0.2
+
+When upgrading from v1.0.1:
+
+1. Docker users should rebuild containers for improved performance
+2. Clear Redis cache after upgrade for best results
+3. Mobile users will experience better touch interaction
+
+### Upgrading to v1.0.1
 
 When upgrading from v1.0.0:
 
@@ -284,12 +301,12 @@ For Docker deployments:
 
 ## Acknowledgments
 
-Special thanks to all contributors who have helped make GameRequest possible:
+Special thanks to all contributors who have helped make GG Requestz possible:
 
 - Core development team
 - Community contributors
 - Beta testers and feedback providers
-- Open source projects that make GameRequest possible:
+- Open source projects that make GG Requestz possible:
   - SvelteKit and the Svelte ecosystem
   - PostgreSQL database
   - Redis caching

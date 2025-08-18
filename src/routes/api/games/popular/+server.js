@@ -5,7 +5,7 @@
 import { json, error } from "@sveltejs/kit";
 import { getPopularGames } from "$lib/igdb.js";
 import { isRommAvailable, crossReferenceWithROMM } from "$lib/romm.server.js";
-import { cachePopularGames, invalidateCache } from "$lib/cache.js";
+import { cachePopularGames, invalidateCache, withCache } from "$lib/cache.js";
 
 export async function GET({ url }) {
   try {
@@ -20,7 +20,7 @@ export async function GET({ url }) {
     // Check if ROMM is available for cross-referencing
     const rommAvailable = await isRommAvailable();
 
-    // Force cache refresh if we detect corrupted cache (< 20 games)
+    // Force cache refresh if explicitly requested
     const forceRefresh = searchParams.get("refresh") === "true";
 
     if (forceRefresh) {
@@ -28,24 +28,24 @@ export async function GET({ url }) {
       await invalidateCache("popular-games");
     }
 
-    // Get popular games with optional cache bypass
+    // Simple approach: fetch more games dynamically without complex cache expansion
     let allGames;
-    allGames = await cachePopularGames(async () => {
-      console.log("🔄 Fetching fresh popular games from IGDB...");
-      const freshGames = await getPopularGames(50, 0); // Get more for pagination
-      console.log(
-        "📊 First 3 popular games:",
-        freshGames.slice(0, 3).map((g) => g.title),
-      );
-      return freshGames;
-    });
+    
+    // For the first few pages, use cached popular games
+    // But if we need more games than cache has, fetch directly
+    if (page <= 3 && offset + limit <= 50) {
+      allGames = await cachePopularGames(() => getPopularGames(50, 0));
+    } else {
+      // For higher pages, fetch directly from IGDB starting from offset
+      console.log(`🔄 Fetching page ${page} directly from IGDB with offset ${offset}`);
+      allGames = await getPopularGames(limit, offset);
+    }
 
-    // If we get too few games, the cache might be corrupted - refresh it
-    if (allGames.length < 20 && !forceRefresh) {
+    // Only refresh cache if we get 0 games (actual error), not just fewer than expected
+    // Docker environments may have different cache states
+    if (allGames.length === 0 && !forceRefresh) {
       console.log(
-        "⚠️ Cache appears corrupted (only",
-        allGames.length,
-        "games), refreshing...",
+        "⚠️ No games in cache, attempting refresh...",
       );
       await invalidateCache("popular-games");
       allGames = await cachePopularGames(async () => {
@@ -65,24 +65,40 @@ export async function GET({ url }) {
       allGames.slice(0, 3).map((g) => g.title),
     );
 
-    // Apply pagination to cached results
-    let games = allGames.slice(offset, offset + limit);
-    console.log(
-      `📊 Page ${page} (offset ${offset}, limit ${limit}):`,
-      games.map((g) => g.title),
-    );
+    // Apply pagination based on approach
+    let games;
+    if (page <= 3 && offset + limit <= 50) {
+      // Use normal pagination for cached results
+      games = allGames.slice(offset, offset + limit);
+      console.log(
+        `📊 Page ${page} (offset ${offset}, limit ${limit}) from cache:`,
+        games.map((g) => g.title),
+      );
+    } else {
+      // For higher pages, we fetched exactly what we need
+      games = allGames;
+      console.log(
+        `📊 Page ${page} direct fetch (${games.length} games):`,
+        games.map((g) => g.title),
+      );
+    }
 
     // Cross-reference with ROMM if available
     if (rommAvailable && games.length > 0) {
       games = await crossReferenceWithROMM(games);
     }
 
+    // Simple hasMore logic: if we got exactly what we asked for, there might be more
+    const hasMore = games.length === limit;
+    
+    console.log(`📊 hasMore logic: games=${games.length}, limit=${limit}, hasMore=${hasMore}`);
+
     return json({
       success: true,
       games,
       page,
       limit,
-      hasMore: offset + limit < allGames.length,
+      hasMore,
     });
   } catch (err) {
     console.error("Popular games API error:", err);

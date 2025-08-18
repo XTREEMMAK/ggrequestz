@@ -353,7 +353,7 @@
         class="platform-icon-wrapper {showLinks && platformData.url ? 'cursor-pointer' : 'cursor-default'}" 
         title="{platformData.name}{showLinks && platformData.url ? ' - Click to open store' : ''}"
         role={showLinks && platformData.url ? 'button' : 'img'}
-        tabindex={showLinks && platformData.url ? 0 : undefined}
+        tabindex={showLinks && platformData.url ? 0 : null}
         aria-label="{platformData.name}{showLinks && platformData.url ? ' store link' : ''}"
         onclick={(e) => handlePlatformClick(platformData, e)}
         onkeydown={(e) => {

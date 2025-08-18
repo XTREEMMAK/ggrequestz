@@ -90,19 +90,24 @@ async function authenticateROMM() {
 }
 
 /**
- * Make authenticated request to ROMM API using Bearer token
+ * Make authenticated request to ROMM API using Bearer token with retry logic
  * @param {string} endpoint - API endpoint (without /api prefix)
  * @param {Object} options - Fetch options
  * @param {string} cookies - Optional cookies to forward (for same-domain auth)
+ * @param {number} retryCount - Number of retries attempted (internal)
  * @returns {Promise<Object>} - API response
  */
-async function rommRequest(endpoint, options = {}, cookies = null) {
+async function rommRequest(endpoint, options = {}, cookies = null, retryCount = 0) {
   await loadEnvironmentVariables();
   
   if (!ROMM_SERVER_URL) {
     throw new Error("ROMM server URL not configured");
   }
 
+  const maxRetries = 3;
+  const isDocker = process.env.NODE_ENV === "production";
+  const baseTimeout = isDocker ? 5000 : 3000; // Higher timeout in Docker
+  
   let headers = {
     accept: "application/json",
     ...options.headers,
@@ -126,44 +131,72 @@ async function rommRequest(endpoint, options = {}, cookies = null) {
   const fetchOptions = {
     ...options,
     headers,
+    // Add timeout using AbortController
+    signal: AbortSignal.timeout(baseTimeout * (retryCount + 1)),
   };
 
-  const response = await fetch(
-    `${ROMM_SERVER_URL}/api${endpoint}`,
-    fetchOptions,
-  );
+  try {
+    const response = await fetch(
+      `${ROMM_SERVER_URL}/api${endpoint}`,
+      fetchOptions,
+    );
 
-  // Handle authentication issues with simple retry
-  if (response.status === 401) {
-    // Clear existing token and try to re-authenticate once
-    sessionToken = null;
-    sessionToken = await authenticateROMM();
+    // Handle authentication issues with simple retry
+    if (response.status === 401) {
+      // Clear existing token and try to re-authenticate once
+      sessionToken = null;
+      sessionToken = await authenticateROMM();
 
-    if (sessionToken) {
-      // Retry the request with new token
-      headers["Authorization"] = `Bearer ${sessionToken}`;
-      const retryResponse = await fetch(`${ROMM_SERVER_URL}/api${endpoint}`, {
-        ...fetchOptions,
-        headers,
-      });
+      if (sessionToken) {
+        // Retry the request with new token
+        headers["Authorization"] = `Bearer ${sessionToken}`;
+        const retryResponse = await fetch(`${ROMM_SERVER_URL}/api${endpoint}`, {
+          ...fetchOptions,
+          headers,
+        });
 
-      if (retryResponse.ok) {
-        return await retryResponse.json();
+        if (retryResponse.ok) {
+          return await retryResponse.json();
+        }
       }
     }
-  }
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "Unknown error");
-    console.error(
-      `ROMM API error: ${response.status} ${response.statusText} - ${errorText}`,
-    );
-    throw new Error(
-      `ROMM API error: ${response.status} ${response.statusText} - ${errorText}`,
-    );
-  }
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      
+      // Retry on 5xx errors or network issues
+      if (response.status >= 500 && retryCount < maxRetries) {
+        console.warn(
+          `ROMM API error (attempt ${retryCount + 1}/${maxRetries}): ${response.status}`,
+        );
+        // Exponential backoff
+        await delay(1000 * Math.pow(2, retryCount));
+        return rommRequest(endpoint, options, cookies, retryCount + 1);
+      }
+      
+      console.error(
+        `ROMM API error: ${response.status} ${response.statusText} - ${errorText}`,
+      );
+      throw new Error(
+        `ROMM API error: ${response.status} ${response.statusText} - ${errorText}`,
+      );
+    }
 
-  return await response.json();
+    return await response.json();
+  } catch (error) {
+    // Handle timeout and network errors with retry
+    if (error.name === 'AbortError' || error.message.includes('fetch')) {
+      if (retryCount < maxRetries) {
+        console.warn(
+          `ROMM request timeout/network error (attempt ${retryCount + 1}/${maxRetries})`,
+        );
+        // Exponential backoff
+        await delay(1000 * Math.pow(2, retryCount));
+        return rommRequest(endpoint, options, cookies, retryCount + 1);
+      }
+    }
+    throw error;
+  }
 }
 
 /**

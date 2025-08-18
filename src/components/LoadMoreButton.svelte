@@ -16,26 +16,25 @@
   
   const dispatch = createEventDispatcher();
   
-  let touchHandled = false;
+  let lastEventTime = 0;
+  const debounceTime = 300; // Prevent double events within 300ms
   
   function handleClick(event) {
-    // Prevent double-firing on touch devices
-    if (event.type === 'click' && touchHandled) {
-      touchHandled = false;
-      return;
-    }
-    
+    // Prevent processing if loading or disabled
     if (loading || disabled) {
       event.preventDefault();
       return;
     }
     
-    if (event.type === 'touchstart') {
-      touchHandled = true;
-      // Reset after a delay to allow for normal click handling if needed
-      setTimeout(() => { touchHandled = false; }, 500);
+    // Debounce to prevent double-firing on mobile
+    const currentTime = Date.now();
+    if (currentTime - lastEventTime < debounceTime) {
+      event.preventDefault();
+      return;
     }
+    lastEventTime = currentTime;
     
+    // Dispatch the load event
     dispatch('load');
   }
   
@@ -55,7 +54,6 @@
 <button
   class="bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-white font-medium py-2 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation {className}"
   onclick={handleClick}
-  ontouchstart={handleClick}
   onmouseenter={handleMouseEnter}
   onmouseleave={handleMouseLeave}
   {disabled}

@@ -19,6 +19,7 @@ import {
   cacheRommGames,
   cacheGameRequests,
   withCache,
+  getCacheStats,
 } from "$lib/cache.js";
 import { safeAsync, withTimeout } from "$lib/utils.js";
 
@@ -38,8 +39,9 @@ export async function load({ parent, cookies, url }) {
   }
 
   try {
-    if (process.env.NODE_ENV === "development") {
-    }
+    // Detect Docker environment
+    const isDocker = process.env.NODE_ENV === "production";
+    const timeoutMultiplier = isDocker ? 1.5 : 1; // Increase timeouts by 50% in Docker
 
     // Get cookies for ROMM authentication
     const cookieHeader = cookies.get("session")
@@ -54,13 +56,13 @@ export async function load({ parent, cookies, url }) {
           () =>
             withTimeout(
               isRommAvailable(cookieHeader),
-              1500, // Reduced from 3000ms
+              1500 * timeoutMultiplier,
               "ROMM availability check timed out",
             ),
-          5 * 60 * 1000, // 5 minutes cache (increased from 2 minutes)
+          5 * 60 * 1000, // 5 minutes cache
         ),
       {
-        timeout: 2000, // Reduced from 4000ms
+        timeout: 2000 * timeoutMultiplier,
         fallback: false,
         errorContext: "ROMM availability check",
       },
@@ -69,29 +71,28 @@ export async function load({ parent, cookies, url }) {
     // Prioritize critical data first - load games without ROMM cross-reference for speed
     const criticalDataPromise = Promise.all([
       // Get new releases from IGDB (fast, no ROMM cross-reference yet)
-      safeAsync(() => cacheRecentGames(() => getRecentGames(8)), {
-        timeout: 3000, // Reduced from 8000ms
+      safeAsync(async () => {
+        // Fetch enough games for pagination (at least 50 for multiple pages)
+        const allGames = await cacheRecentGames(() => getRecentGames(50));
+        // Return only first 8 for initial display
+        return allGames.slice(0, 8);
+      }, {
+        timeout: 3000 * timeoutMultiplier,
         fallback: [],
         errorContext: "Recent games loading",
       }),
 
       // Get popular games from IGDB (fast, no ROMM cross-reference yet)
-      safeAsync(async () => {
-        try {
-          return await cachePopularGames(() => getPopularGames(8));
-        } catch (error) {
-          console.error("❌ Popular games loading failed:", error);
-          throw error;
-        }
-      }, {
-        timeout: 3000, // Reduced from 8000ms
+      // Let the API endpoint handle caching - just fetch initial 8 games for display
+      safeAsync(() => getPopularGames(8), {
+        timeout: 3000 * timeoutMultiplier,
         fallback: [],
         errorContext: "Popular games loading"
       }),
 
       // Get recent game requests (with caching)
       safeAsync(() => cacheGameRequests(() => gameRequests.getRecent(6)), {
-        timeout: 2000, // Reduced from 5000ms
+        timeout: 2000 * timeoutMultiplier,
         fallback: [],
         errorContext: "Recent requests loading",
       }),
@@ -122,7 +123,7 @@ export async function load({ parent, cookies, url }) {
 
           return watchlist.get(userId);
         },
-        { timeout: 1500, fallback: [], errorContext: "User watchlist loading" }, // Reduced timeout
+        { timeout: 1500 * timeoutMultiplier, fallback: [], errorContext: "User watchlist loading" },
       ),
     ]);
 
@@ -137,7 +138,7 @@ export async function load({ parent, cookies, url }) {
                 0,
               ),
             {
-              timeout: 4000, // Reduced from 10000ms
+              timeout: 4000 * timeoutMultiplier,
               fallback: [],
               errorContext: "ROMM library loading",
             },
