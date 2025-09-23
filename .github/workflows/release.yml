@@ -54,6 +54,13 @@ jobs:
           echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Delete existing release if exists
+        continue-on-error: true
+        run: |
+          gh release delete ${{ steps.version.outputs.version }} --yes || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create GitHub Release
         id: create-release
         uses: actions/create-release@v1

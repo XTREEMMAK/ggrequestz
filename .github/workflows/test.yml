@@ -89,7 +89,7 @@ jobs:
       - name: Clear database and run migrations
         run: |
           # Clear any existing data and reset migrations
-          PGPASSWORD=test_password psql -h localhost -U postgres -d ggrequestz_test -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+          PGPASSWORD=test_password psql -h localhost -U postgres -d ggrequestz_test -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres; GRANT ALL ON SCHEMA public TO public;"
           # Run migrations with environment variables
           node scripts/database/db-manager.js migrate
         env:
