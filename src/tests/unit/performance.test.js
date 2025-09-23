@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  ResourcePrefetcher,
-  PerformanceMetrics,
-  ImageOptimizer,
-  BundleOptimizer,
-} from "$lib/performance.js";
+import { ResourcePrefetcher } from "$lib/performance/prefetcher.js";
+import { PerformanceMetrics } from "$lib/performance/metrics.js";
+import { ImageOptimizer, BundleOptimizer } from "$lib/performance/imageOptimizer.js";
 
 describe("Performance Utilities", () => {
   describe("ResourcePrefetcher", () => {

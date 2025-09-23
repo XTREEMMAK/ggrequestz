@@ -59,6 +59,20 @@ export class ImageOptimizer {
   static optimizeImage(url) {
     if (!url) return {};
 
+    const isIGDB = url.includes('images.igdb.com');
+
+    if (isIGDB) {
+      // Generate responsive srcset for IGDB images with WebP
+      const srcSet = this.generateSrcSet(url).replace(/t_cover_big/g, 't_cover_big,f_webp');
+
+      return {
+        src: url.replace('t_cover_big', 't_cover_big,f_webp'),
+        srcSet,
+        loading: "lazy",
+        decoding: "async",
+      };
+    }
+
     return {
       src: url,
       loading: "lazy",

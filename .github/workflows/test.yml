@@ -41,6 +41,21 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ggrequestz_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,11 +72,30 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
+      - name: Setup test environment
+        run: |
+          cp .env.example .env
+          echo "POSTGRES_HOST=localhost" >> .env
+          echo "POSTGRES_PORT=5432" >> .env
+          echo "POSTGRES_DB=ggrequestz_test" >> .env
+          echo "POSTGRES_USER=postgres" >> .env
+          echo "POSTGRES_PASSWORD=test_password" >> .env
+          echo "SESSION_SECRET=test_session_secret_for_github_actions_32_chars" >> .env
+          echo "IGDB_CLIENT_ID=test_client_id" >> .env
+          echo "IGDB_CLIENT_SECRET=test_client_secret" >> .env
+          echo "AUTH_METHOD=basic" >> .env
+          echo "NODE_ENV=test" >> .env
+
+      - name: Run database migrations
+        run: npm run db:migrate
+
       - name: Build application
         run: npm run build
 
       - name: Run E2E tests
         run: npm run test:e2e
+        env:
+          CI: true
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
