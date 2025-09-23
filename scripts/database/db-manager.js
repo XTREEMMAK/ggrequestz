@@ -262,7 +262,7 @@ async function runMigrations() {
         // Record migration
         const executionTime = Date.now() - startTime;
         await client.query(
-          `INSERT INTO ${CONFIG.migrationTable} (migration_name, checksum, execution_time, success) VALUES ($1, $2, $3, $4)`,
+          `INSERT INTO ${CONFIG.migrationTable} (migration_name, checksum, execution_time, success) VALUES ($1, $2, $3, $4) ON CONFLICT (migration_name) DO NOTHING`,
           [file, checksum, executionTime, true],
         );
 
