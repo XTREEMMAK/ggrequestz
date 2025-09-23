@@ -87,7 +87,13 @@ jobs:
           echo "NODE_ENV=test" >> .env
 
       - name: Run database migrations
-        run: npm run db:migrate
+        run: node scripts/database/db-manager.js migrate
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: ggrequestz_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
 
       - name: Build application
         run: npm run build
