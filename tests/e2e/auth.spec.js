@@ -6,31 +6,45 @@ test.describe("Authentication Flow", () => {
   }) => {
     await page.goto("/");
 
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/login/);
+    // Should redirect to login or setup (if first time)
+    await expect(page).toHaveURL(/\/(login|setup)/);
 
-    // Check login page elements
-    await expect(page.getByText(/login/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /login/i })).toBeVisible();
+    // If on setup page, should have setup elements
+    if (page.url().includes("/setup")) {
+      await expect(page.getByText(/setup/i).first()).toBeVisible();
+    } else {
+      // Check login page elements
+      await expect(page.getByText(/login/i)).toBeVisible();
+      await expect(page.getByRole("button", { name: /login/i })).toBeVisible();
+    }
   });
 
   test("should show appropriate login options", async ({ page }) => {
     await page.goto("/login");
 
-    // Should show login form or OAuth options
-    // This will depend on your auth configuration
-    const loginButton = page.getByRole("button", { name: /login/i });
-    await expect(loginButton).toBeVisible();
+    // May redirect to setup if first time
+    if (page.url().includes("/setup")) {
+      await expect(page.getByText(/setup/i).first()).toBeVisible();
+    } else {
+      // Should show login form or OAuth options
+      const loginButton = page.getByRole("button", { name: /login/i });
+      await expect(loginButton).toBeVisible();
+    }
   });
 
   test("should handle navigation between auth pages", async ({ page }) => {
     await page.goto("/login");
 
-    // Test navigation works
-    await expect(page.getByText("GG.Requestz")).toBeVisible();
+    // May redirect to setup if first time
+    if (page.url().includes("/setup")) {
+      await expect(page.getByText(/setup/i).first()).toBeVisible();
+    } else {
+      // Test navigation works
+      await expect(page.getByText("GG.Requestz")).toBeVisible();
 
-    // Click on logo should stay on login or go to a safe page
-    await page.getByText("GG.Requestz").click();
+      // Click on logo should stay on login or go to a safe page
+      await page.getByText("GG.Requestz").click();
+    }
 
     // Should not crash or show errors
     await expect(page.locator("body")).toBeVisible();
@@ -44,8 +58,8 @@ test.describe("Authentication Flow", () => {
     const currentUrl = page.url();
 
     if (currentUrl.includes("/setup")) {
-      // Setup page should have form elements
-      await expect(page.getByText(/setup/i)).toBeVisible();
+      // Setup page should have form elements (use first() to avoid strict mode)
+      await expect(page.getByText(/setup/i).first()).toBeVisible();
     } else {
       // Should redirect to appropriate page
       expect(currentUrl).toMatch(/\/(login|$)/);
@@ -57,15 +71,15 @@ test.describe("Authentication Security", () => {
   test("should protect admin routes", async ({ page }) => {
     await page.goto("/admin");
 
-    // Should redirect to login or show access denied
-    await expect(page).toHaveURL(/\/login/);
+    // Should redirect to login or setup (if first time)
+    await expect(page).toHaveURL(/\/(login|setup)/);
   });
 
   test("should protect user-specific routes", async ({ page }) => {
     await page.goto("/profile");
 
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/login/);
+    // Should redirect to login or setup (if first time)
+    await expect(page).toHaveURL(/\/(login|setup)/);
   });
 
   test("should protect API routes", async ({ page }) => {
