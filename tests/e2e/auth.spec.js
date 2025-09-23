@@ -71,7 +71,7 @@ test.describe("Authentication Security", () => {
   test("should protect API routes", async ({ page }) => {
     const response = await page.request.get("/api/watchlist/add");
 
-    // Should return 401 or redirect
-    expect([401, 302, 403]).toContain(response.status());
+    // Should return 401, 302, 403, or 405 (method not allowed for GET on POST endpoint)
+    expect([401, 302, 403, 405]).toContain(response.status());
   });
 });

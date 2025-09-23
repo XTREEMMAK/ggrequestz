@@ -18,7 +18,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: "http://127.0.0.1:5174",
+    baseURL: process.env.CI ? "http://127.0.0.1:4173" : "http://127.0.0.1:5174",
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: "on-first-retry",
@@ -57,8 +57,20 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: "npm run dev",
-    port: 5174,
+    command: process.env.CI ? "npm run preview" : "npm run dev",
+    port: process.env.CI ? 4173 : 5174,
     reuseExistingServer: !process.env.CI,
+    env: process.env.CI ? {
+      POSTGRES_HOST: "localhost",
+      POSTGRES_PORT: "5432",
+      POSTGRES_DB: "ggrequestz_test",
+      POSTGRES_USER: "postgres",
+      POSTGRES_PASSWORD: "test_password",
+      SESSION_SECRET: "test_session_secret_for_github_actions_32_chars",
+      IGDB_CLIENT_ID: "test_client_id",
+      IGDB_CLIENT_SECRET: "test_client_secret",
+      AUTH_METHOD: "basic",
+      NODE_ENV: "test"
+    } : {},
   },
 });
