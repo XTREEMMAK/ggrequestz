@@ -86,8 +86,12 @@ jobs:
           echo "AUTH_METHOD=basic" >> .env
           echo "NODE_ENV=test" >> .env
 
-      - name: Run database migrations
-        run: node scripts/database/db-manager.js migrate
+      - name: Clear database and run migrations
+        run: |
+          # Clear any existing data and reset migrations
+          PGPASSWORD=test_password psql -h localhost -U postgres -d ggrequestz_test -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+          # Run migrations with environment variables
+          node scripts/database/db-manager.js migrate
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
