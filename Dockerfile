@@ -33,37 +33,38 @@ RUN npm install -g pm2
 WORKDIR /app
 
 # Create non-root user with configurable IDs
-RUN addgroup -g ${PGID} -S ggrequestz && \
-    adduser -S -u ${PUID} -G ggrequestz ggrequestz
+# If the group/user already exists, reuse them
+RUN (getent group ${PGID} || addgroup -g ${PGID} -S ggrequestz) && \
+    (getent passwd ${PUID} || adduser -S -u ${PUID} -G ggrequestz ggrequestz)
 
 # Copy package files and install production dependencies
 COPY package*.json ./
 RUN npm ci --only=production --silent && npm cache clean --force
 
 # Copy built application from builder stage
-COPY --from=builder --chown=ggrequestz:ggrequestz /app/build ./build
-COPY --from=builder --chown=ggrequestz:ggrequestz /app/static ./static
-COPY --from=builder --chown=ggrequestz:ggrequestz /app/package.json ./
+COPY --from=builder --chown=${PUID}:${PGID} /app/build ./build
+COPY --from=builder --chown=${PUID}:${PGID} /app/static ./static
+COPY --from=builder --chown=${PUID}:${PGID} /app/package.json ./
 
 # Copy PM2 ecosystem configuration
-COPY --chown=ggrequestz:ggrequestz ecosystem.config.cjs ./
+COPY --chown=${PUID}:${PGID} ecosystem.config.cjs ./
 
 # Copy database scripts and migrations
-COPY --chown=ggrequestz:ggrequestz scripts/ ./scripts/
-COPY --chown=ggrequestz:ggrequestz migrations/ ./migrations/
+COPY --chown=${PUID}:${PGID} scripts/ ./scripts/
+COPY --chown=${PUID}:${PGID} migrations/ ./migrations/
 
 # Copy src directory for database utilities (needed by Docker entrypoint)
-COPY --from=builder --chown=ggrequestz:ggrequestz /app/src ./src
+COPY --from=builder --chown=${PUID}:${PGID} /app/src ./src
 
 # Create logs directory with proper permissions
-RUN mkdir -p /app/logs && chown -R ggrequestz:ggrequestz /app/logs
+RUN mkdir -p /app/logs && chown -R ${PUID}:${PGID} /app/logs
 
 # Set proper permissions for scripts
 RUN chmod +x scripts/database/db-manager.js
 RUN chmod +x scripts/deployment/docker-entrypoint.js
 
 # Switch to non-root user
-USER ggrequestz
+USER ${PUID}
 
 # Expose port
 EXPOSE 3000
