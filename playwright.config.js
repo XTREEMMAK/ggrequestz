@@ -60,17 +60,19 @@ export default defineConfig({
     command: process.env.CI ? "npm run preview" : "npm run dev",
     port: process.env.CI ? 4173 : 5174,
     reuseExistingServer: !process.env.CI,
-    env: process.env.CI ? {
-      POSTGRES_HOST: "localhost",
-      POSTGRES_PORT: "5432",
-      POSTGRES_DB: "ggrequestz_test",
-      POSTGRES_USER: "postgres",
-      POSTGRES_PASSWORD: "test_password",
-      SESSION_SECRET: "test_session_secret_for_github_actions_32_chars",
-      IGDB_CLIENT_ID: "test_client_id",
-      IGDB_CLIENT_SECRET: "test_client_secret",
-      AUTH_METHOD: "basic",
-      NODE_ENV: "test"
-    } : {},
+    env: process.env.CI
+      ? {
+          POSTGRES_HOST: "localhost",
+          POSTGRES_PORT: "5432",
+          POSTGRES_DB: "ggrequestz_test",
+          POSTGRES_USER: "postgres",
+          POSTGRES_PASSWORD: "test_password",
+          SESSION_SECRET: "test_session_secret_for_github_actions_32_chars",
+          IGDB_CLIENT_ID: "test_client_id",
+          IGDB_CLIENT_SECRET: "test_client_secret",
+          AUTH_METHOD: "basic",
+          NODE_ENV: "test",
+        }
+      : {},
   },
 });
