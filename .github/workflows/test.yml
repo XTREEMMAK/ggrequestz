@@ -90,8 +90,12 @@ jobs:
         run: |
           # Clear any existing data and reset migrations
           PGPASSWORD=test_password psql -h localhost -U postgres -d ggrequestz_test -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres; GRANT ALL ON SCHEMA public TO public;"
+          # Remove .env file temporarily to prevent dotenv override
+          mv .env .env.backup || true
           # Run migrations with environment variables
           node scripts/database/db-manager.js migrate
+          # Restore .env file
+          mv .env.backup .env || true
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
