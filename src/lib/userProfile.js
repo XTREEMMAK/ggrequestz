@@ -177,11 +177,34 @@ async function assignRolesFromAuthentikGroups(userId, authentikGroups) {
  */
 export async function getUserPermissions(userId) {
   try {
+    // First check if user is an admin
+    const adminCheck = await query(
+      "SELECT is_admin FROM ggr_users WHERE id = $1 AND is_admin = TRUE AND is_active = TRUE",
+      [userId]
+    );
+
+    if (adminCheck.rows.length > 0) {
+      // Admins have all permissions - return all available permissions
+      const allPermsResult = await query(
+        "SELECT name as permission_name FROM ggr_permissions WHERE is_active = TRUE"
+      );
+      return allPermsResult.rows.map((row) => row.permission_name);
+    }
+
+    // Get permissions through role assignments
     const result = await query(
       `
-      SELECT DISTINCT permission_name as permission_name
-  FROM ggr_user_permissions
-  WHERE user_id = $1
+      SELECT DISTINCT p.name as permission_name
+      FROM ggr_users u
+      JOIN ggr_user_roles ur ON u.id = ur.user_id
+      JOIN ggr_roles r ON ur.role_id = r.id
+      JOIN ggr_role_permissions rp ON r.id = rp.role_id
+      JOIN ggr_permissions p ON rp.permission_id = p.id
+      WHERE u.id = $1
+        AND u.is_active = TRUE
+        AND ur.is_active = TRUE
+        AND r.is_active = TRUE
+        AND p.is_active = TRUE
     `,
       [userId],
     );
@@ -201,10 +224,30 @@ export async function getUserPermissions(userId) {
  */
 export async function userHasPermission(userId, permissionName) {
   try {
+    // First check if user is an admin (admins have all permissions)
+    const adminCheck = await query(
+      "SELECT is_admin FROM ggr_users WHERE id = $1 AND is_admin = TRUE AND is_active = TRUE",
+      [userId]
+    );
+
+    if (adminCheck.rows.length > 0) {
+      return true; // Admins have all permissions
+    }
+
+    // If not admin, check specific permission through role assignments
     const result = await query(
       `
-      SELECT 1 FROM ggr_user_permissions up
-      WHERE up.user_id = $1 AND up.permission_name = $2
+      SELECT 1 FROM ggr_users u
+      JOIN ggr_user_roles ur ON u.id = ur.user_id
+      JOIN ggr_roles r ON ur.role_id = r.id
+      JOIN ggr_role_permissions rp ON r.id = rp.role_id
+      JOIN ggr_permissions p ON rp.permission_id = p.id
+      WHERE u.id = $1
+        AND u.is_active = TRUE
+        AND ur.is_active = TRUE
+        AND r.is_active = TRUE
+        AND p.is_active = TRUE
+        AND (p.name = $2 OR p.name = 'admin.*')
       LIMIT 1
     `,
       [userId, permissionName],

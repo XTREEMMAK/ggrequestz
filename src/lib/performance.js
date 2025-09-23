@@ -6,6 +6,10 @@
 // Import lightweight lazy loader immediately
 export { lazyLoader } from "./performance/lazyLoader.js";
 
+// Export actual classes for testing
+export { ResourcePrefetcher } from "./performance/prefetcher.js";
+export { PerformanceMetrics } from "./performance/metrics.js";
+
 // Lazy load heavy utilities only when needed
 let _prefetcher = null;
 let _metrics = null;

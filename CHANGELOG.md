@@ -5,6 +5,76 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-09-23
+
+### Added
+
+- **Pre-built Docker Images**
+  - Automated Docker image publishing to GitHub Container Registry
+  - Multi-platform support (amd64, arm64)
+  - Images available at `ghcr.io/xtreemmak/ggrequestz`
+  - Automatic builds on releases and main branch updates
+
+- **Enhanced Docker Support**
+  - PUID/PGID support for proper file permissions
+  - Standard Docker Compose `.env` file convention (not `.env.docker`)
+  - Improved environment variable handling
+  - Better defaults and clearer configuration
+
+- **Documentation Improvements**
+  - New QUICKSTART.md for 5-minute setup
+  - Consolidated CONFIGURATION.md with all options
+  - Simplified README with clear navigation
+  - Clearer authentication setup instructions
+
+### Fixed
+
+- **Authentication & Permissions**
+  - Fixed basic auth admin users unable to manage requests
+  - Corrected permission checking for `is_admin` flag
+  - Fixed `ggr_user_permissions` table reference error
+  - Resolved async/await misuse in authentication modules
+
+- **Environment Configuration**
+  - Fixed development environment using wrong `.env` file
+  - Separated `.env` (Docker/production) from `.env.dev` (development)
+  - Fixed DOTENV_CONFIG_PATH support for development
+  - Corrected environment variable loading in multiple modules
+
+- **Search & UI**
+  - Implemented missing watchlist functionality in search page
+  - Fixed favorite icon click handlers
+  - Corrected reactive state management for watchlist
+
+### Changed
+
+- **Docker Standardization**
+  - Docker Compose now uses standard `.env` file (community standard)
+  - Simplified environment variable structure
+  - Updated Dockerfile with configurable user/group IDs
+  - Default to pulling pre-built images instead of building locally
+
+- **Development Workflow**
+  - Development scripts now use `.env.dev` by default
+  - Improved separation between production and development configs
+  - Better error messages for configuration issues
+
+### Migration Notes
+
+When upgrading from v1.0.2:
+
+1. **Environment Files**:
+   - Rename `.env.docker` to `.env` for Docker deployments
+   - Use `.env.dev` for local development
+
+2. **Docker Images**:
+   - Images now available at `ghcr.io/xtreemmak/ggrequestz`
+   - No need to build locally unless customizing
+
+3. **Permissions**:
+   - Add PUID/PGID to `.env` for proper file permissions
+   - Database migrations run automatically
+
 ## [1.0.2] - 2025-08-18
 
 ### Fixed

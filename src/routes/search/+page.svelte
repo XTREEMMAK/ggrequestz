@@ -16,7 +16,7 @@
   let { data } = $props();
   
   let user = $derived(data?.user);
-  let userWatchlist = $derived(data?.userWatchlist || []);
+  let userWatchlist = $state(data?.userWatchlist || []);
   
   // Search state - using $state for reactivity
   let searchQuery = $state(data?.query || '');
@@ -273,12 +273,62 @@
     goto(`/request?game=${detail.game.igdb_id || detail.game.id}`);
   }
   
-  function handleWatchlist({ detail }) {
+  async function handleWatchlist({ detail }) {
     if (!user) {
       goto('/api/auth/login');
       return;
     }
-    // TODO: Implement watchlist API calls
+
+    const gameId = detail.game.igdb_id || detail.game.id;
+    const isCurrentlyInWatchlist = userWatchlist.some(item => item.igdb_id == gameId);
+
+    try {
+      let response;
+
+      if (isCurrentlyInWatchlist) {
+        // Remove from watchlist
+        response = await fetch('/api/watchlist/remove', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ game_id: gameId })
+        });
+      } else {
+        // Add to watchlist
+        response = await fetch('/api/watchlist/add', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            game_id: gameId,
+            game_data: detail.game
+          })
+        });
+      }
+
+      if (response.ok) {
+        const result = await response.json();
+
+        if (result.success) {
+          // Update local watchlist state
+          if (isCurrentlyInWatchlist) {
+            userWatchlist = userWatchlist.filter(item => item.igdb_id != gameId);
+          } else {
+            userWatchlist = [...userWatchlist, { igdb_id: gameId, ...detail.game }];
+          }
+        } else {
+          console.error('Watchlist operation failed:', result.error);
+          // Could add user-facing error notification here
+        }
+      } else {
+        console.error('Watchlist API request failed:', response.status);
+      }
+    } catch (error) {
+      console.error('Error updating watchlist:', error);
+      // Could add user-facing error notification here
+    }
   }
   
   function handleViewDetails({ detail }) {

@@ -22,37 +22,41 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine AS production
 
+# Build arguments for user/group IDs
+ARG PUID=1000
+ARG PGID=1000
+
 # Install PM2 globally
 RUN npm install -g pm2
 
 # Create app directory
 WORKDIR /app
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S ggrequestz -u 1001
+# Create non-root user with configurable IDs
+RUN addgroup -g ${PGID} -S ggrequestz && \
+    adduser -S -u ${PUID} -G ggrequestz ggrequestz
 
 # Copy package files and install production dependencies
 COPY package*.json ./
 RUN npm ci --only=production --silent && npm cache clean --force
 
 # Copy built application from builder stage
-COPY --from=builder --chown=ggrequestz:nodejs /app/build ./build
-COPY --from=builder --chown=ggrequestz:nodejs /app/static ./static
-COPY --from=builder --chown=ggrequestz:nodejs /app/package.json ./
+COPY --from=builder --chown=ggrequestz:ggrequestz /app/build ./build
+COPY --from=builder --chown=ggrequestz:ggrequestz /app/static ./static
+COPY --from=builder --chown=ggrequestz:ggrequestz /app/package.json ./
 
 # Copy PM2 ecosystem configuration
-COPY --chown=ggrequestz:nodejs ecosystem.config.cjs ./
+COPY --chown=ggrequestz:ggrequestz ecosystem.config.cjs ./
 
 # Copy database scripts and migrations
-COPY --chown=ggrequestz:nodejs scripts/ ./scripts/
-COPY --chown=ggrequestz:nodejs migrations/ ./migrations/
+COPY --chown=ggrequestz:ggrequestz scripts/ ./scripts/
+COPY --chown=ggrequestz:ggrequestz migrations/ ./migrations/
 
 # Copy src directory for database utilities (needed by Docker entrypoint)
-COPY --from=builder --chown=ggrequestz:nodejs /app/src ./src
+COPY --from=builder --chown=ggrequestz:ggrequestz /app/src ./src
 
 # Create logs directory with proper permissions
-RUN mkdir -p /app/logs && chown -R ggrequestz:nodejs /app/logs
+RUN mkdir -p /app/logs && chown -R ggrequestz:ggrequestz /app/logs
 
 # Set proper permissions for scripts
 RUN chmod +x scripts/database/db-manager.js

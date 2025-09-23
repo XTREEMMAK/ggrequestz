@@ -143,7 +143,7 @@ const authGuard = async ({ event, resolve }) => {
     if (!user) {
       const basicAuthSession = cookies.get("basic_auth_session");
       if (basicAuthSession) {
-        user = await getBasicAuthUser(basicAuthSession);
+        user = getBasicAuthUser(basicAuthSession);
       }
     }
   } catch (error) {

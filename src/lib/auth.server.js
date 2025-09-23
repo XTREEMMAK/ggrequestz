@@ -251,31 +251,47 @@ export async function requireAuth(request) {
  * @returns {Promise<Object|null>} - User object or null
  */
 export async function getAuthenticatedUser(cookies) {
+  // First check for Authentik/OIDC session cookie
   const sessionCookie = cookies.get("session");
 
-  if (!sessionCookie) {
-    return null;
+  if (sessionCookie) {
+    // Try to verify as JWT (Authentik/OIDC session)
+    try {
+      const jwtUser = await verifySessionToken(sessionCookie);
+      if (jwtUser) {
+        return jwtUser;
+      }
+    } catch (error) {
+      console.error("JWT verification failed:", error);
+    }
+
+    // If JWT fails, try basic auth token on session cookie
+    try {
+      const { verifyBasicAuthToken } = await import("./basicAuth.js");
+      const basicUser = verifyBasicAuthToken(sessionCookie);
+      if (basicUser) {
+        basicUser.auth_type = "basic";
+        return basicUser;
+      }
+    } catch (error) {
+      console.error("Basic auth verification on session cookie failed:", error);
+    }
   }
 
-  // First try to verify as JWT (Authentik/OIDC session)
-  try {
-    const jwtUser = await verifySessionToken(sessionCookie);
-    if (jwtUser) {
-      return jwtUser;
-    }
-  } catch (error) {
-    console.error("JWT verification failed:", error);
-  }
+  // Check for basic auth session cookie
+  const basicAuthCookie = cookies.get("basic_auth_session");
 
-  // If JWT fails, try basic auth token
-  try {
-    const { verifyBasicAuthToken } = await import("./basicAuth.js");
-    const basicUser = verifyBasicAuthToken(sessionCookie);
-    if (basicUser) {
-      return basicUser;
+  if (basicAuthCookie) {
+    try {
+      const { getBasicAuthUser } = await import("./basicAuth.js");
+      const basicUser = getBasicAuthUser(basicAuthCookie);
+      if (basicUser) {
+        basicUser.auth_type = "basic";
+        return basicUser;
+      }
+    } catch (error) {
+      console.error("Basic auth session verification failed:", error);
     }
-  } catch (error) {
-    console.error("Basic auth verification failed:", error);
   }
 
   return null;

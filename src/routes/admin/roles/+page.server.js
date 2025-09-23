@@ -27,7 +27,7 @@ async function getUserId(cookies) {
   if (basicAuthSessionCookie) {
     try {
       const { getBasicAuthUser } = await import("$lib/basicAuth.js");
-      const user = await getBasicAuthUser(basicAuthSessionCookie);
+      const user = getBasicAuthUser(basicAuthSessionCookie);
       if (user && user.sub?.startsWith("basic_auth_")) {
         const basicAuthId = user.sub.replace("basic_auth_", "");
         const result = await query(

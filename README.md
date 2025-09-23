@@ -36,68 +36,38 @@ A modern game discovery and request management platform with IGDB integration, R
 
 ## 🚀 Quick Start
 
-### Docker Compose (Recommended)
+**Get running in 5 minutes with Docker:**
 
 ```bash
-# Step 1: Clone the repository
+# Clone repository
 git clone https://github.com/XTREEMMAK/ggrequestz.git
 cd ggrequestz
 
-# Step 2: Copy .env.example file and rename to .env.docker
-cp .env.example .env.docker
+# Configure environment
+cp .env.example .env
+nano .env  # Add your IGDB credentials and settings
 
-# Step 3: Adjust environment variables to taste. Read on how to get your Typesense API key
-# Edit .env.docker with your settings
+# Start with Docker Compose
+docker compose up -d
 
-# Step 4: Run the deploy script
-sudo ./scripts/deployment/deploy-production.sh
+# Visit http://localhost:3000
 ```
 
-### Local Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-```
+📖 **[Full Quickstart Guide](QUICKSTART.md)** | 🔧 **[Configuration Options](docs/CONFIGURATION.md)**
 
 ## 📖 Documentation
 
-- [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
-- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
-- [Development Guide](docs/DEVELOPMENT.md) - Local setup and contributing
-- [API Documentation](docs/API.md) - REST API endpoints
-- [Performance Guide](docs/PERFORMANCE.md) - Caching and optimization
+### Getting Started
+- **[Quickstart Guide](QUICKSTART.md)** - Get running in 5 minutes
+- **[Configuration Guide](docs/CONFIGURATION.md)** - All configuration options
+- **[Deployment Guide](docs/setup/DEPLOYMENT.md)** - Production deployment
 
-### Authentication Guides
+### Guides
+- [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, Basic Auth
+- [ROMM Integration](docs/guides/INTEGRATION_GUIDE.md) - Connect with ROMM
+- [API Documentation](docs/API.md) - REST API reference
 
-- [Generic OIDC Setup](docs/OIDC_SETUP.md) - Configure any OIDC provider
-- [Authentik Setup](docs/AUTHENTIK_ADMIN_SETUP.md) - Specific Authentik configuration
-
-## 🔧 Configuration
-
-### Required Environment Variables
-
-```env
-# Database
-DATABASE_URL=postgresql://user:pass@localhost/ggrequestz
-
-# Authentication (Choose one)
-AUTH_METHOD=oidc_generic
-OIDC_ISSUER_URL=https://your-provider.com
-OIDC_CLIENT_ID=your-client-id
-OIDC_CLIENT_SECRET=your-client-secret
-
-# IGDB API (Required for game data)
-IGDB_CLIENT_ID=your-igdb-client
-IGDB_CLIENT_SECRET=your-igdb-secret
-
-# Optional
-REDIS_URL=redis://localhost:6379
-ROMM_URL=http://your-romm-instance
-```
+## 🔧 Key Features Configuration
 
 ### Getting IGDB API Credentials
 
@@ -125,16 +95,17 @@ IGDB (Internet Game Database) provides the game data for G.G. Requestz. To get y
 
 **Note**: These credentials are required for the application to fetch game data, search results, and cover images.
 
-## 📚 Documentation
+## 🐳 Docker Images
 
-Comprehensive documentation is available in the [`docs/`](docs/) directory:
+Pre-built Docker images are available:
 
-- **[Setup Guide](SETUP.md)** - Quick start and configuration
-- **[Documentation Index](docs/README.md)** - Complete documentation overview
-- **[Setup Guides](docs/setup/)** - Database, Docker, authentication setup
-- **[Integration Guides](docs/guides/)** - ROMM integration and troubleshooting
-- **[Architecture](docs/ARCHITECTURE.md)** - System design overview
-- **[API Documentation](docs/API.md)** - API endpoints and usage
+```bash
+# Pull latest image
+docker pull ghcr.io/xtreemmak/ggrequestz:latest
+
+# Pull specific version
+docker pull ghcr.io/xtreemmak/ggrequestz:v1.0.3
+```
 
 ## 🤝 Contributing
 

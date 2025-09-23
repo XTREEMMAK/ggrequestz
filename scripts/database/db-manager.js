@@ -185,20 +185,22 @@ async function runMigrations() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS ${CONFIG.migrationTable} (
         id SERIAL PRIMARY KEY,
-        version VARCHAR(255) NOT NULL UNIQUE,
-        name VARCHAR(255) NOT NULL,
+        migration_name VARCHAR(255) NOT NULL UNIQUE,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        success BOOLEAN DEFAULT true,
         checksum VARCHAR(64),
-        executed_at TIMESTAMP DEFAULT NOW(),
-        execution_time INTEGER
+        version INTEGER,
+        execution_time INTEGER,
+        error_message TEXT
       )
     `);
 
     // Get executed migrations
     const executedResult = await client.query(
-      `SELECT version FROM ${CONFIG.migrationTable} ORDER BY version`,
+      `SELECT migration_name FROM ${CONFIG.migrationTable} ORDER BY executed_at`,
     );
     const executedMigrations = new Set(
-      executedResult.rows.map((row) => row.version),
+      executedResult.rows.map((row) => row.migration_name),
     );
 
     // Find migration files
@@ -214,9 +216,7 @@ async function runMigrations() {
     let executedCount = 0;
 
     for (const file of migrationFiles) {
-      const version = file.replace(".sql", "");
-
-      if (executedMigrations.has(version)) {
+      if (executedMigrations.has(file)) {
         console.log(`⏭️  Skipping ${file} (already executed)`);
         continue;
       }
@@ -244,8 +244,8 @@ async function runMigrations() {
         // Record migration
         const executionTime = Date.now() - startTime;
         await client.query(
-          `INSERT INTO ${CONFIG.migrationTable} (version, name, checksum, execution_time) VALUES ($1, $2, $3, $4)`,
-          [version, file, checksum, executionTime],
+          `INSERT INTO ${CONFIG.migrationTable} (migration_name, checksum, execution_time, success) VALUES ($1, $2, $3, $4)`,
+          [file, checksum, executionTime, true],
         );
 
         await client.query("COMMIT");
@@ -297,7 +297,7 @@ async function migrationStatus() {
 
     // Get migration status
     const result = await client.query(
-      `SELECT version, name, executed_at FROM ${CONFIG.migrationTable} ORDER BY version`,
+      `SELECT migration_name, executed_at FROM ${CONFIG.migrationTable} ORDER BY executed_at`,
     );
 
     console.log("\n📋 Migration Status:");
@@ -307,7 +307,7 @@ async function migrationStatus() {
       console.log("No migrations executed yet.");
     } else {
       result.rows.forEach((row, index) => {
-        console.log(`${index + 1}. ${row.version} - ${row.name}`);
+        console.log(`${index + 1}. ${row.migration_name}`);
         console.log(`   Executed: ${row.executed_at.toISOString()}`);
       });
     }
@@ -318,9 +318,9 @@ async function migrationStatus() {
         .filter((file) => file.endsWith(".sql"))
         .sort();
 
-      const executedVersions = new Set(result.rows.map((row) => row.version));
+      const executedFiles = new Set(result.rows.map((row) => row.migration_name));
       const pendingFiles = allFiles.filter(
-        (file) => !executedVersions.has(file.replace(".sql", "")),
+        (file) => !executedFiles.has(file),
       );
 
       if (pendingFiles.length > 0) {

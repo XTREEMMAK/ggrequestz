@@ -14,7 +14,9 @@ if (!browser) {
   if (process.env.NODE_ENV !== "production") {
     try {
       const { config } = await import("dotenv");
-      config();
+      // Use DOTENV_CONFIG_PATH if set (for development), otherwise default to .env
+      const envPath = process.env.DOTENV_CONFIG_PATH || '.env';
+      config({ path: envPath });
     } catch (error) {
       // Dotenv not available or already configured - continue
     }

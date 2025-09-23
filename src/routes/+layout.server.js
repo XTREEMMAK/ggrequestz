@@ -169,7 +169,7 @@ export async function load({ request, cookies }) {
     if (!user) {
       const basicAuthSession = cookies.get("basic_auth_session");
       if (basicAuthSession) {
-        user = await getBasicAuthUser(basicAuthSession);
+        user = getBasicAuthUser(basicAuthSession);
         if (user) {
           user.auth_type = "basic"; // Mark as basic auth user
         }

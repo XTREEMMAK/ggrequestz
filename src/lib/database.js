@@ -21,7 +21,9 @@ async function loadEnvironmentVariables() {
       try {
         // Use dynamic import for dotenv in ESM context
         const { config } = await import("dotenv");
-        config();
+        // Use DOTENV_CONFIG_PATH if set (for development), otherwise default to .env
+        const envPath = process.env.DOTENV_CONFIG_PATH || '.env';
+        config({ path: envPath });
       } catch (error) {
         console.warn(
           "⚠️ Could not load dotenv via dynamic import:",

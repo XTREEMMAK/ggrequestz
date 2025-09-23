@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
-  server: {
+    server: {
     host: true, // Allow external access when --host flag is used
     port: 5174,
     allowedHosts: [

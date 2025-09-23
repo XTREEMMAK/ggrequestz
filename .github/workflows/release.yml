@@ -1,0 +1,108 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:unit
+
+      - name: Build application
+        run: npm run build
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Extract changelog section for this version
+          CHANGELOG_CONTENT=$(awk "
+            /^## \[${VERSION#v}\]/ { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          " CHANGELOG.md | sed '/^$/N;/^\n$/d')
+          
+          # Save to output with proper escaping
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: GG Requestz ${{ steps.version.outputs.version }}
+          body: |
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.content }}
+
+            ## Full Changelog
+            
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for complete version history.
+
+            ## Installation
+
+            ### Docker (Recommended)
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/ggrequestz:${{ steps.version.outputs.version }}
+            ```
+
+            ### Manual Installation
+            1. Download the source code
+            2. Follow the [Installation Guide](https://github.com/${{ github.repository }}/blob/main/README.md)
+
+            ## Documentation
+            - [Docker Setup Guide](https://github.com/${{ github.repository }}/blob/main/DOCKER_TESTING.md)
+            - [Contributing Guide](https://github.com/${{ github.repository }}/blob/main/CONTRIBUTING.md)
+            - [Migration Guide](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md#migration-guides)
+          draft: false
+          prerelease: false
+
+      - name: Create build artifact
+        run: |
+          # Create a clean build without node_modules
+          mkdir -p release
+          cp -r build release/
+          cp package.json package-lock.json release/
+          cp README.md CHANGELOG.md LICENSE release/
+          cd release && tar -czf ../ggrequestz-${{ steps.version.outputs.version }}.tar.gz .
+
+      - name: Upload release artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./ggrequestz-${{ steps.version.outputs.version }}.tar.gz
+          asset_name: ggrequestz-${{ steps.version.outputs.version }}.tar.gz
+          asset_content_type: application/gzip

@@ -1,37 +1,51 @@
+# Docker Compose automatically loads .env file from the same directory
+# Copy .env.example to .env and configure your settings
+
 services:
   # GameRequest Application
   ggrequestz:
-    build: .
+    # Use pre-built image by default, fall back to local build if needed
+    image: ghcr.io/xtreemmak/ggrequestz:latest
+    build:
+      context: .
+      args:
+        - PUID=${PUID:-1000}
+        - PGID=${PGID:-1000}
     container_name: ggrequestz-app
     restart: unless-stopped
     ports:
       - "${APP_PORT:-3000}:3000"
     environment:
-      # Database Configuration (supports external database)
-      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_DB: ${POSTGRES_DB:-ggrequestz}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+      # User/Group IDs for file permissions
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
 
-      # Authentication (required)
-      AUTH_METHOD: ${AUTH_METHOD:-authentik}
-      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID}
-      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET}
-      AUTHENTIK_ISSUER: ${AUTHENTIK_ISSUER}
+      # Database Configuration
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # Authentication
+      AUTH_METHOD: ${AUTH_METHOD}
+      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID:-}
+      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:-}
+      AUTHENTIK_ISSUER: ${AUTHENTIK_ISSUER:-}
       SESSION_SECRET: ${SESSION_SECRET}
 
       # IGDB API (required)
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
 
-      # Search Engine (supports external Typesense)
+      # Search Engine (optional)
       TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
       TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
       TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz123}
 
-      # Redis Cache (supports external Redis, optional - falls back to memory)
+      # Redis Cache (optional - falls back to memory if not available)
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
 
       # Optional External Services
@@ -44,9 +58,7 @@ services:
 
       # Application Configuration
       PM2_INSTANCES: ${PM2_INSTANCES:-max}
-      NODE_ENV: ${NODE_ENV:-production}
-
-      # Database Migration
+      NODE_ENV: production
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
     volumes:
       - ggrequestz-logs:/app/logs
