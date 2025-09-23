@@ -15,7 +15,9 @@ test.describe("Homepage", () => {
       // Check for main navigation links
       await expect(page.getByRole("button", { name: /home/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /search/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /request/i })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: /request/i }),
+      ).toBeVisible();
     }
   });
 
