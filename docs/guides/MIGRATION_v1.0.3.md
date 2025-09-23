@@ -7,10 +7,12 @@ Version 1.0.3 standardizes Docker deployment to use the conventional `.env` file
 ## What Changed
 
 ### Environment File Standardization
+
 - **v1.0.2**: Used custom deployment script with `.env.docker`
 - **v1.0.3**: Uses standard Docker Compose with `.env` (community expectation)
 
 ### Key Benefits
+
 - ✅ Standard `docker compose up -d` deployment
 - ✅ Follows Docker Compose conventions
 - ✅ Easier for new users to understand
@@ -80,12 +82,12 @@ docker compose logs ggrequestz
 
 ## Environment Variable Comparison
 
-| Component | v1.0.2 | v1.0.3 |
-|-----------|---------|---------|
-| **Docker Production** | `.env.docker` | `.env` |
-| **Local Development** | `.env` | `.env.dev` |
-| **Docker Build** | `.env.docker-build` | `.env.docker-build` (unchanged) |
-| **Template** | `.env.example` | `.env.example` (unchanged) |
+| Component             | v1.0.2              | v1.0.3                          |
+| --------------------- | ------------------- | ------------------------------- |
+| **Docker Production** | `.env.docker`       | `.env`                          |
+| **Local Development** | `.env`              | `.env.dev`                      |
+| **Docker Build**      | `.env.docker-build` | `.env.docker-build` (unchanged) |
+| **Template**          | `.env.example`      | `.env.example` (unchanged)      |
 
 ## Database Compatibility
 
@@ -116,12 +118,14 @@ mv .env.docker.backup .env.docker
 For contributors and developers:
 
 ### v1.0.2 Development
+
 ```bash
 # Used .env for local development
 npm run dev
 ```
 
 ### v1.0.3 Development
+
 ```bash
 # Now uses .env.dev for local development
 # Update any local tooling to use .env.dev
@@ -131,13 +135,17 @@ npm run dev
 ## Common Migration Issues
 
 ### Issue: "Environment file not found"
+
 **Solution**: Ensure you copied `.env.docker` to `.env`
+
 ```bash
 cp .env.docker .env
 ```
 
 ### Issue: "Database connection failed"
+
 **Solution**: Verify database environment variables in `.env`
+
 ```bash
 # Check these are set in .env:
 POSTGRES_PASSWORD=your_password
@@ -146,7 +154,9 @@ POSTGRES_USER=postgres
 ```
 
 ### Issue: "Services fail to start"
+
 **Solution**: Check Docker Compose logs
+
 ```bash
 docker compose logs
 ```
@@ -162,11 +172,13 @@ docker compose logs
 v1.0.3 makes deployment simpler and more standard:
 
 **Before (v1.0.2)**:
+
 ```bash
 ./scripts/deployment/deploy-production.sh
 ```
 
 **After (v1.0.3)**:
+
 ```bash
 docker compose up -d
 ```

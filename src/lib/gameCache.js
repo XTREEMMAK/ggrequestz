@@ -64,12 +64,16 @@ function formatForCache(igdbGame) {
 function formatFromCache(cachedGame) {
   // Helper function to convert IGDB URLs to proxy URLs
   const toProxyUrl = (url) => {
-    if (!url || !url.includes('igdb.com') || url.includes('/api/images/proxy')) {
+    if (
+      !url ||
+      !url.includes("igdb.com") ||
+      url.includes("/api/images/proxy")
+    ) {
       return url;
     }
     return `/api/images/proxy?url=${encodeURIComponent(url)}`;
   };
-  
+
   return {
     id: cachedGame.igdb_id,
     igdb_id: cachedGame.igdb_id,

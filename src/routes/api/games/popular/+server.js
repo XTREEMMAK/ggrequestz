@@ -30,23 +30,23 @@ export async function GET({ url }) {
 
     // Simple approach: fetch more games dynamically without complex cache expansion
     let allGames;
-    
+
     // For the first few pages, use cached popular games
     // But if we need more games than cache has, fetch directly
     if (page <= 3 && offset + limit <= 50) {
       allGames = await cachePopularGames(() => getPopularGames(50, 0));
     } else {
       // For higher pages, fetch directly from IGDB starting from offset
-      console.log(`🔄 Fetching page ${page} directly from IGDB with offset ${offset}`);
+      console.log(
+        `🔄 Fetching page ${page} directly from IGDB with offset ${offset}`,
+      );
       allGames = await getPopularGames(limit, offset);
     }
 
     // Only refresh cache if we get 0 games (actual error), not just fewer than expected
     // Docker environments may have different cache states
     if (allGames.length === 0 && !forceRefresh) {
-      console.log(
-        "⚠️ No games in cache, attempting refresh...",
-      );
+      console.log("⚠️ No games in cache, attempting refresh...");
       await invalidateCache("popular-games");
       allGames = await cachePopularGames(async () => {
         console.log("🔄 Re-fetching fresh popular games from IGDB...");
@@ -90,8 +90,10 @@ export async function GET({ url }) {
 
     // Simple hasMore logic: if we got exactly what we asked for, there might be more
     const hasMore = games.length === limit;
-    
-    console.log(`📊 hasMore logic: games=${games.length}, limit=${limit}, hasMore=${hasMore}`);
+
+    console.log(
+      `📊 hasMore logic: games=${games.length}, limit=${limit}, hasMore=${hasMore}`,
+    );
 
     return json({
       success: true,

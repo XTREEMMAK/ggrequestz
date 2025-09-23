@@ -106,8 +106,12 @@ async function runMigrations() {
   // Reset database if requested
   if (resetDatabase) {
     console.log("🗑️  Database reset requested (RESET_DATABASE=true)");
-    console.log("⚠️  Database reset functionality has been deprecated for safety");
-    console.log("   To reset the database, please drop and recreate it manually");
+    console.log(
+      "⚠️  Database reset functionality has been deprecated for safety",
+    );
+    console.log(
+      "   To reset the database, please drop and recreate it manually",
+    );
     // Skip reset for safety - in production, manual intervention is preferred
   }
 
@@ -205,7 +209,7 @@ async function initializeDatabase() {
 
 async function warmCaches() {
   console.log("🔥 Warming application caches...");
-  
+
   try {
     // Create a simple cache warming script
     await runCommand("node", [
@@ -235,7 +239,7 @@ async function warmCaches() {
       
       // Wait for app to be ready then warm caches
       setTimeout(warmUp, 5000);
-      `
+      `,
     ]);
   } catch (error) {
     console.log("⚠️ Cache warming failed (non-critical):", error.message);
@@ -260,14 +264,14 @@ async function startApplication() {
       stdio: "inherit",
       env: process.env,
     });
-    
+
     // Warm caches after a delay (non-blocking)
     if (process.env.NODE_ENV === "production") {
       setTimeout(() => {
         warmCaches().catch(console.error);
       }, 10000); // Wait 10 seconds for app to fully start
     }
-    
+
     // Handle process events
     appProcess.on("close", (code) => {
       if (code !== 0) {
@@ -275,7 +279,7 @@ async function startApplication() {
         process.exit(code);
       }
     });
-    
+
     appProcess.on("error", (error) => {
       console.error("❌ Failed to start application:", error.message);
       process.exit(1);

@@ -3,7 +3,7 @@ name: Create Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 jobs:
   create-release:
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,8 +19,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -48,7 +48,7 @@ jobs:
             found && /^## \[/ { exit }
             found { print }
           " CHANGELOG.md | sed '/^$/N;/^\n$/d')
-          
+
           # Save to output with proper escaping
           echo "content<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
@@ -67,7 +67,7 @@ jobs:
             ${{ steps.changelog.outputs.content }}
 
             ## Full Changelog
-            
+
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for complete version history.
 
             ## Installation

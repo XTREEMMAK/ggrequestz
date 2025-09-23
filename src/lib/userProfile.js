@@ -180,13 +180,13 @@ export async function getUserPermissions(userId) {
     // First check if user is an admin
     const adminCheck = await query(
       "SELECT is_admin FROM ggr_users WHERE id = $1 AND is_admin = TRUE AND is_active = TRUE",
-      [userId]
+      [userId],
     );
 
     if (adminCheck.rows.length > 0) {
       // Admins have all permissions - return all available permissions
       const allPermsResult = await query(
-        "SELECT name as permission_name FROM ggr_permissions WHERE is_active = TRUE"
+        "SELECT name as permission_name FROM ggr_permissions WHERE is_active = TRUE",
       );
       return allPermsResult.rows.map((row) => row.permission_name);
     }
@@ -227,7 +227,7 @@ export async function userHasPermission(userId, permissionName) {
     // First check if user is an admin (admins have all permissions)
     const adminCheck = await query(
       "SELECT is_admin FROM ggr_users WHERE id = $1 AND is_admin = TRUE AND is_active = TRUE",
-      [userId]
+      [userId],
     );
 
     if (adminCheck.rows.length > 0) {

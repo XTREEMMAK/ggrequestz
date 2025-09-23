@@ -37,9 +37,9 @@ class HybridCache {
     try {
       // Parse Redis URL (handle http:// prefix)
       const parsedRedisUrl = redisUrl.replace("http://", "redis://");
-      
+
       // Configure Redis client with Docker-friendly settings
-      this.redisClient = createClient({ 
+      this.redisClient = createClient({
         url: parsedRedisUrl,
         socket: {
           connectTimeout: 5000,
@@ -50,13 +50,16 @@ class HybridCache {
             }
             // Exponential backoff with max 3 seconds
             return Math.min(retries * 100, 3000);
-          }
-        }
+          },
+        },
       });
 
       this.redisClient.on("error", (err) => {
         // Only log non-connection errors
-        if (!err.message.includes("ECONNREFUSED") && !err.message.includes("ETIMEDOUT")) {
+        if (
+          !err.message.includes("ECONNREFUSED") &&
+          !err.message.includes("ETIMEDOUT")
+        ) {
           console.warn("🚨 Redis error:", err.message);
         }
         this.redisConnected = false;
@@ -66,7 +69,7 @@ class HybridCache {
         console.log("✅ Redis connected successfully");
         this.redisConnected = true;
       });
-      
+
       this.redisClient.on("reconnecting", () => {
         console.log("🔄 Redis reconnecting...");
       });

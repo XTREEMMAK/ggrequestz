@@ -14,11 +14,11 @@ async function loadEnvironmentVariables() {
   if (browser) {
     throw new Error("Environment variables cannot be loaded in browser");
   }
-  
+
   if (ROMM_SERVER_URL !== undefined) {
     return; // Already loaded
   }
-  
+
   const { env } = await import("$env/dynamic/private");
   ROMM_SERVER_URL = env.ROMM_SERVER_URL || process.env.ROMM_SERVER_URL;
   ROMM_USERNAME = env.ROMM_USERNAME || process.env.ROMM_USERNAME;
@@ -42,9 +42,9 @@ export function clearRommSession() {
  */
 async function authenticateROMM() {
   if (browser) throw new Error("authenticateROMM is server-only");
-  
+
   await loadEnvironmentVariables();
-  
+
   if (!ROMM_SERVER_URL || !ROMM_USERNAME || !ROMM_PASSWORD) {
     console.warn(
       "⚠️ ROMM server URL or credentials not configured - ROMM features disabled",
@@ -97,9 +97,14 @@ async function authenticateROMM() {
  * @param {number} retryCount - Number of retries attempted (internal)
  * @returns {Promise<Object>} - API response
  */
-async function rommRequest(endpoint, options = {}, cookies = null, retryCount = 0) {
+async function rommRequest(
+  endpoint,
+  options = {},
+  cookies = null,
+  retryCount = 0,
+) {
   await loadEnvironmentVariables();
-  
+
   if (!ROMM_SERVER_URL) {
     throw new Error("ROMM server URL not configured");
   }
@@ -107,7 +112,7 @@ async function rommRequest(endpoint, options = {}, cookies = null, retryCount = 
   const maxRetries = 3;
   const isDocker = process.env.NODE_ENV === "production";
   const baseTimeout = isDocker ? 5000 : 3000; // Higher timeout in Docker
-  
+
   let headers = {
     accept: "application/json",
     ...options.headers,
@@ -163,7 +168,7 @@ async function rommRequest(endpoint, options = {}, cookies = null, retryCount = 
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
-      
+
       // Retry on 5xx errors or network issues
       if (response.status >= 500 && retryCount < maxRetries) {
         console.warn(
@@ -173,7 +178,7 @@ async function rommRequest(endpoint, options = {}, cookies = null, retryCount = 
         await delay(1000 * Math.pow(2, retryCount));
         return rommRequest(endpoint, options, cookies, retryCount + 1);
       }
-      
+
       console.error(
         `ROMM API error: ${response.status} ${response.statusText} - ${errorText}`,
       );
@@ -185,7 +190,7 @@ async function rommRequest(endpoint, options = {}, cookies = null, retryCount = 
     return await response.json();
   } catch (error) {
     // Handle timeout and network errors with retry
-    if (error.name === 'AbortError' || error.message.includes('fetch')) {
+    if (error.name === "AbortError" || error.message.includes("fetch")) {
       if (retryCount < maxRetries) {
         console.warn(
           `ROMM request timeout/network error (attempt ${retryCount + 1}/${maxRetries})`,
@@ -293,7 +298,7 @@ export async function getPlatforms() {
  */
 export async function isRommConfigured() {
   if (browser) throw new Error("isRommConfigured is server-only");
-  
+
   await loadEnvironmentVariables();
   return !!(ROMM_SERVER_URL && ROMM_USERNAME && ROMM_PASSWORD);
 }

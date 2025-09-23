@@ -105,16 +105,21 @@ docker compose down -v
 ## Authentication Options
 
 ### Basic Auth (Simplest)
+
 Set `AUTH_METHOD=basic` in `.env`. Create admin account on first visit.
 
 ### Authentik
+
 Set `AUTH_METHOD=authentik` and configure:
+
 - `AUTHENTIK_CLIENT_ID`
 - `AUTHENTIK_CLIENT_SECRET`
 - `AUTHENTIK_ISSUER`
 
 ### Generic OIDC (Keycloak, Auth0, etc.)
+
 Set `AUTH_METHOD=oidc_generic` and configure:
+
 - `OIDC_CLIENT_ID`
 - `OIDC_CLIENT_SECRET`
 - `OIDC_ISSUER_URL`
@@ -140,19 +145,24 @@ N8N_WEBHOOK_URL=https://your-n8n-webhook
 ## Troubleshooting
 
 ### Port Already in Use
+
 Change `APP_PORT` in `.env`:
+
 ```bash
 APP_PORT=3001  # Use a different port
 ```
 
 ### Database Connection Issues
+
 Ensure PostgreSQL is running:
+
 ```bash
 docker compose ps postgres
 docker compose logs postgres
 ```
 
 ### Reset Everything
+
 ```bash
 docker compose down -v  # Warning: Deletes all data!
 docker compose up -d

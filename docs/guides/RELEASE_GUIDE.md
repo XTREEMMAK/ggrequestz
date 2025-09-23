@@ -27,12 +27,15 @@ Add your new version section to `CHANGELOG.md` following the existing format:
 ## [1.0.3] - 2025-08-19
 
 ### Added
+
 - New feature descriptions
 
 ### Changed
+
 - What was changed
 
 ### Fixed
+
 - Bug fixes
 ```
 
@@ -52,6 +55,7 @@ scripts/create-release.sh 1.0.3
 ```
 
 The script will:
+
 - ✅ Validate the version format
 - ✅ Check that the version exists in CHANGELOG.md
 - ✅ Ensure your working directory is clean
@@ -105,6 +109,7 @@ Each release includes:
 ## Troubleshooting
 
 ### Tag Already Exists
+
 ```bash
 # Delete the tag locally and remotely
 git tag -d v1.0.3
@@ -116,11 +121,13 @@ git push origin v1.0.3
 ```
 
 ### Version Not in CHANGELOG.md
+
 - Add the version section to CHANGELOG.md
 - Commit the changes
 - Try creating the release again
 
 ### GitHub Actions Fails
+
 - Check the Actions tab for detailed error logs
 - Common issues:
   - Test failures
@@ -136,6 +143,7 @@ Follow [Semantic Versioning](https://semver.org/):
 - **PATCH** (1.0.X): Bug fixes, backwards compatible
 
 ### Examples:
+
 - `1.0.3` → Bug fixes
 - `1.1.0` → New features
 - `2.0.0` → Breaking changes

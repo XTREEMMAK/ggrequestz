@@ -41,7 +41,9 @@ const cacheHeaders = async ({ event, resolve }) => {
     // Build assets - long cache with versioning
     headers.set("Cache-Control", "public, max-age=31536000, immutable"); // 1 year
   } else if (
-    event.url.pathname.match(/\.(js|css|woff|woff2|png|jpg|jpeg|gif|svg|ico|webp)$/)
+    event.url.pathname.match(
+      /\.(js|css|woff|woff2|png|jpg|jpeg|gif|svg|ico|webp)$/,
+    )
   ) {
     // Static assets - longer cache for images
     headers.set("Cache-Control", "public, max-age=604800, immutable"); // 7 days

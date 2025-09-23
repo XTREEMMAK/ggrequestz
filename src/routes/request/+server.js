@@ -34,7 +34,7 @@ export async function POST({ request, cookies }) {
       sub: user.sub,
       id: user.id,
       email: user.email,
-      username: user.username
+      username: user.username,
     });
 
     try {
@@ -73,15 +73,16 @@ export async function POST({ request, cookies }) {
 
         console.log("🔍 AUTH DEBUG: Basic auth user lookup result:", {
           found: userResult.rows.length > 0,
-          userId: userResult.rows[0]?.id
+          userId: userResult.rows[0]?.id,
         });
-
       } else {
         // For Authentik users
         console.log("🔍 AUTH DEBUG: Authentik user lookup with sub:", user.sub);
 
         if (!user.sub) {
-          console.error("❌ AUTH DEBUG: Missing sub for Authentik user:", { user });
+          console.error("❌ AUTH DEBUG: Missing sub for Authentik user:", {
+            user,
+          });
           return json(
             { success: false, error: "Invalid Authentik user format" },
             { status: 400 },
@@ -95,14 +96,15 @@ export async function POST({ request, cookies }) {
 
         console.log("🔍 AUTH DEBUG: Authentik user lookup result:", {
           found: userResult.rows.length > 0,
-          userId: userResult.rows[0]?.id
+          userId: userResult.rows[0]?.id,
         });
       }
 
       if (userResult.rows.length === 0) {
         console.error("❌ AUTH DEBUG: User not found in database:", {
           auth_type: user.auth_type,
-          lookup_value: user.auth_type === "basic" ? user.id || user.sub : user.sub
+          lookup_value:
+            user.auth_type === "basic" ? user.id || user.sub : user.sub,
         });
 
         return json(
@@ -112,10 +114,15 @@ export async function POST({ request, cookies }) {
       }
 
       localUserId = userResult.rows[0].id;
-      console.log("✅ AUTH DEBUG: Successfully found user with local ID:", localUserId);
-
+      console.log(
+        "✅ AUTH DEBUG: Successfully found user with local ID:",
+        localUserId,
+      );
     } catch (dbError) {
-      console.error("❌ AUTH DEBUG: Database error during user lookup:", dbError);
+      console.error(
+        "❌ AUTH DEBUG: Database error during user lookup:",
+        dbError,
+      );
       return json(
         { success: false, error: "Database error during authentication" },
         { status: 500 },
@@ -368,7 +375,6 @@ export async function GET({ url, cookies }) {
           "SELECT id, username, email FROM ggr_users WHERE id = $1 AND (password_hash IS NOT NULL OR authentik_sub IS NULL)",
           [basicAuthId],
         );
-
       } else {
         // For Authentik users
         if (!user.sub) {
@@ -392,9 +398,11 @@ export async function GET({ url, cookies }) {
       }
 
       localUserId = userResult.rows[0].id;
-
     } catch (dbError) {
-      console.error("❌ GET requests: Database error during user lookup:", dbError);
+      console.error(
+        "❌ GET requests: Database error during user lookup:",
+        dbError,
+      );
       return json(
         { success: false, error: "Database error during authentication" },
         { status: 500 },

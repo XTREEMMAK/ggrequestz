@@ -6,60 +6,64 @@ Complete reference for all GG Requestz configuration options.
 
 ### System Configuration
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PUID` | User ID for file permissions | `1000` | No |
-| `PGID` | Group ID for file permissions | `1000` | No |
-| `TZ` | Timezone | `UTC` | No |
-| `APP_PORT` | Application port | `3000` | No |
-| `NODE_ENV` | Environment mode | `production` | No |
-| `PM2_INSTANCES` | PM2 worker instances | `max` | No |
+| Variable        | Description                   | Default      | Required |
+| --------------- | ----------------------------- | ------------ | -------- |
+| `PUID`          | User ID for file permissions  | `1000`       | No       |
+| `PGID`          | Group ID for file permissions | `1000`       | No       |
+| `TZ`            | Timezone                      | `UTC`        | No       |
+| `APP_PORT`      | Application port              | `3000`       | No       |
+| `NODE_ENV`      | Environment mode              | `production` | No       |
+| `PM2_INSTANCES` | PM2 worker instances          | `max`        | No       |
 
 ### Database Configuration
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `POSTGRES_HOST` | PostgreSQL host | `postgres` | Yes |
-| `POSTGRES_PORT` | PostgreSQL port | `5432` | Yes |
-| `POSTGRES_DB` | Database name | `ggrequestz` | Yes |
-| `POSTGRES_USER` | Database user | `postgres` | Yes |
-| `POSTGRES_PASSWORD` | Database password | - | **Yes** |
-| `AUTO_MIGRATE` | Auto-run migrations | `true` | No |
+| Variable            | Description         | Default      | Required |
+| ------------------- | ------------------- | ------------ | -------- |
+| `POSTGRES_HOST`     | PostgreSQL host     | `postgres`   | Yes      |
+| `POSTGRES_PORT`     | PostgreSQL port     | `5432`       | Yes      |
+| `POSTGRES_DB`       | Database name       | `ggrequestz` | Yes      |
+| `POSTGRES_USER`     | Database user       | `postgres`   | Yes      |
+| `POSTGRES_PASSWORD` | Database password   | -            | **Yes**  |
+| `AUTO_MIGRATE`      | Auto-run migrations | `true`       | No       |
 
 ### Authentication
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `AUTH_METHOD` | Authentication method (`basic`, `authentik`, `oidc_generic`) | `basic` | Yes |
-| `SESSION_SECRET` | Session encryption key (32+ chars) | - | **Yes** |
+| Variable         | Description                                                  | Default | Required |
+| ---------------- | ------------------------------------------------------------ | ------- | -------- |
+| `AUTH_METHOD`    | Authentication method (`basic`, `authentik`, `oidc_generic`) | `basic` | Yes      |
+| `SESSION_SECRET` | Session encryption key (32+ chars)                           | -       | **Yes**  |
 
 #### Basic Auth
+
 No additional configuration needed. Admin account created on first visit.
 
 #### Authentik Configuration
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `AUTHENTIK_CLIENT_ID` | OAuth2 client ID | Yes (if using Authentik) |
+
+| Variable                  | Description          | Required                 |
+| ------------------------- | -------------------- | ------------------------ |
+| `AUTHENTIK_CLIENT_ID`     | OAuth2 client ID     | Yes (if using Authentik) |
 | `AUTHENTIK_CLIENT_SECRET` | OAuth2 client secret | Yes (if using Authentik) |
-| `AUTHENTIK_ISSUER` | Authentik issuer URL | Yes (if using Authentik) |
+| `AUTHENTIK_ISSUER`        | Authentik issuer URL | Yes (if using Authentik) |
 
 #### Generic OIDC Configuration
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `OIDC_CLIENT_ID` | OIDC client ID | Yes (if using OIDC) |
-| `OIDC_CLIENT_SECRET` | OIDC client secret | Yes (if using OIDC) |
-| `OIDC_ISSUER_URL` | OIDC provider URL | Yes (if using OIDC) |
-| `OIDC_REDIRECT_URI` | OAuth callback URL | Yes (if using OIDC) |
-| `OIDC_SCOPE` | OAuth scopes | No (default: `openid profile email`) |
+
+| Variable             | Description        | Required                             |
+| -------------------- | ------------------ | ------------------------------------ |
+| `OIDC_CLIENT_ID`     | OIDC client ID     | Yes (if using OIDC)                  |
+| `OIDC_CLIENT_SECRET` | OIDC client secret | Yes (if using OIDC)                  |
+| `OIDC_ISSUER_URL`    | OIDC provider URL  | Yes (if using OIDC)                  |
+| `OIDC_REDIRECT_URI`  | OAuth callback URL | Yes (if using OIDC)                  |
+| `OIDC_SCOPE`         | OAuth scopes       | No (default: `openid profile email`) |
 
 ### IGDB API (Required)
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `IGDB_CLIENT_ID` | Twitch app client ID | **Yes** |
-| `IGDB_CLIENT_SECRET` | Twitch app client secret | **Yes** |
+| Variable             | Description              | Required |
+| -------------------- | ------------------------ | -------- |
+| `IGDB_CLIENT_ID`     | Twitch app client ID     | **Yes**  |
+| `IGDB_CLIENT_SECRET` | Twitch app client secret | **Yes**  |
 
 Get these from [Twitch Developer Console](https://dev.twitch.tv/console):
+
 1. Create a new application
 2. Set OAuth Redirect URL to `http://localhost`
 3. Copy Client ID and Client Secret
@@ -67,38 +71,42 @@ Get these from [Twitch Developer Console](https://dev.twitch.tv/console):
 ### Optional Services
 
 #### Redis Cache
-| Variable | Description | Default |
-|----------|-------------|---------|
+
+| Variable    | Description          | Default              |
+| ----------- | -------------------- | -------------------- |
 | `REDIS_URL` | Redis connection URL | `redis://redis:6379` |
 
 If not configured, falls back to in-memory caching.
 
 #### ROMM Integration
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ROMM_SERVER_URL` | ROMM server URL | - |
-| `ROMM_USERNAME` | ROMM username | - |
-| `ROMM_PASSWORD` | ROMM password | - |
+
+| Variable          | Description     | Default |
+| ----------------- | --------------- | ------- |
+| `ROMM_SERVER_URL` | ROMM server URL | -       |
+| `ROMM_USERNAME`   | ROMM username   | -       |
+| `ROMM_PASSWORD`   | ROMM password   | -       |
 
 #### Gotify Notifications
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GOTIFY_URL` | Gotify server URL | - |
-| `GOTIFY_TOKEN` | Gotify app token | - |
+
+| Variable       | Description       | Default |
+| -------------- | ----------------- | ------- |
+| `GOTIFY_URL`   | Gotify server URL | -       |
+| `GOTIFY_TOKEN` | Gotify app token  | -       |
 
 #### n8n Webhooks
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `N8N_WEBHOOK_URL` | n8n webhook endpoint | - |
+
+| Variable          | Description          | Default |
+| ----------------- | -------------------- | ------- |
+| `N8N_WEBHOOK_URL` | n8n webhook endpoint | -       |
 
 ### Search Engine (Optional)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TYPESENSE_HOST` | Typesense host | `typesense` |
-| `TYPESENSE_PORT` | Typesense port | `8108` |
-| `TYPESENSE_PROTOCOL` | Protocol (http/https) | `http` |
-| `TYPESENSE_API_KEY` | API key | `xyz123` |
+| Variable             | Description           | Default     |
+| -------------------- | --------------------- | ----------- |
+| `TYPESENSE_HOST`     | Typesense host        | `typesense` |
+| `TYPESENSE_PORT`     | Typesense port        | `8108`      |
+| `TYPESENSE_PROTOCOL` | Protocol (http/https) | `http`      |
+| `TYPESENSE_API_KEY`  | API key               | `xyz123`    |
 
 ## Docker Compose Configuration
 
@@ -111,6 +119,7 @@ To use external PostgreSQL, Redis, or Typesense:
 3. Ensure network connectivity
 
 Example for external PostgreSQL:
+
 ```bash
 POSTGRES_HOST=your-external-db.com
 POSTGRES_PORT=5432
@@ -135,12 +144,14 @@ docker compose --profile proxy up -d
 For proper file permissions in Docker:
 
 1. Find your user/group IDs:
+
 ```bash
 id -u  # User ID (PUID)
 id -g  # Group ID (PGID)
 ```
 
 2. Set in `.env`:
+
 ```bash
 PUID=1000
 PGID=1000
@@ -159,6 +170,7 @@ PGID=1000
 ### Environment Variables Not Loading
 
 Docker Compose automatically loads `.env` from the same directory. Ensure:
+
 - File is named exactly `.env` (not `.env.docker` or other)
 - File is in same directory as `docker-compose.yml`
 - No syntax errors in `.env` file
@@ -166,6 +178,7 @@ Docker Compose automatically loads `.env` from the same directory. Ensure:
 ### Permission Denied Errors
 
 Set correct PUID/PGID in `.env`:
+
 ```bash
 PUID=$(id -u)
 PGID=$(id -g)
@@ -174,6 +187,7 @@ PGID=$(id -g)
 ### Database Connection Failed
 
 Check PostgreSQL is running:
+
 ```bash
 docker compose logs postgres
 docker compose ps
@@ -182,6 +196,7 @@ docker compose ps
 ## Migration from v1.0.2
 
 If upgrading from v1.0.2:
+
 1. Rename `.env.docker` to `.env`
 2. Add PUID/PGID variables
 3. Pull new images: `docker compose pull`

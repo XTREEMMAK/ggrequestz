@@ -58,11 +58,13 @@ docker compose up -d
 ## 📖 Documentation
 
 ### Getting Started
+
 - **[Quickstart Guide](QUICKSTART.md)** - Get running in 5 minutes
 - **[Configuration Guide](docs/CONFIGURATION.md)** - All configuration options
 - **[Deployment Guide](docs/setup/DEPLOYMENT.md)** - Production deployment
 
 ### Guides
+
 - [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, Basic Auth
 - [ROMM Integration](docs/guides/INTEGRATION_GUIDE.md) - Connect with ROMM
 - [API Documentation](docs/API.md) - REST API reference

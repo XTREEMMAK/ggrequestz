@@ -35,13 +35,31 @@ const CONFIG = {
  */
 function getDbClient() {
   const client = new Client({
-    host: process.env.POSTGRES_HOST || process.env.DB_HOST || process.env.SUPABASE_DB_HOST || "localhost",
-    port: process.env.POSTGRES_PORT || process.env.DB_PORT || process.env.SUPABASE_DB_PORT || 5432,
+    host:
+      process.env.POSTGRES_HOST ||
+      process.env.DB_HOST ||
+      process.env.SUPABASE_DB_HOST ||
+      "localhost",
+    port:
+      process.env.POSTGRES_PORT ||
+      process.env.DB_PORT ||
+      process.env.SUPABASE_DB_PORT ||
+      5432,
     database:
-      process.env.POSTGRES_DB || process.env.DB_NAME || process.env.SUPABASE_DB_NAME || "ggrequestz",
-    user: process.env.POSTGRES_USER || process.env.DB_USER || process.env.SUPABASE_DB_USER || "postgres",
+      process.env.POSTGRES_DB ||
+      process.env.DB_NAME ||
+      process.env.SUPABASE_DB_NAME ||
+      "ggrequestz",
+    user:
+      process.env.POSTGRES_USER ||
+      process.env.DB_USER ||
+      process.env.SUPABASE_DB_USER ||
+      "postgres",
     password:
-      process.env.POSTGRES_PASSWORD || process.env.DB_PASSWORD || process.env.SUPABASE_DB_PASSWORD || "password",
+      process.env.POSTGRES_PASSWORD ||
+      process.env.DB_PASSWORD ||
+      process.env.SUPABASE_DB_PASSWORD ||
+      "password",
     ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false,
   });
   return client;
@@ -318,10 +336,10 @@ async function migrationStatus() {
         .filter((file) => file.endsWith(".sql"))
         .sort();
 
-      const executedFiles = new Set(result.rows.map((row) => row.migration_name));
-      const pendingFiles = allFiles.filter(
-        (file) => !executedFiles.has(file),
+      const executedFiles = new Set(
+        result.rows.map((row) => row.migration_name),
       );
+      const pendingFiles = allFiles.filter((file) => !executedFiles.has(file));
 
       if (pendingFiles.length > 0) {
         console.log("\n⏳ Pending Migrations:");

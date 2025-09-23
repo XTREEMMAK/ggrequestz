@@ -13,15 +13,17 @@ export async function load({ fetch, data }) {
   // Defer non-critical data preloading to avoid blocking initial render
   // Only preload the most critical next page data in the background
   const preloadCache = {};
-  
+
   // Schedule background preloading after initial render
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     setTimeout(() => {
       // Only preload one critical resource to avoid overwhelming the browser
       if (initialData.popularGames?.length > 0) {
         fetch("/api/games/popular?page=2&limit=16")
-          .then(res => res.ok ? res.json() : null)
-          .then(data => { if (data) preloadCache.popularGames = data; })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data) preloadCache.popularGames = data;
+          })
           .catch(() => {});
       }
     }, 1000); // Delay preloading to after initial page is fully loaded

@@ -24,7 +24,7 @@ const config = {
           "self",
           "https://cdnjs.cloudflare.com",
           "https://cdn.jsdelivr.net",
-          "unsafe-hashes"
+          "unsafe-hashes",
         ],
         "object-src": ["none"],
         "base-uri": ["self"],

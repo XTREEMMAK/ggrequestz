@@ -22,7 +22,7 @@ async function loadEnvironmentVariables() {
         // Use dynamic import for dotenv in ESM context
         const { config } = await import("dotenv");
         // Use DOTENV_CONFIG_PATH if set (for development), otherwise default to .env
-        const envPath = process.env.DOTENV_CONFIG_PATH || '.env';
+        const envPath = process.env.DOTENV_CONFIG_PATH || ".env";
         config({ path: envPath });
       } catch (error) {
         console.warn(
@@ -71,14 +71,16 @@ export function resetPool() {
  */
 async function getPool() {
   if (browser) {
-    throw new Error("Database operations cannot be performed in browser context");
+    throw new Error(
+      "Database operations cannot be performed in browser context",
+    );
   }
-  
+
   if (!pool) {
     // Dynamically import PostgreSQL module to prevent client-side bundling
     const pkg = await import("pg");
     const { Pool } = pkg.default || pkg;
-    
+
     // Load fresh environment variables every time we create a pool
     const env = await loadEnvironmentVariables();
 

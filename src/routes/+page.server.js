@@ -71,23 +71,26 @@ export async function load({ parent, cookies, url }) {
     // Prioritize critical data first - load games without ROMM cross-reference for speed
     const criticalDataPromise = Promise.all([
       // Get new releases from IGDB (fast, no ROMM cross-reference yet)
-      safeAsync(async () => {
-        // Fetch enough games for pagination (at least 50 for multiple pages)
-        const allGames = await cacheRecentGames(() => getRecentGames(50));
-        // Return only first 8 for initial display
-        return allGames.slice(0, 8);
-      }, {
-        timeout: 3000 * timeoutMultiplier,
-        fallback: [],
-        errorContext: "Recent games loading",
-      }),
+      safeAsync(
+        async () => {
+          // Fetch enough games for pagination (at least 50 for multiple pages)
+          const allGames = await cacheRecentGames(() => getRecentGames(50));
+          // Return only first 8 for initial display
+          return allGames.slice(0, 8);
+        },
+        {
+          timeout: 3000 * timeoutMultiplier,
+          fallback: [],
+          errorContext: "Recent games loading",
+        },
+      ),
 
       // Get popular games from IGDB (fast, no ROMM cross-reference yet)
       // Let the API endpoint handle caching - just fetch initial 8 games for display
       safeAsync(() => getPopularGames(8), {
         timeout: 3000 * timeoutMultiplier,
         fallback: [],
-        errorContext: "Popular games loading"
+        errorContext: "Popular games loading",
       }),
 
       // Get recent game requests (with caching)
@@ -102,7 +105,7 @@ export async function load({ parent, cookies, url }) {
         async () => {
           // Check if user ID is already in the user object (optimized auth)
           let userId = user.id;
-          
+
           if (!userId) {
             if (user.sub?.startsWith("basic_auth_")) {
               // For Basic Auth users, extract actual user ID from sub
@@ -123,7 +126,11 @@ export async function load({ parent, cookies, url }) {
 
           return watchlist.get(userId);
         },
-        { timeout: 1500 * timeoutMultiplier, fallback: [], errorContext: "User watchlist loading" },
+        {
+          timeout: 1500 * timeoutMultiplier,
+          fallback: [],
+          errorContext: "User watchlist loading",
+        },
       ),
     ]);
 

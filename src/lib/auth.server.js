@@ -7,7 +7,9 @@ import { browser } from "$app/environment";
 
 // Throw error if accidentally imported in browser
 if (browser) {
-  throw new Error("auth.server.js cannot be imported in browser - use auth.js for client-safe functions");
+  throw new Error(
+    "auth.server.js cannot be imported in browser - use auth.js for client-safe functions",
+  );
 }
 
 // Import server-only modules
@@ -17,8 +19,10 @@ import crypto from "crypto";
 import { env } from "$env/dynamic/private";
 
 // Use dynamic environment variables for runtime configuration
-const AUTHENTIK_CLIENT_ID = env.AUTHENTIK_CLIENT_ID || process.env.AUTHENTIK_CLIENT_ID;
-const AUTHENTIK_CLIENT_SECRET = env.AUTHENTIK_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
+const AUTHENTIK_CLIENT_ID =
+  env.AUTHENTIK_CLIENT_ID || process.env.AUTHENTIK_CLIENT_ID;
+const AUTHENTIK_CLIENT_SECRET =
+  env.AUTHENTIK_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
 const AUTHENTIK_ISSUER = env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_ISSUER;
 const SESSION_SECRET = env.SESSION_SECRET || process.env.SESSION_SECRET;
 
@@ -34,7 +38,7 @@ function getBaseUrl() {
   if (!AUTHENTIK_ISSUER) {
     throw new Error("AUTHENTIK_ISSUER is not configured");
   }
-  
+
   // Extract the base domain from the issuer URL
   // AUTHENTIK_ISSUER might be like "https://auth.keyjaycompound.com/application/o/gg-requestz"
   // We need to get "https://auth.keyjaycompound.com"
@@ -50,7 +54,9 @@ function getBaseUrl() {
  */
 export function getAuthorizationUrl(redirectUri, state) {
   if (!AUTHENTIK_CLIENT_ID) {
-    throw new Error("AUTHENTIK_CLIENT_ID is not configured in environment variables");
+    throw new Error(
+      "AUTHENTIK_CLIENT_ID is not configured in environment variables",
+    );
   }
 
   const params = new URLSearchParams({
@@ -193,7 +199,10 @@ export async function verifySessionToken(token) {
     const { payload } = await jwtVerify(token, secret);
     return payload;
   } catch (error) {
-    console.error("❌ AUTH DEBUG: Session token verification failed:", error.message);
+    console.error(
+      "❌ AUTH DEBUG: Session token verification failed:",
+      error.message,
+    );
     return null;
   }
 }
@@ -229,7 +238,10 @@ export async function getSession(cookieHeader) {
       return basicUser;
     }
   } catch (error) {
-    console.error(`❌ AUTH DEBUG: Error during basic auth verification:`, error);
+    console.error(
+      `❌ AUTH DEBUG: Error during basic auth verification:`,
+      error,
+    );
   }
 
   return null;
