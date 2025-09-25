@@ -8,6 +8,7 @@ import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { watchlist } from "$lib/database.js";
 import { query } from "$lib/database.js";
 import { parse } from "cookie";
+import { invalidateCache } from "$lib/cache.js";
 
 export async function POST({ request }) {
   try {
@@ -93,6 +94,14 @@ export async function POST({ request }) {
 
     // Add to watchlist
     const watchlistItem = await watchlist.add(localUserId, numericGameId);
+
+    // Invalidate watchlist-related cache entries
+    await invalidateCache([
+      `watchlist-${localUserId}-${numericGameId}`,
+      `user-${localUserId}-watchlist`,
+      // Also clear any game detail caches for this game
+      `game-details-${numericGameId}`,
+    ]);
 
     return json({
       success: true,

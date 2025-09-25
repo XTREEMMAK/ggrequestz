@@ -38,13 +38,14 @@ export async function POST({ request, cookies }) {
 
     // Get user's local ID - support both basic auth and Authentik users
     let userResult;
-    if (user.sub?.startsWith("basic_auth_")) {
-      const basicAuthId = user.sub.replace("basic_auth_", "");
+    if (user.auth_type === "basic") {
+      // For basic auth, use the direct ID from the user object
       userResult = await query(
         "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)],
+        [parseInt(user.id)],
       );
     } else {
+      // For Authentik users, use the sub field
       userResult = await query(
         "SELECT id FROM ggr_users WHERE authentik_sub = $1",
         [user.sub],

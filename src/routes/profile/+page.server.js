@@ -6,7 +6,9 @@ import { redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getUserWatchlist, getUserRequests } from "$lib/userProfile.js";
 
-export async function load({ parent }) {
+export async function load({ parent, depends }) {
+  // Add dependency for watchlist data invalidation
+  depends("app:watchlist");
   const { user } = await parent();
 
   // Redirect to login if not authenticated

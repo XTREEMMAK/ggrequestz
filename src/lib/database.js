@@ -628,10 +628,9 @@ export const watchlist = {
   async contains(userId, igdbId) {
     try {
       const result = await query(
-        "SELECT 1 FROM ggr_user_watchlist WHERE user_id = $1 AND igdb_id = $2",
+        "SELECT * FROM ggr_user_watchlist WHERE user_id = $1 AND igdb_id = $2",
         [userId, igdbId],
       );
-
       return result.rows.length > 0;
     } catch (error) {
       console.error("Failed to check watchlist:", error);
@@ -651,8 +650,8 @@ export const watchlist = {
         "INSERT INTO ggr_user_watchlist (user_id, igdb_id) VALUES ($1, $2) RETURNING *",
         [userId, igdbId],
       );
-
-      return result.rows.length > 0 ? result.rows[0] : null;
+      const added = result.rows.length > 0 ? result.rows[0] : null;
+      return added;
     } catch (error) {
       console.error("Failed to add to watchlist:", error);
       return null;
@@ -672,7 +671,8 @@ export const watchlist = {
         [userId, igdbId],
       );
 
-      return result.rowCount > 0;
+      const success = result.rowCount > 0;
+      return success;
     } catch (error) {
       console.error("Failed to remove from watchlist:", error);
       return false;

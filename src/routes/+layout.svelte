@@ -109,17 +109,19 @@
 		currentPath !== '/search' && currentPath !== '/request'
 	);
 	
-	// Hide entire mobile header on admin pages, login pages, and setup pages
+	// Hide entire mobile header on admin pages, login pages, setup pages, and register pages
 	let shouldShowMobileHeader = $derived(
-		!currentPath.startsWith('/admin') && 
+		!currentPath.startsWith('/admin') &&
 		!currentPath.startsWith('/login') &&
-		!currentPath.startsWith('/setup')
+		!currentPath.startsWith('/setup') &&
+		!currentPath.startsWith('/register')
 	);
-	
-	// Hide sidebar navigation on login pages and setup pages
+
+	// Hide sidebar navigation on login pages, setup pages, and register pages
 	let shouldShowSidebar = $derived(
 		!currentPath.startsWith('/login') &&
-		!currentPath.startsWith('/setup')
+		!currentPath.startsWith('/setup') &&
+		!currentPath.startsWith('/register')
 	);
 	
 	function isActivePath(path) {

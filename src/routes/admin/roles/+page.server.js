@@ -28,11 +28,11 @@ async function getUserId(cookies) {
     try {
       const { getBasicAuthUser } = await import("$lib/basicAuth.js");
       const user = getBasicAuthUser(basicAuthSessionCookie);
-      if (user && user.sub?.startsWith("basic_auth_")) {
-        const basicAuthId = user.sub.replace("basic_auth_", "");
+      if (user && user.auth_type === "basic") {
+        // For basic auth, use the direct ID from the user object
         const result = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)],
+          [parseInt(user.id)],
         );
         return result.rows.length > 0 ? result.rows[0].id : null;
       }

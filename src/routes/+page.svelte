@@ -12,7 +12,7 @@
   import SEOHead from '../components/SEOHead.svelte';
   import LoadMoreButton from '../components/LoadMoreButton.svelte';
   import SkeletonLoader from '../components/SkeletonLoader.svelte';
-  import { goto } from '$app/navigation';
+  import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { slide, fade, scale } from 'svelte/transition';
   import { quintOut, backOut } from 'svelte/easing';
   import { beforeNavigate, afterNavigate } from '$app/navigation';
@@ -24,6 +24,7 @@
   import { getGameByIdClient, warmGameCacheClient } from '$lib/gameCache.js';
   import { rommService, watchlistService } from '$lib/clientServices.js';
   import { metrics, prefetcher } from '$lib/performance.js';
+  import { batchGetWatchlistStatus, updateWatchlistStatus, getCachedWatchlistStatus } from '$lib/watchlistStatus.js';
   
   let { data } = $props();
   
@@ -38,8 +39,13 @@
   let showPopularGames = $state(false); // Show last
   let progressiveLoadingComplete = $state(false); // Track if progressive loading is done
   let recentRequests = $derived(data?.recentRequests || []);
-  let userWatchlist = $state(data?.userWatchlist || []);
+  let userWatchlist = $derived(data?.userWatchlist || []);
+
+
+  // Real-time watchlist status tracking
+  let watchlistStatuses = $state(new Map());
   let rommAvailable = $derived(data?.rommAvailable || false);
+
   let genres = $state(data?.genres || []);
   let publishers = $state(data?.publishers || []);
   let systems = $state(data?.systems || []);
@@ -50,11 +56,48 @@
   let loadingNewReleases = $state(false);
   let loadingPopular = $state(false);
 
+  // Track if we just invalidated to prioritize server data
+  let justInvalidated = $state(false);
+
   // Helper function to check if game is in watchlist
   function isGameInWatchlist(game) {
     const gameId = game.igdb_id || game.id;
-    return userWatchlist.some(w => w.igdb_id === gameId);
+
+    // Check real-time status first
+    const realtimeStatus = watchlistStatuses.get(gameId);
+
+    // Fall back to server data
+    const serverStatus = userWatchlist.some(w => w.igdb_id == gameId);
+
+    // Check for mismatches between client and server
+    if (realtimeStatus !== undefined && realtimeStatus !== serverStatus) {
+      let shouldUseServer = false;
+
+      // If we just invalidated and there's a mismatch, trust server data
+      if (justInvalidated) {
+        shouldUseServer = true;
+      }
+      // Even without justInvalidated flag, if there's a clear server-client mismatch on page load, prioritize server
+      // This handles cases where cache persisted across browser sessions
+      else if (watchlistStatuses.size > 0 && userWatchlist.length > 0) {
+        shouldUseServer = true;
+      }
+
+      if (shouldUseServer) {
+        watchlistStatuses.delete(gameId);
+        return serverStatus;
+      }
+    }
+
+    // If we have a real-time status, use it
+    if (realtimeStatus !== undefined) {
+      return realtimeStatus;
+    }
+
+    // Otherwise use server status
+    return serverStatus;
   }
+
   
   // Pagination tracking
   let newInLibraryPage = $state(1);
@@ -66,6 +109,7 @@
   let newInLibraryExpanded = $state(true);
   let rommsExpanded = $state(true);
   let newReleasesExpanded = $state(true);
+
   let popularExpanded = $state(true);
   
   // Scroll to top button state
@@ -267,18 +311,40 @@
 
     const game = detail.game;
     const gameId = game.igdb_id || game.id;
-    const isCurrentlyInWatchlist = userWatchlist.some(w => w.igdb_id === gameId);
+    const isCurrentlyInWatchlist = isGameInWatchlist(game);
 
     try {
       if (isCurrentlyInWatchlist) {
         // Remove from watchlist
-        const success = await watchlistService.removeFromWatchlist(gameId);
-        if (success) {
-          userWatchlist = userWatchlist.filter(w => w.igdb_id !== gameId);
-          toasts.success(`${game.title} removed from watchlist`);
-        } else {
-          throw new Error('Failed to remove from watchlist');
+        const result = await watchlistService.removeFromWatchlist(gameId);
+
+        // Always update local state to "removed" regardless of API result
+        // This handles cases where the game wasn't actually in the DB
+        watchlistStatuses = new Map(watchlistStatuses.set(gameId, false));
+        updateWatchlistStatus(gameId, false);
+
+        // Invalidate SvelteKit cache to refresh watchlist data
+        if (browser) {
+          // Small delay to ensure database transaction completes
+          await new Promise(resolve => setTimeout(resolve, 100));
+          await invalidateAll();
+
+          // Set flag to prioritize server data over stale client cache
+          justInvalidated = true;
+
+          // Clear ALL stale client-side statuses after invalidation
+          setTimeout(() => {
+            watchlistStatuses = new Map(); // Clear entire client cache
+
+            // Reset invalidation flag after cleanup
+            setTimeout(() => {
+              justInvalidated = false;
+            }, 100);
+          }, 200);
+
         }
+
+        toasts.success(`${game.title} removed from watchlist`);
       } else {
         // Add to watchlist
         const gameData = {
@@ -289,10 +355,34 @@
           rating: game.rating,
           release_date: game.release_date
         };
-        
+
         const success = await watchlistService.addToWatchlist(gameId, gameData);
         if (success) {
-          userWatchlist = [...userWatchlist, { ...gameData, igdb_id: gameId }];
+          // Update real-time status immediately for UI feedback
+          watchlistStatuses = new Map(watchlistStatuses.set(gameId, true));
+          updateWatchlistStatus(gameId, true);
+
+          // Invalidate SvelteKit cache to refresh watchlist data
+          if (browser) {
+            // Small delay to ensure database transaction completes
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await invalidateAll();
+
+            // Set flag to prioritize server data over stale client cache
+            justInvalidated = true;
+
+            // Clear ALL stale client-side statuses after invalidation (consistent with remove)
+            setTimeout(() => {
+              watchlistStatuses = new Map(); // Clear entire client cache
+
+              // Reset invalidation flag after cleanup
+              setTimeout(() => {
+                justInvalidated = false;
+              }, 100);
+            }, 200);
+
+          }
+
           toasts.success(`${game.title} added to watchlist`);
         } else {
           throw new Error('Failed to add to watchlist');
@@ -325,6 +415,7 @@
     modalOpen = false;
     modalGame = null;
   }
+
   
   function handleModalRequest({ detail }) {
     // Close modal and redirect to request page
@@ -502,19 +593,19 @@
     }
   });
   
-  afterNavigate((navigation) => {
+  afterNavigate(async (navigation) => {
     if (!browser) return;
-    
+
     // Only restore when returning from a game detail page
     if (window.location.pathname === '/' && navigation.from?.url.pathname.startsWith('/game/')) {
       // Set flag that we're navigating back
       isNavigatingBack = true;
-      
+
       // Show all sections immediately when navigating back
       showNewInLibrary = true;
       showNewReleases = true;
       showPopularGames = true;
-      
+
       // Attempt to restore state if we have any
       const hasSavedState = sessionStorage.getItem('homepage_content_state');
       if (hasSavedState) {
@@ -524,7 +615,7 @@
           sessionStorage.removeItem('homepage_content_state');
         }, 500);
       }
-      
+
       setTimeout(() => {
         restoreScrollPosition();
       }, 50); // Reduced timeout
@@ -628,7 +719,87 @@
       progressiveLoadingComplete = true;
     }
   });
-  
+
+  // Initialize watchlist status from cache on page load (runs only once)
+  let hasInitialized = false;
+  $effect(() => {
+    if (!browser || !user || hasInitialized) return;
+
+    // Get cached statuses for all games on initial load
+    const allGameIds = [];
+    [...newInLibrary, ...newReleases, ...popularGames].forEach(game => {
+      const gameId = game.igdb_id || game.id;
+      if (gameId && !allGameIds.includes(gameId)) {
+        allGameIds.push(gameId);
+      }
+    });
+
+    // Only sync from cache, no API calls to avoid infinite loops
+    const cachedStatuses = new Map();
+    allGameIds.forEach(gameId => {
+      const cached = getCachedWatchlistStatus(gameId);
+      if (cached !== null) {
+        cachedStatuses.set(gameId, cached);
+      }
+    });
+
+    if (cachedStatuses.size > 0) {
+      watchlistStatuses = cachedStatuses; // Don't spread existing Map to avoid loop
+    }
+    hasInitialized = true;
+  });
+
+  // Fetch real-time watchlist statuses - always refresh when new games are added
+  let watchlistLoadPromise = null;
+  let lastCheckedGameIds = new Set();
+
+
+
+  $effect(() => {
+    // Only proceed if we have a properly authenticated user with sub field
+    if (!browser || !user || !user.sub) return;
+
+    // Get all visible game IDs
+    const allGameIds = [];
+    [...newInLibrary, ...newReleases, ...popularGames].forEach(game => {
+      const gameId = game.igdb_id || game.id;
+      if (gameId && !allGameIds.includes(gameId)) {
+        allGameIds.push(gameId);
+      }
+    });
+
+    // Find game IDs that haven't been checked yet
+    const uncheckedGameIds = allGameIds.filter(id => !lastCheckedGameIds.has(String(id)));
+
+    if (uncheckedGameIds.length > 0 && !watchlistLoadPromise) {
+      // Wait for page to be fully loaded and user to be authenticated
+      const timeout = setTimeout(() => {
+        // Double check user is still valid and page is ready
+        if (user && user.sub) {
+          watchlistLoadPromise = batchGetWatchlistStatus(uncheckedGameIds)
+            .then(statuses => {
+              if (statuses.size > 0) {
+                // Merge new statuses with existing ones
+                const mergedStatuses = new Map(watchlistStatuses);
+                statuses.forEach((value, key) => mergedStatuses.set(key, value));
+                watchlistStatuses = mergedStatuses;
+              }
+              // Mark these games as checked
+              uncheckedGameIds.forEach(id => lastCheckedGameIds.add(String(id)));
+            })
+            .catch(error => {
+              // Handle errors silently
+            })
+            .finally(() => {
+              watchlistLoadPromise = null; // Reset for future calls
+            });
+        }
+      }, 200); // Shorter delay for dynamically loaded games
+
+      return () => clearTimeout(timeout);
+    }
+  });
+
   // Warm cache for games visible in initial viewport with performance monitoring
   async function warmInitialViewportGames() {
     const startTime = performance.now();

@@ -4,6 +4,7 @@
 
 import { redirect } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
+import { query } from "$lib/database.js";
 
 export async function load({ parent }) {
   const { user, needsSetup, authMethod } = await parent();
@@ -53,10 +54,23 @@ export async function load({ parent }) {
     }
   }
 
+  // Check if registration is enabled
+  let registrationEnabled = false;
+  try {
+    const settingResult = await query(
+      "SELECT value FROM ggr_system_settings WHERE key = 'system.registration_enabled'",
+    );
+    registrationEnabled =
+      settingResult.rows.length > 0 && settingResult.rows[0].value === "true";
+  } catch (error) {
+    console.warn("Could not check registration setting:", error);
+  }
+
   return {
     user: null,
     isAuthentikEnabled,
     isBasicAuthEnabled,
+    registrationEnabled,
     hasAuthentikId: !!AUTHENTIK_CLIENT_ID,
     hasAuthentikSecret: !!AUTHENTIK_CLIENT_SECRET,
     hasAuthentikIssuer: !!AUTHENTIK_ISSUER,

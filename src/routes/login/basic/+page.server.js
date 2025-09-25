@@ -4,6 +4,7 @@
 
 import { redirect, fail } from "@sveltejs/kit";
 import { authenticateUser, createBasicAuthToken } from "$lib/basicAuth.js";
+import { query } from "$lib/database.js";
 
 export async function load({ parent }) {
   const { user } = await parent();
@@ -13,8 +14,21 @@ export async function load({ parent }) {
     throw redirect(302, "/");
   }
 
+  // Check if registration is enabled
+  let registrationEnabled = false;
+  try {
+    const settingResult = await query(
+      "SELECT value FROM ggr_system_settings WHERE key = 'system.registration_enabled'",
+    );
+    registrationEnabled =
+      settingResult.rows.length > 0 && settingResult.rows[0].value === "true";
+  } catch (error) {
+    console.warn("Could not check registration setting:", error);
+  }
+
   return {
     user: null,
+    registrationEnabled,
   };
 }
 

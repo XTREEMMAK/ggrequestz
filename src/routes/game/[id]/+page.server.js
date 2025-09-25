@@ -47,16 +47,33 @@ export async function load({ params, parent, request }) {
       }
     });
 
+    // Check if game is in user's watchlist
     let isInWatchlist = false;
-
-    // Check if game is in user's watchlist (with shorter cache)
     if (user) {
       try {
-        isInWatchlist = await withCache(
-          `watchlist-${user.sub}-${gameId}`,
-          () => watchlist.contains(user.sub, gameId),
-          60 * 1000, // 1 minute cache for watchlist status
-        );
+        // Get user's local database ID using the same logic as API endpoints
+        let userId;
+        if (user.sub?.startsWith("basic_auth_")) {
+          // For Basic Auth users, extract actual user ID from sub
+          userId = user.sub.replace("basic_auth_", "");
+        } else {
+          // For Authentik users, look up database ID by authentik_sub
+          const { query } = await import("$lib/database.js");
+          const userResult = await query(
+            "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+            [user.sub],
+          );
+          if (userResult.rows.length === 0) {
+            console.error("User not found in database for watchlist check");
+            userId = null;
+          } else {
+            userId = userResult.rows[0].id;
+          }
+        }
+
+        if (userId) {
+          isInWatchlist = await watchlist.contains(userId, gameId);
+        }
       } catch (watchlistError) {
         console.error("Failed to check watchlist status:", watchlistError);
         // Continue without watchlist status

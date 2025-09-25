@@ -8,6 +8,7 @@
   import StatusBadge from '../../../../components/StatusBadge.svelte';
   import LoadingSpinner from '../../../../components/LoadingSpinner.svelte';
   import { formatDate } from '$lib/utils.js';
+  import { toasts } from '$lib/stores/toast.js';
   import Icon from '@iconify/svelte';
   
   let { data } = $props();
@@ -16,6 +17,12 @@
   let userPermissions = $derived(data?.userPermissions || []);
   
   let loading = $state(false);
+
+  // Confirmation modal state
+  let showConfirmDialog = $state(false);
+  let confirmAction = $state(null);
+  let confirmMessage = $state('');
+  let confirmTitle = $state('');
   
   // Permission checks
   let canApprove = $derived(userPermissions.includes('request.approve'));
@@ -37,14 +44,15 @@
       
       const result = await response.json();
       if (result.success) {
-        // Refresh the page to get updated data
+        // Show success message and refresh the page
+        toasts.success(`Request ${newStatus} successfully!`);
         window.location.reload();
       } else {
         throw new Error(result.error || 'Failed to update request');
       }
     } catch (error) {
       console.error('Update request error:', error);
-      alert('Failed to update request: ' + error.message);
+      toasts.error('Failed to update request: ' + error.message);
     } finally {
       loading = false;
     }
@@ -67,6 +75,26 @@
       case 'fix': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
+  }
+
+  // Confirmation dialog helpers
+  function showConfirmation(title, message, action) {
+    confirmTitle = title;
+    confirmMessage = message;
+    confirmAction = action;
+    showConfirmDialog = true;
+  }
+
+  function handleConfirmYes() {
+    showConfirmDialog = false;
+    if (confirmAction) {
+      confirmAction();
+    }
+  }
+
+  function handleConfirmNo() {
+    showConfirmDialog = false;
+    confirmAction = null;
   }
 </script>
 
@@ -279,7 +307,11 @@
       <div class="flex items-center space-x-4">
         <button
           type="button"
-          onclick={() => updateRequestStatus('approved')}
+          onclick={() => showConfirmation(
+            'Approve Request',
+            'Are you sure you want to approve this request?',
+            () => updateRequestStatus('approved')
+          )}
           disabled={loading}
           class="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors"
         >
@@ -293,7 +325,11 @@
         
         <button
           type="button"
-          onclick={() => updateRequestStatus('rejected')}
+          onclick={() => showConfirmation(
+            'Reject Request',
+            'Are you sure you want to reject this request?',
+            () => updateRequestStatus('rejected')
+          )}
           disabled={loading}
           class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition-colors"
         >
@@ -308,3 +344,48 @@
     </div>
   {/if}
 </div>
+
+<!-- Confirmation Modal -->
+{#if showConfirmDialog}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+            {confirmTitle}
+          </h3>
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-6">
+          {confirmMessage}
+        </p>
+
+        <div class="flex items-center justify-end space-x-3">
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick={handleConfirmYes}
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}

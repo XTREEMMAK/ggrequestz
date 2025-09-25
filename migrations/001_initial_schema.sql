@@ -419,6 +419,16 @@ INSERT INTO ggr_permissions (name, display_name, description, category) VALUES
     ('system.settings', 'System Settings', 'Can modify system configuration', 'system')
 ON CONFLICT (name) DO NOTHING;
 
+-- Insert default system settings
+INSERT INTO ggr_system_settings (key, value, category, description, is_sensitive)
+VALUES (
+    'security_404_limit',
+    '{"enabled": true, "maxAttempts": 5, "timeWindow": 300, "logoutUser": true, "notifyAdmin": true}',
+    'security',
+    'Security settings for 404 attempt limiting and monitoring',
+    false
+) ON CONFLICT (key) DO NOTHING;
+
 -- Assign permissions to default roles
 INSERT INTO ggr_role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM ggr_roles r, ggr_permissions p

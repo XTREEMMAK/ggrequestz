@@ -5,6 +5,118 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-09-24
+
+### Added
+
+- **Security Features**
+  - 404 Attack Protection system with configurable limits
+  - Gaming-themed 404 error page with animations and contextual messages
+  - Client-side security monitoring with localStorage tracking
+  - Admin-configurable security settings (max attempts, time windows, notifications)
+  - Automatic user logout and admin notifications for security violations
+  - Enhanced security logging with IP tracking and user agent detection
+
+- **Enhanced User Experience**
+  - Beautiful animated 404 page with floating elements and glitch effects
+  - Contextual error messages for different 404 scenarios
+  - Hidden navigation on error pages for better focus
+  - Gaming-themed visual design with controller icons and cosmic backgrounds
+
+- **Watchlist Improvements**
+  - Batch processing for watchlist operations
+  - Improved consistency across the application
+  - Better synchronization between different watchlist views
+  - Enhanced performance for large watchlists
+
+- **Docker & Deployment**
+  - New Docker Compose methods for easier instance deployment
+  - Simplified setup process with better defaults
+  - Enhanced Docker configuration for various deployment scenarios
+  - Improved container startup and health checking
+
+- **Database & Migration System**
+  - Enhanced migration system for existing installations
+  - Automatic security settings deployment for new installations
+  - Missing database initialization scripts added
+  - Migration file for existing installations (002_security_settings.sql)
+
+- **Documentation & Usability**
+  - Consolidated documentation for better readability
+  - Enhanced setup guides and troubleshooting documentation
+  - Clearer configuration instructions
+  - Improved project structure and organization
+
+### Fixed
+
+- **Authentication & User Management**
+  - Fixed basic user registration system
+  - Resolved admin permission issues
+  - Corrected user role assignment problems
+  - Enhanced authentication flow reliability
+
+- **UI & Form Improvements**
+  - Fixed form title inconsistencies across the application
+  - Resolved navigation visibility issues on error pages
+  - Improved form validation and error handling
+  - Enhanced responsive design for mobile devices
+
+- **Database & Infrastructure**
+  - Fixed missing database initialization scripts
+  - Resolved migration system issues for existing installations
+  - Enhanced database connection handling
+  - Improved error handling for database operations
+
+- **Security & Performance**
+  - Implemented proper security headers
+  - Enhanced session management
+  - Improved error page performance with client-side tracking
+  - Better handling of security violations and user logout
+
+### Enhanced
+
+- **Admin Panel**
+  - New Security Settings section in admin panel
+  - Comprehensive 404 protection controls
+  - Real-time security monitoring configuration
+  - Enhanced admin notification system integration
+
+- **Performance & Reliability**
+  - Optimized client-side security tracking
+  - Improved error handling and graceful degradation
+  - Enhanced cache management for security settings
+  - Better resource loading and management
+
+- **Migration & Upgrade Path**
+  - Seamless upgrade path for existing installations
+  - Automatic migration system for new features
+  - Docker-friendly deployment updates
+  - Backward compatibility maintained
+
+### Migration Notes
+
+When upgrading from v1.0.3 to v1.1.0:
+
+1. **Security Features**:
+   - New installations automatically include 404 protection
+   - Existing Docker installations will get updates on restart
+   - NPM installations: run `node scripts/database/db-manager.js migrate`
+
+2. **Database Updates**:
+   - New security settings table entries added automatically
+   - Migration system handles existing installations gracefully
+   - No manual database changes required
+
+3. **Configuration**:
+   - 404 protection enabled by default with sensible limits (5 attempts in 5 minutes)
+   - Admin can configure all security settings via admin panel
+   - Gotify notifications supported for security violations
+
+4. **Deployment**:
+   - Enhanced Docker Compose configurations available
+   - Improved startup scripts and health checking
+   - Better support for various deployment scenarios
+
 ## [1.0.3] - 2025-09-23
 
 ### Added
@@ -330,7 +442,8 @@ When upgrading from v1.0.2:
 - **v1.0.0** (2025-08-11): Initial stable release with core functionality
 - **v1.0.1** (2025-08-15): Major performance improvements and project reorganization
 - **v1.0.2** (2025-08-18): Docker-specific fixes and mobile improvements
-- **v1.1.0** (Planned): Advanced user integrations and API enhancements
+- **v1.0.3** (2025-09-23): Pre-built Docker images and authentication improvements
+- **v1.1.0** (2025-09-24): Security features, 404 protection, watchlist improvements
 - **v1.2.0** (Planned): Enhanced admin features and analytics
 - **v2.0.0** (Planned): Major UI/UX improvements and new integrations
 

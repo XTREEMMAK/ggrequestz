@@ -12,6 +12,7 @@
   let { data } = $props();
   let backgroundImage = $state('');
   let imageLoaded = $state(false);
+  let loading = $state(false);
 
   // Load background image
   onMount(async () => {
@@ -50,8 +51,18 @@
   });
 
   async function goToLogin() {
-    await invalidateAll();
-    goto('/login');
+    try {
+      await invalidateAll();
+      goto('/login');
+    } catch (error) {
+      console.error('Error during navigation:', error);
+      loading = false;
+    }
+  }
+
+  function handleStartClick() {
+    loading = true;
+    goToLogin();
   }
 </script>
 
@@ -70,6 +81,17 @@
   <div class="absolute inset-0 bg-black/60"></div>
   <div class="absolute inset-0 bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-pink-900/30"></div>
 </div>
+
+<!-- Loading overlay -->
+{#if loading}
+  <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 text-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+      <p class="text-white text-lg font-medium">Preparing your dashboard...</p>
+      <p class="text-blue-100/70 text-sm mt-2">Please wait while we set up your experience</p>
+    </div>
+  </div>
+{/if}
 
 <!-- Main Content -->
 <div class="relative min-h-screen flex items-center justify-center p-4">
@@ -218,14 +240,21 @@
       <div class="text-center">
         <button
           type="button"
-          onclick={goToLogin}
-          class="px-8 py-4 bg-gradient-to-r from-green-600 via-blue-600 to-purple-600 
-                 hover:from-green-700 hover:via-blue-700 hover:to-purple-700 
+          onclick={handleStartClick}
+          disabled={loading}
+          class="px-8 py-4 bg-gradient-to-r from-green-600 via-blue-600 to-purple-600
+                 hover:from-green-700 hover:via-blue-700 hover:to-purple-700
+                 disabled:opacity-50 disabled:cursor-not-allowed
                  text-white font-bold rounded-xl transition-all duration-200
                  transform hover:scale-[1.02] shadow-2xl text-lg"
         >
-          <Icon icon="heroicons:play" class="w-6 h-6 inline mr-3" />
-          Start Using G.G. Requestz
+          {#if loading}
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white inline mr-3"></div>
+            Starting...
+          {:else}
+            <Icon icon="heroicons:play" class="w-6 h-6 inline mr-3" />
+            Start Using G.G. Requestz
+          {/if}
         </button>
         
         <!-- Progress indicator -->

@@ -25,8 +25,11 @@ import { safeAsync, withTimeout } from "$lib/utils.js";
 
 import { redirect } from "@sveltejs/kit";
 
-export async function load({ parent, cookies, url }) {
+export async function load({ parent, cookies, url, depends }) {
   const { user, needsSetup, authMethod } = await parent();
+
+  // Establish dependency for watchlist invalidation
+  depends("app:watchlist");
 
   // Redirect to setup if initial setup is needed
   if (needsSetup) {
@@ -124,7 +127,12 @@ export async function load({ parent, cookies, url }) {
             }
           }
 
-          return watchlist.get(userId);
+          // Force a fresh database connection to avoid stale reads
+          const { query } = await import("$lib/database.js");
+
+          const userWatchlistData = await watchlist.get(userId);
+
+          return userWatchlistData;
         },
         {
           timeout: 1500 * timeoutMultiplier,

@@ -72,11 +72,15 @@ services:
     networks:
       - ggrequestz-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f --retry 3 --max-time 10 http://localhost:3000/api/health || curl -f http://localhost:3000/ || exit 1",
+        ]
       interval: 30s
-      timeout: 15s
-      retries: 5
-      start_period: 60s
+      timeout: 25s
+      retries: 6
+      start_period: 120s
 
   # PostgreSQL Database
   postgres:
@@ -141,11 +145,15 @@ services:
     networks:
       - ggrequestz-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8108/collections || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 6
-      start_period: 30s
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f --retry 2 --max-time 10 http://localhost:8108/health || curl -f -H 'X-TYPESENSE-API-KEY: ${TYPESENSE_API_KEY:-xyz123}' http://localhost:8108/collections || exit 1",
+        ]
+      interval: 35s
+      timeout: 20s
+      retries: 8
+      start_period: 60s
 
   # Optional: Gotify Notification Server
   gotify:

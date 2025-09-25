@@ -8,6 +8,7 @@
   import { invalidateAll } from '$app/navigation';
   import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
   import { formatDate } from '$lib/utils.js';
+  import { toasts } from '$lib/stores/toast.js';
   import Icon from '@iconify/svelte';
   
   let { data } = $props();
@@ -22,6 +23,12 @@
   let loading = $state(false);
   let selectedUsers = $state(new Set());
   let pageUrl = $derived($page.url);
+
+  // Confirmation modal state
+  let showConfirmDialog = $state(false);
+  let confirmAction = $state(null);
+  let confirmMessage = $state('');
+  let confirmTitle = $state('');
   
   // Get filter state directly from URL to ensure button states are correct (matching admin requests pattern)
   let currentSearch = $derived($page.url.searchParams.get('search') || '');
@@ -179,7 +186,7 @@
       }
     } catch (error) {
       console.error('Update user error:', error);
-      alert('Failed to update user: ' + error.message);
+      toasts.error('Failed to update user: ' + error.message);
     } finally {
       loading = false;
     }
@@ -194,8 +201,14 @@
       delete: 'delete'
     };
     
-    if (!confirm(`Are you sure you want to ${actionLabels[action]} ${selectedUsers.size} user(s)?`)) return;
-    
+    showConfirmation(
+      `${actionLabels[action].charAt(0).toUpperCase() + actionLabels[action].slice(1)} Users`,
+      `Are you sure you want to ${actionLabels[action]} ${selectedUsers.size} user(s)?`,
+      () => performBulkUpdate(action, value)
+    );
+  }
+
+  async function performBulkUpdate(action, value = null) {
     loading = true;
     try {
       const response = await fetch('/admin/api/users/bulk-update', {
@@ -211,13 +224,14 @@
       const result = await response.json();
       if (result.success) {
         // Refresh the page to get updated data
+        toasts.success(`Successfully ${actionLabels[action]}d ${selectedUsers.size} user(s)!`);
         window.location.reload();
       } else {
         throw new Error(result.error || 'Failed to update users');
       }
     } catch (error) {
       console.error('Bulk update error:', error);
-      alert('Failed to update users: ' + error.message);
+      toasts.error('Failed to update users: ' + error.message);
     } finally {
       loading = false;
     }
@@ -232,35 +246,87 @@
   
   function getRoleBadges(user) {
     const badges = [];
-    
-    // For basic auth users, show admin status directly from is_admin field
-    if (user.auth_type === 'basic') {
-      if (user.is_admin) {
-        badges.push({ text: 'Administrator', class: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' });
-      } else {
-        badges.push({ text: 'Basic User', class: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' });
+
+    // Define role hierarchy (highest to lowest priority)
+    const roleHierarchy = ['admin', 'manager', 'viewer'];
+    const roleColors = {
+      admin: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      manager: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      viewer: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+    };
+
+    // Check if user has admin privileges through is_admin flag or admin role
+    let hasAdminRole = false;
+    if (user.is_admin) {
+      hasAdminRole = true;
+    } else if (user.roles && user.roles.length > 0) {
+      hasAdminRole = user.roles.some(role => role.name === 'admin');
+    }
+
+    if (hasAdminRole) {
+      badges.push({
+        text: 'Administrator',
+        class: roleColors.admin
+      });
+      return badges;
+    }
+
+    // For non-admin users, find the highest priority role
+    const userRoles = user.roles || [];
+    if (userRoles.length > 0) {
+      // Find the highest priority role
+      let highestRole = null;
+      for (const hierarchyRole of roleHierarchy) {
+        const foundRole = userRoles.find(role => role.name === hierarchyRole);
+        if (foundRole) {
+          highestRole = foundRole;
+          break;
+        }
       }
-    } else {
-      // For Authentik users, show their roles
-      const userRoles = user.roles || [];
-      if (userRoles.length === 0) {
-        badges.push({ text: 'No Role', class: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' });
+
+      if (highestRole) {
+        badges.push({
+          text: highestRole.display_name || highestRole.name,
+          class: roleColors[highestRole.name] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+        });
       } else {
-        userRoles.forEach(role => {
-          const roleColors = {
-            admin: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-            manager: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-            viewer: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-          };
-          badges.push({
-            text: role.display_name || role.name,
-            class: roleColors[role.name] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-          });
+        // Show first role if not in hierarchy
+        const firstRole = userRoles[0];
+        badges.push({
+          text: firstRole.display_name || firstRole.name,
+          class: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
         });
       }
+    } else {
+      // No roles assigned
+      if (user.auth_type === 'basic') {
+        badges.push({ text: 'Basic User', class: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' });
+      } else {
+        badges.push({ text: 'No Role', class: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' });
+      }
     }
-    
+
     return badges;
+  }
+
+  // Confirmation dialog helpers
+  function showConfirmation(title, message, action) {
+    confirmTitle = title;
+    confirmMessage = message;
+    confirmAction = action;
+    showConfirmDialog = true;
+  }
+
+  function handleConfirmYes() {
+    showConfirmDialog = false;
+    if (confirmAction) {
+      confirmAction();
+    }
+  }
+
+  function handleConfirmNo() {
+    showConfirmDialog = false;
+    confirmAction = null;
   }
 </script>
 
@@ -650,3 +716,48 @@
     {/if}
   </div>
 </div>
+
+<!-- Confirmation Modal -->
+{#if showConfirmDialog}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+            {confirmTitle}
+          </h3>
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-6">
+          {confirmMessage}
+        </p>
+
+        <div class="flex items-center justify-end space-x-3">
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick={handleConfirmYes}
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}

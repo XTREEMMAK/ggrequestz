@@ -8,6 +8,7 @@ import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { watchlist } from "$lib/database.js";
 import { query } from "$lib/database.js";
 import { parse } from "cookie";
+import { invalidateCache } from "$lib/cache.js";
 
 export async function POST({ request }) {
   try {
@@ -61,17 +62,12 @@ export async function POST({ request }) {
 
     // Enhanced validation for game_id
     if (!game_id && game_id !== 0) {
-      console.error("Watchlist remove - missing game_id:", { body, game_id });
       throw error(400, "Missing game_id");
     }
 
     // Ensure game_id is numeric
     const numericGameId = parseInt(game_id);
     if (isNaN(numericGameId)) {
-      console.error("Watchlist remove - invalid game_id:", {
-        game_id,
-        type: typeof game_id,
-      });
       throw error(400, "Invalid game_id format");
     }
 
@@ -87,6 +83,14 @@ export async function POST({ request }) {
         { status: 400 },
       );
     }
+
+    // Invalidate watchlist-related cache entries
+    await invalidateCache([
+      `watchlist-${localUserId}-${numericGameId}`,
+      `user-${localUserId}-watchlist`,
+      // Also clear any game detail caches for this game
+      `game-details-${numericGameId}`,
+    ]);
 
     return json({
       success: true,

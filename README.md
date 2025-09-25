@@ -6,7 +6,7 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
@@ -106,7 +106,7 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:v1.0.3
+docker pull ghcr.io/xtreemmak/ggrequestz:v1.1.0
 ```
 
 ## 🤝 Contributing

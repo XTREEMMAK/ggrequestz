@@ -23,13 +23,12 @@ export async function load({ parent }) {
     let userResult;
 
     // Handle basic auth users vs Authentik users - both now in unified ggr_users table
-    if (user.sub?.startsWith("basic_auth_")) {
-      const basicAuthId = user.sub.replace("basic_auth_", "");
-
+    if (user.auth_type === "basic") {
+      // For basic auth, use the direct ID from the user object
       // Query the unified users table for basic auth users
       userResult = await query(
         "SELECT id, is_admin FROM ggr_users WHERE id = $1 AND is_active = TRUE AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)],
+        [parseInt(user.id)],
       );
 
       if (userResult.rows.length === 0) {

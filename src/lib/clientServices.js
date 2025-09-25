@@ -203,11 +203,6 @@ export class WatchlistService {
   async addToWatchlist(gameId, gameData) {
     if (!browser) return false;
 
-    // Optimistic update
-    if (this.cache) {
-      this.cache.push({ igdb_id: gameId, ...gameData });
-    }
-
     try {
       const response = await fetch("/api/watchlist/add", {
         method: "POST",
@@ -216,13 +211,23 @@ export class WatchlistService {
       });
 
       if (!response.ok) {
-        // Revert optimistic update
-        if (this.cache) {
-          this.cache = this.cache.filter((g) => g.igdb_id !== gameId);
+        // Handle specific case where game is already in watchlist
+        if (response.status === 400) {
+          const errorData = await response.json().catch(() => null);
+          if (errorData?.error === "Game is already in your watchlist") {
+            console.log(
+              "🔍 WATCHLIST SERVICE - Game already in watchlist, treating as success",
+            );
+            // Clear cache to force fresh data and treat as success
+            this.clearCache();
+            return true;
+          }
         }
         throw new Error(`HTTP ${response.status}`);
       }
 
+      // Clear cache after successful operation to force fresh data
+      this.clearCache();
       return true;
     } catch (error) {
       console.warn("Failed to add to watchlist:", error);
@@ -238,15 +243,6 @@ export class WatchlistService {
   async removeFromWatchlist(gameId) {
     if (!browser) return false;
 
-    // Store for potential revert
-    let removedItem = null;
-    if (this.cache) {
-      const index = this.cache.findIndex((g) => g.igdb_id === gameId);
-      if (index !== -1) {
-        removedItem = this.cache.splice(index, 1)[0];
-      }
-    }
-
     try {
       const response = await fetch("/api/watchlist/remove", {
         method: "POST",
@@ -255,13 +251,20 @@ export class WatchlistService {
       });
 
       if (!response.ok) {
-        // Revert optimistic update
-        if (removedItem && this.cache) {
-          this.cache.push(removedItem);
+        // Handle specific case where game is not in watchlist
+        if (response.status === 400) {
+          const errorData = await response.json().catch(() => null);
+          if (errorData?.error === "Game is not in your watchlist") {
+            // Clear cache to force fresh data and treat as success
+            this.clearCache();
+            return true;
+          }
         }
         throw new Error(`HTTP ${response.status}`);
       }
 
+      // Clear cache after successful operation to force fresh data
+      this.clearCache();
       return true;
     } catch (error) {
       console.warn("Failed to remove from watchlist:", error);

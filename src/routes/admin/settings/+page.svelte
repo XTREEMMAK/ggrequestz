@@ -5,6 +5,7 @@
 <script>
   import { goto } from '$app/navigation';
   import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
+  import { toasts } from '$lib/stores/toast.js';
   import Icon from '@iconify/svelte';
   
   let { data } = $props();
@@ -14,6 +15,12 @@
   let loading = $state(false);
   let saveStatus = $state('');
   let activeSection = $state('notifications');
+
+  // Confirmation modal state
+  let showConfirmDialog = $state(false);
+  let confirmAction = $state(null);
+  let confirmMessage = $state('');
+  let confirmTitle = $state('');
   
   // Settings sections
   let sections = [
@@ -35,11 +42,17 @@
       icon: 'heroicons:clipboard-document-list',
       description: 'Manage request handling behavior'
     },
-    { 
-      id: 'system', 
-      label: 'System Settings', 
+    {
+      id: 'system',
+      label: 'System Settings',
       icon: 'heroicons:cog-6-tooth',
       description: 'Core system configuration'
+    },
+    {
+      id: 'security',
+      label: 'Security Settings',
+      icon: 'heroicons:shield-check',
+      description: 'Security monitoring and protection'
     }
   ];
   
@@ -63,7 +76,14 @@
     
     // System settings
     'system.maintenance_mode': settings['system.maintenance_mode'] === 'true',
-    'system.registration_enabled': settings['system.registration_enabled'] === 'true'
+    'system.registration_enabled': settings['system.registration_enabled'] === 'true',
+
+    // Security settings
+    'security.404_limit_enabled': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').enabled : true,
+    'security.404_max_attempts': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').maxAttempts : 5,
+    'security.404_time_window': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').timeWindow : 300,
+    'security.404_logout_user': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').logoutUser : true,
+    'security.404_notify_admin': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').notifyAdmin : true
   });
   
   // Editable form state
@@ -79,7 +99,12 @@
     'request.auto_approve': false,
     'request.require_approval': false,
     'system.maintenance_mode': false,
-    'system.registration_enabled': false
+    'system.registration_enabled': false,
+    'security.404_limit_enabled': true,
+    'security.404_max_attempts': 5,
+    'security.404_time_window': 300,
+    'security.404_logout_user': true,
+    'security.404_notify_admin': true
   });
   
   // Sync editable data with settings on load
@@ -100,24 +125,47 @@
       // Convert form data to API format
       const settingsToSave = {};
       for (const [key, value] of Object.entries(editableFormData)) {
+        // Handle security settings as a JSON object
+        if (key.startsWith('security.404_')) {
+          continue; // Skip individual security settings, handle them together below
+        }
+
         if (typeof value === 'boolean') {
           settingsToSave[key] = value.toString();
         } else {
           settingsToSave[key] = value;
         }
       }
-      
+
+      // Combine security settings into a single JSON object
+      const securitySettings = {
+        enabled: editableFormData['security.404_limit_enabled'],
+        maxAttempts: parseInt(editableFormData['security.404_max_attempts']) || 5,
+        timeWindow: parseInt(editableFormData['security.404_time_window']) || 300,
+        logoutUser: editableFormData['security.404_logout_user'],
+        notifyAdmin: editableFormData['security.404_notify_admin']
+      };
+
+      // Update both the old format and new API format
+      settingsToSave['security_404_limit'] = JSON.stringify(securitySettings);
+
       const response = await fetch('/admin/api/settings/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: settingsToSave })
       });
-      
+
       const result = await response.json();
       if (result.success) {
         saveStatus = 'success';
         // Update local settings
         settings = { ...settings, ...settingsToSave };
+
+        // Update client-side cache for 404 security system
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('ggr_security_settings', JSON.stringify(securitySettings));
+        }
+
         setTimeout(() => { saveStatus = ''; }, 3000);
       } else {
         throw new Error(result.error || 'Failed to save settings');
@@ -133,7 +181,7 @@
   
   async function testGotifyConnection() {
     if (!editableFormData['gotify.url'] || !editableFormData['gotify.token']) {
-      alert('Please enter both Gotify URL and token');
+      toasts.error('Please enter both Gotify URL and token');
       return;
     }
     
@@ -150,13 +198,13 @@
       
       const result = await response.json();
       if (result.success) {
-        alert('✅ Gotify connection successful! Test notification sent.');
+        toasts.success('Gotify connection successful! Test notification sent.');
       } else {
         throw new Error(result.error || 'Connection failed');
       }
     } catch (error) {
       console.error('Test Gotify error:', error);
-      alert('❌ Gotify connection failed: ' + error.message);
+      toasts.error('Gotify connection failed: ' + error.message);
     } finally {
       loading = false;
     }
@@ -164,7 +212,7 @@
   
   async function testRommConnection() {
     if (!editableFormData['romm.server_url'] || !editableFormData['romm.username'] || !editableFormData['romm.password']) {
-      alert('Please enter ROMM server URL, username, and password');
+      toasts.error('Please enter ROMM server URL, username, and password');
       return;
     }
     
@@ -182,18 +230,37 @@
       
       const result = await response.json();
       if (result.success) {
-        alert('✅ ROMM connection successful! Found ' + (result.total_games || 0) + ' games.');
+        toasts.success('ROMM connection successful! Found ' + (result.total_games || 0) + ' games.');
       } else {
         throw new Error(result.error || 'Connection failed');
       }
     } catch (error) {
       console.error('Test ROMM error:', error);
-      alert('❌ ROMM connection failed: ' + error.message);
+      toasts.error('ROMM connection failed: ' + error.message);
     } finally {
       loading = false;
     }
   }
-  
+
+  // Confirmation dialog helpers
+  function showConfirmation(title, message, action) {
+    confirmTitle = title;
+    confirmMessage = message;
+    confirmAction = action;
+    showConfirmDialog = true;
+  }
+
+  function handleConfirmYes() {
+    showConfirmDialog = false;
+    if (confirmAction) {
+      confirmAction();
+    }
+  }
+
+  function handleConfirmNo() {
+    showConfirmDialog = false;
+    confirmAction = null;
+  }
 </script>
 
 <svelte:head>
@@ -596,8 +663,222 @@
               </div>
             </div>
           {/if}
+
+          <!-- Security Settings Section -->
+          {#if activeSection === 'security'}
+            <div class="space-y-6">
+              <div>
+                <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  <Icon icon="heroicons:shield-check" class="inline-block w-5 h-5 mr-2" />
+                  Security Configuration
+                </h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Configure security monitoring and protection settings to keep your application safe.
+                </p>
+              </div>
+
+              <!-- 404 Attack Protection -->
+              <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-6 border border-gray-200 dark:border-gray-600">
+                <div class="flex items-start space-x-3 mb-4">
+                  <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+                      <Icon icon="heroicons:exclamation-triangle" class="w-5 h-5 text-red-600 dark:text-red-400" />
+                    </div>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">404 Attack Protection</h3>
+                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      Protect against excessive 404 attempts that could indicate malicious activity or reconnaissance.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <!-- Enable/Disable -->
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                      <label for="security-404-enabled" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Enable 404 Protection
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Monitor and limit excessive 404 attempts from users
+                      </p>
+                    </div>
+                    <div class="ml-4">
+                      <label class="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          id="security-404-enabled"
+                          bind:checked={editableFormData['security.404_limit_enabled']}
+                          disabled={!canEditSettings}
+                          class="sr-only peer"
+                        />
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {#if editableFormData['security.404_limit_enabled']}
+                    <!-- Max Attempts -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label for="security-404-max-attempts" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Maximum Attempts
+                        </label>
+                        <input
+                          type="number"
+                          id="security-404-max-attempts"
+                          bind:value={editableFormData['security.404_max_attempts']}
+                          disabled={!canEditSettings}
+                          min="1"
+                          max="20"
+                          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white text-sm"
+                          placeholder="5"
+                        />
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Number of 404 attempts before taking action (1-20)
+                        </p>
+                      </div>
+
+                      <div>
+                        <label for="security-404-time-window" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Time Window (seconds)
+                        </label>
+                        <input
+                          type="number"
+                          id="security-404-time-window"
+                          bind:value={editableFormData['security.404_time_window']}
+                          disabled={!canEditSettings}
+                          min="60"
+                          max="3600"
+                          step="60"
+                          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white text-sm"
+                          placeholder="300"
+                        />
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Time window for counting attempts (60-3600 seconds)
+                        </p>
+                      </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="space-y-3 pt-2">
+                      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Actions to take when limit is exceeded:</h4>
+
+                      <div class="flex items-center justify-between">
+                        <div class="flex-1 min-w-0">
+                          <label for="security-404-logout" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Logout User
+                          </label>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Automatically log out authenticated users who exceed the limit
+                          </p>
+                        </div>
+                        <div class="ml-4">
+                          <label class="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              id="security-404-logout"
+                              bind:checked={editableFormData['security.404_logout_user']}
+                              disabled={!canEditSettings}
+                              class="sr-only peer"
+                            />
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-600"></div>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center justify-between">
+                        <div class="flex-1 min-w-0">
+                          <label for="security-404-notify" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Notify Administrators
+                          </label>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Send notifications to admins when security violations are detected
+                          </p>
+                        </div>
+                        <div class="ml-4">
+                          <label class="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              id="security-404-notify"
+                              bind:checked={editableFormData['security.404_notify_admin']}
+                              disabled={!canEditSettings}
+                              class="sr-only peer"
+                            />
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Security Info -->
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                      <div class="flex">
+                        <div class="flex-shrink-0">
+                          <Icon icon="heroicons:information-circle" class="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div class="ml-3">
+                          <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">Security Note</h4>
+                          <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                            This feature helps protect against automated scanning and potential attackers trying to enumerate your application structure.
+                            All security events are logged and can be reviewed in the admin dashboard.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
     </div>
   </div>
 </div>
+
+<!-- Confirmation Modal -->
+{#if showConfirmDialog}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+            {confirmTitle}
+          </h3>
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-6">
+          {confirmMessage}
+        </p>
+
+        <div class="flex items-center justify-end space-x-3">
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick={handleConfirmYes}
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}

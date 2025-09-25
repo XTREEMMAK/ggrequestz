@@ -6,6 +6,7 @@ import { error, redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
+import { invalidateCache } from "$lib/cache.js";
 
 export async function load({ params, parent }) {
   const { userPermissions } = await parent();
@@ -170,13 +171,14 @@ export const actions = {
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith("basic_auth_")) {
-        const basicAuthId = user.sub.replace("basic_auth_", "");
+      if (user.auth_type === "basic") {
+        // For basic auth, use the direct ID from the user object
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)],
+          [parseInt(user.id)],
         );
       } else {
+        // For Authentik users, use the sub field
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
           [user.sub],
@@ -340,13 +342,14 @@ export const actions = {
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith("basic_auth_")) {
-        const basicAuthId = user.sub.replace("basic_auth_", "");
+      if (user.auth_type === "basic") {
+        // For basic auth, use the direct ID from the user object
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)],
+          [parseInt(user.id)],
         );
       } else {
+        // For Authentik users, use the sub field
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
           [user.sub],
@@ -418,6 +421,15 @@ export const actions = {
         console.warn("Failed to log analytics:", analyticsError);
       }
 
+      // Invalidate user-related cache entries
+      await invalidateCache([
+        `user-${targetUserId}-data`,
+        `user-${targetUserId}-roles`,
+        `user-${targetUserId}-permissions`,
+        "admin-users-list",
+        "user-analytics",
+      ]);
+
       console.log(
         `✅ Role ${roleId} assigned to user ${targetUserId} by admin ${user.name || user.email}`,
       );
@@ -453,13 +465,14 @@ export const actions = {
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith("basic_auth_")) {
-        const basicAuthId = user.sub.replace("basic_auth_", "");
+      if (user.auth_type === "basic") {
+        // For basic auth, use the direct ID from the user object
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)],
+          [parseInt(user.id)],
         );
       } else {
+        // For Authentik users, use the sub field
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
           [user.sub],
@@ -544,6 +557,15 @@ export const actions = {
       } catch (analyticsError) {
         console.warn("Failed to log analytics:", analyticsError);
       }
+      // Invalidate user-related cache entries
+      await invalidateCache([
+        `user-${targetUserId}-data`,
+        `user-${targetUserId}-roles`,
+        `user-${targetUserId}-permissions`,
+        "admin-users-list",
+        "user-analytics",
+      ]);
+
       console.log(
         `✅ Role ${roleId} removed from user ${targetUserId} by admin ${user.name || user.email}`,
       );
@@ -579,13 +601,14 @@ export const actions = {
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith("basic_auth_")) {
-        const basicAuthId = user.sub.replace("basic_auth_", "");
+      if (user.auth_type === "basic") {
+        // For basic auth, use the direct ID from the user object
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)],
+          [parseInt(user.id)],
         );
       } else {
+        // For Authentik users, use the sub field
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
           [user.sub],

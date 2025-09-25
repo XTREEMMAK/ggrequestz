@@ -3,28 +3,95 @@
 -->
 
 <script>
-  import { goto } from '$app/navigation';
+  import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
+  import { browser } from '$app/environment';
   import PlatformIcons from '../../../components/PlatformIcons.svelte';
   import StatusBadge from '../../../components/StatusBadge.svelte';
   import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
   import { formatDate, truncateText } from '$lib/utils.js';
   import { watchlistService } from '$lib/clientServices.js';
-  import { browser } from '$app/environment';
+  import { toasts } from '$lib/stores/toast.js';
+  import { getWatchlistStatus, updateWatchlistStatus, clearWatchlistStatus, getCachedWatchlistStatus } from '$lib/watchlistStatus.js';
   import { onMount } from 'svelte';
   
   let { data } = $props();
   
   let game = $derived(data?.game);
   let user = $derived(data?.user);
-  let isInWatchlist = $derived(data?.isInWatchlist || false);
   let loading = $state(false);
+
+  let isInWatchlist = $state(data?.isInWatchlist || false);
+
+  // Track server data for mismatch detection
+  let serverWatchlistStatus = $derived(data?.isInWatchlist || false);
+  let justInvalidated = $state(false);
+
+
+  // Initialize from server data on load, then handle cache loading
+  $effect(() => {
+    // Initialize from server data first (this only runs once per page load)
+    if (!hasLoadedStatus && serverWatchlistStatus !== undefined) {
+      isInWatchlist = serverWatchlistStatus;
+    }
+  });
+
+  // Load real-time watchlist status with smart mismatch detection
+  let hasLoadedStatus = false;
+  $effect(() => {
+    if (!browser || !user || !user.sub || !game?.igdb_id || hasLoadedStatus) return;
+
+    // If server data is already loaded and matches current state, don't load cache
+    if (serverWatchlistStatus !== undefined && isInWatchlist === serverWatchlistStatus) {
+      hasLoadedStatus = true;
+      return;
+    }
+
+    // Check cache first
+    const cachedStatus = getCachedWatchlistStatus(game.igdb_id);
+    if (cachedStatus !== null) {
+      // Detect mismatch between cache and server data
+      if (cachedStatus !== serverWatchlistStatus) {
+        clearWatchlistStatus(game.igdb_id);
+        // Don't update isInWatchlist here - let it stay as server data
+      } else {
+        // Cache matches server data - only use if different from current state
+        if (!justInvalidated && cachedStatus !== isInWatchlist) {
+          isInWatchlist = cachedStatus;
+        }
+      }
+      hasLoadedStatus = true;
+      return;
+    }
+
+    // If no cache, fetch from API with proper timing
+    const timeout = setTimeout(() => {
+      if (user && user.sub && game?.igdb_id && document.readyState === 'complete') {
+        getWatchlistStatus(game.igdb_id)
+          .then(status => {
+            // Only update if we don't have a server/client conflict
+            if (status === serverWatchlistStatus || !justInvalidated) {
+              isInWatchlist = status;
+            }
+            hasLoadedStatus = true;
+          })
+          .catch(error => {
+            // Handle errors silently - keep server data
+            hasLoadedStatus = true;
+          });
+      }
+    }, 500); // Reasonable delay for page loading
+
+    return () => clearTimeout(timeout);
+  });
+
   
   $effect(() => {
     if (!game) {
       goto('/search');
     }
   });
+
   
   let showFullDescription = $state(false);
   let activeImageIndex = $state(0);
@@ -63,7 +130,12 @@
       goto('/api/auth/login');
       return;
     }
-    
+
+    // Prevent double-clicks during loading
+    if (loading) {
+      return;
+    }
+
     loading = true;
     try {
       const gameData = {
@@ -72,22 +144,67 @@
         platforms: game.platforms,
         igdb_id: game.igdb_id
       };
-      
-      let result;
+
       if (isInWatchlist) {
-        result = { success: await watchlistService.removeFromWatchlist(game.igdb_id) };
+        const success = await watchlistService.removeFromWatchlist(game.igdb_id);
+        if (success) {
+          isInWatchlist = false;
+          updateWatchlistStatus(game.igdb_id, false);
+          // Force complete page refresh to clear cached watchlist data
+          if (browser) {
+            // Small delay to ensure database transaction completes
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await invalidateAll();
+
+            // Set flag to prioritize server data over stale client cache
+            justInvalidated = true;
+
+            // Clear stale client-side cache after invalidation
+            setTimeout(() => {
+              clearWatchlistStatus(game.igdb_id);
+
+              // Reset invalidation flag after cleanup
+              setTimeout(() => {
+                justInvalidated = false;
+              }, 100);
+            }, 200);
+          }
+          toasts.success('Removed from watchlist');
+        } else {
+          throw new Error('Failed to remove from watchlist');
+        }
       } else {
-        result = { success: await watchlistService.addToWatchlist(game.igdb_id, gameData) };
-      }
-      
-      if (result.success) {
-        isInWatchlist = !isInWatchlist;
-      } else {
-        throw new Error(result.error || 'Failed to update watchlist');
+        const success = await watchlistService.addToWatchlist(game.igdb_id, gameData);
+        if (success) {
+          isInWatchlist = true;
+          updateWatchlistStatus(game.igdb_id, true);
+          // Force complete page refresh to clear cached watchlist data
+          if (browser) {
+            // Small delay to ensure database transaction completes
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await invalidateAll();
+
+            // Set flag to prioritize server data over stale client cache
+            justInvalidated = true;
+
+            // Clear stale client-side cache after invalidation
+            setTimeout(() => {
+              clearWatchlistStatus(game.igdb_id);
+
+              // Reset invalidation flag after cleanup
+              setTimeout(() => {
+                justInvalidated = false;
+              }, 100);
+            }, 200);
+          }
+          toasts.success('Added to watchlist');
+        } else {
+          throw new Error('Failed to add to watchlist');
+        }
       }
     } catch (error) {
       console.error('Watchlist error:', error);
-      alert('Failed to update watchlist. Please try again.');
+      toasts.error('Failed to update watchlist. Please try again.');
     } finally {
       loading = false;
     }

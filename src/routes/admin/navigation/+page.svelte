@@ -1,5 +1,6 @@
 <script>
   import Icon from '@iconify/svelte';
+  import { toasts } from '$lib/stores/toast.js';
   
   let { data } = $props();
   
@@ -8,6 +9,12 @@
   let showAddForm = $state(false);
   let editingItem = $state(null);
   let loading = $state(false);
+
+  // Confirmation modal state
+  let showConfirmDialog = $state(false);
+  let confirmAction = $state(null);
+  let confirmMessage = $state('');
+  let confirmTitle = $state('');
   
   // Form data
   let formData = $state({
@@ -106,7 +113,7 @@
   
   async function saveNavItem() {
     if (!formData.name.trim() || !formData.href.trim()) {
-      alert('Name and URL are required');
+      toasts.error('Name and URL are required');
       return;
     }
     
@@ -134,22 +141,28 @@
           navItems = refreshResult.data;
         }
         
+        toasts.success(editingItem ? 'Navigation item updated successfully!' : 'Navigation item added successfully!');
         resetForm();
       } else {
-        alert(result.error || 'Failed to save navigation item');
+        toasts.error(result.error || 'Failed to save navigation item');
       }
     } catch (error) {
       console.error('Error saving navigation item:', error);
-      alert('Failed to save navigation item');
+      toasts.error('Failed to save navigation item');
     } finally {
       loading = false;
     }
   }
   
-  async function deleteNavItem(id) {
-    if (!confirm('Are you sure you want to delete this navigation item?')) {
-      return;
-    }
+  function deleteNavItem(id) {
+    showConfirmation(
+      'Delete Navigation Item',
+      'Are you sure you want to delete this navigation item?',
+      () => performDelete(id)
+    );
+  }
+
+  async function performDelete(id) {
     
     loading = true;
     
@@ -166,15 +179,36 @@
       
       if (result.success) {
         navItems = navItems.filter(item => item.id !== id);
+        toasts.success('Navigation item deleted successfully!');
       } else {
-        alert(result.error || 'Failed to delete navigation item');
+        toasts.error(result.error || 'Failed to delete navigation item');
       }
     } catch (error) {
       console.error('Error deleting navigation item:', error);
-      alert('Failed to delete navigation item');
+      toasts.error('Failed to delete navigation item');
     } finally {
       loading = false;
     }
+  }
+
+  // Confirmation dialog helpers
+  function showConfirmation(title, message, action) {
+    confirmTitle = title;
+    confirmMessage = message;
+    confirmAction = action;
+    showConfirmDialog = true;
+  }
+
+  function handleConfirmYes() {
+    showConfirmDialog = false;
+    if (confirmAction) {
+      confirmAction();
+    }
+  }
+
+  function handleConfirmNo() {
+    showConfirmDialog = false;
+    confirmAction = null;
   }
 </script>
 
@@ -497,3 +531,48 @@
     </div>
   </div>
 </div>
+
+<!-- Confirmation Modal -->
+{#if showConfirmDialog}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+            {confirmTitle}
+          </h3>
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-6">
+          {confirmMessage}
+        </p>
+
+        <div class="flex items-center justify-end space-x-3">
+          <button
+            type="button"
+            onclick={handleConfirmNo}
+            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick={handleConfirmYes}
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}

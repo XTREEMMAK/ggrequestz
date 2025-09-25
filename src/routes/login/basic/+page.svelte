@@ -25,7 +25,7 @@
 </script>
 
 <svelte:head>
-  <title>Basic Login - G.G Requestz</title>
+  <title>Login - G.G Requestz</title>
   <meta name="description" content="Login with username and password" />
 </svelte:head>
 
@@ -61,7 +61,7 @@
         <div class="mx-auto w-16 h-16 mb-4 flex items-center justify-center bg-gradient-to-br from-gray-500 to-gray-600 rounded-full shadow-lg">
           <Icon icon="heroicons:user" class="w-8 h-8 text-white" />
         </div>
-        <h1 class="text-2xl font-bold text-white mb-1">Basic Login</h1>
+        <h1 class="text-2xl font-bold text-white mb-1">Login</h1>
         <p class="text-blue-100/80 text-sm">Enter your username and password</p>
       </div>
       
@@ -154,10 +154,28 @@
         </div>
       </form>
       
+      <!-- Registration Section -->
+      {#if data?.registrationEnabled}
+        <div class="mt-6 text-center">
+          <p class="text-blue-100/70 text-sm mb-3">Don't have an account?</p>
+          <a
+            href="/register"
+            class="w-full inline-flex items-center justify-center px-4 py-3
+                   bg-gradient-to-r from-green-600 to-emerald-600
+                   hover:from-green-700 hover:to-emerald-700
+                   text-white font-semibold rounded-xl transition-all duration-200
+                   transform hover:scale-[1.02] shadow-lg hover:shadow-xl"
+          >
+            <Icon icon="heroicons:user-plus" class="w-5 h-5 mr-2" />
+            Create New Account
+          </a>
+        </div>
+      {/if}
+
       <!-- Back to main login -->
-      <div class="mt-6 text-center">
-        <a 
-          href="/login" 
+      <div class="mt-4 text-center">
+        <a
+          href="/login"
           class="text-blue-200/80 hover:text-white text-sm transition-colors inline-flex items-center"
         >
           <Icon icon="heroicons:arrow-left" class="w-4 h-4 mr-1" />

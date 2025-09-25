@@ -61,26 +61,36 @@ export async function load({ params, parent }) {
 export const actions = {
   default: async ({ request, cookies, params }) => {
     try {
-      // Verify authentication
+      // Verify authentication - support both auth types
       const sessionCookie = cookies.get("session");
-      if (!sessionCookie) {
+      const basicAuthSessionCookie = cookies.get("basic_auth_session");
+
+      if (!sessionCookie && !basicAuthSessionCookie) {
         return { success: false, error: "Authentication required" };
       }
 
-      const user = await verifySessionToken(sessionCookie);
+      let user = null;
+      if (sessionCookie) {
+        user = await verifySessionToken(sessionCookie);
+      } else if (basicAuthSessionCookie) {
+        const { getBasicAuthUser } = await import("$lib/basicAuth.js");
+        user = getBasicAuthUser(basicAuthSessionCookie);
+      }
+
       if (!user) {
         return { success: false, error: "Invalid session" };
       }
 
       // Get user's local ID - support both basic auth and Authentik users
       let userResult;
-      if (user.sub?.startsWith("basic_auth_")) {
-        const basicAuthId = user.sub.replace("basic_auth_", "");
+      if (user.auth_type === "basic") {
+        // For basic auth, use the direct ID from the user object
         userResult = await query(
           "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-          [parseInt(basicAuthId)],
+          [parseInt(user.id)],
         );
       } else {
+        // For Authentik users, use the sub field
         userResult = await query(
           "SELECT id FROM ggr_users WHERE authentik_sub = $1",
           [user.sub],

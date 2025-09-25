@@ -32,7 +32,7 @@ print_error() {
 # Function to validate version format
 validate_version() {
     if [[ ! $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_error "Invalid version format. Use semantic versioning (e.g., 1.0.3)"
+        print_error "Invalid version format. Use semantic versioning (e.g., 1.1.0)"
         exit 1
     fi
 }
@@ -94,7 +94,7 @@ main() {
     # Get version argument
     if [[ -z $1 ]]; then
         echo "Usage: $0 <version>"
-        echo "Example: $0 1.0.3"
+        echo "Example: $0 1.1.0"
         echo ""
         echo "Current version: $(get_current_version)"
         exit 1

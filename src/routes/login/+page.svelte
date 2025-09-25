@@ -159,7 +159,24 @@
             Login with Username/Password
           </a>
           {/if}
-          
+
+          <!-- Registration Button -->
+          {#if data?.isBasicAuthEnabled && data?.registrationEnabled}
+          <a
+            href="/register"
+            class="auth-button register-button"
+            style="text-decoration: none;"
+          >
+            <svg class="user-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="8.5" cy="7" r="4"/>
+              <line x1="20" y1="8" x2="20" y2="14"/>
+              <line x1="23" y1="11" x2="17" y2="11"/>
+            </svg>
+            Create New Account
+          </a>
+          {/if}
+
           <!-- Error Message -->
           {#if !data?.isAuthentikEnabled && !data?.isBasicAuthEnabled}
           <div class="error-card">
@@ -462,9 +479,22 @@
     box-shadow: 0 15px 35px rgba(71, 85, 105, 0.6);
     background: linear-gradient(135deg, #64748b 0%, #475569 100%);
   }
-  
+
+  .register-button {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    color: white;
+    box-shadow: 0 8px 25px rgba(5, 150, 105, 0.4);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .register-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(5, 150, 105, 0.6);
+    background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  }
+
   /* Icon styling with proper spacing */
-  .key-icon, .user-icon {
+  .key-icon, .user-icon, .user-plus-icon {
     width: 1.5rem;
     height: 1.5rem;
     transition: transform 0.3s ease;
@@ -472,7 +502,8 @@
   }
   
   .auth-button:hover .key-icon,
-  .auth-button:hover .user-icon {
+  .auth-button:hover .user-icon,
+  .auth-button:hover .user-plus-icon {
     transform: scale(1.1) rotate(5deg);
   }
   

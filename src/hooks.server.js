@@ -51,8 +51,13 @@ const cacheHeaders = async ({ event, resolve }) => {
     event.url.pathname === "/" ||
     event.url.pathname.startsWith("/game/")
   ) {
-    // HTML pages - short cache with revalidation
-    headers.set("Cache-Control", "public, max-age=300, must-revalidate"); // 5 minutes
+    // HTML pages with user-specific content - disable HTTP cache for dynamic data
+    headers.set(
+      "Cache-Control",
+      "private, no-cache, no-store, must-revalidate",
+    );
+    headers.set("Pragma", "no-cache");
+    headers.set("Expires", "0");
     headers.set("Vary", "Accept-Encoding, Cookie");
   }
 
@@ -114,24 +119,35 @@ const authGuard = async ({ event, resolve }) => {
   const publicRoutes = [
     "/login",
     "/login/basic",
+    "/register", // User registration page
     "/setup", // Setup pages need to be accessible when database is down
-    "/api",
     "/auth/setup",
   ];
+
+  // Define API routes that require authentication
+  const authenticatedApiRoutes = ["/api/watchlist/", "/api/user/watchlist"];
 
   // Check if current route is public
   const isPublicRoute = publicRoutes.some((route) =>
     url.pathname.startsWith(route),
   );
 
-  // Skip auth check for public routes and API endpoints
-  if (isPublicRoute || url.pathname.startsWith("/api/")) {
+  // Check if this is an authenticated API route
+  const isAuthenticatedApiRoute = authenticatedApiRoutes.some((route) =>
+    url.pathname.startsWith(route),
+  );
+
+  // Skip auth check for public routes and most API endpoints (except authenticated ones)
+  if (
+    isPublicRoute ||
+    (url.pathname.startsWith("/api/") && !isAuthenticatedApiRoute)
+  ) {
     if (url.pathname.includes("/api/auth/basic/setup")) {
     }
     return resolve(event);
   }
 
-  // Check authentication
+  // Check authentication for protected pages and authenticated API routes
   let user = null;
 
   try {
@@ -152,8 +168,19 @@ const authGuard = async ({ event, resolve }) => {
     console.error("🔐 AUTH GUARD: Auth check error:", error);
   }
 
-  // Redirect to login if not authenticated
-  if (!user) {
+  // Set user in locals for API routes (they need it in the handler)
+  event.locals.user = user;
+
+  // For authenticated API routes, return 401 if no user
+  if (isAuthenticatedApiRoute && !user) {
+    return new Response(JSON.stringify({ error: "Authentication required" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // For regular pages, redirect to login if not authenticated
+  if (!user && !isAuthenticatedApiRoute) {
     throw redirect(302, "/login");
   }
 

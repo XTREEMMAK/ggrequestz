@@ -7,12 +7,22 @@ export default defineConfig({
   server: {
     host: true, // Allow external access when --host flag is used
     port: 5174,
+    strictPort: true, // Exit if port is already in use instead of trying another
+    cors: true, // Enable CORS for development
+    headers: {
+      "Cache-Control": "no-cache", // Prevent caching issues during development
+    },
     allowedHosts: [
       process.env.DOMAIN || "localhost",
       process.env.GGREQUESTZ_HOST || "localhost",
       "localhost",
       "127.0.0.1",
+      "192.168.10.54",
     ],
+    fs: {
+      // Allow serving files from the entire project
+      allow: [".."],
+    },
   },
   build: {
     rollupOptions: {
@@ -43,8 +53,10 @@ export default defineConfig({
   },
   // Optimize dependencies
   optimizeDeps: {
-    include: ["@iconify/svelte"],
+    include: ["@iconify/svelte", "canvas-confetti"],
     exclude: ["@iconify-json/*"], // Don't pre-bundle icon sets
+    // Force dependency pre-bundling for better dev server performance
+    force: process.env.NODE_ENV === "development",
   },
 
   // Performance optimizations
