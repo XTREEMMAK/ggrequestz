@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Database Manager Version
-const DB_MANAGER_VERSION = "1.1.2";
+const DB_MANAGER_VERSION = "1.1.3";
 
 // Load environment variables
 config();
@@ -200,6 +200,15 @@ async function runMigrations() {
     await client.connect();
     console.log("✅ Connected for migrations");
 
+    // Check if core tables exist to determine if DB is already initialized
+    const coreTablesCheck = await client.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name IN ('ggr_users', 'ggr_games_cache', 'ggr_game_requests')
+    `);
+    const coreTablesExist = parseInt(coreTablesCheck.rows[0].count) > 0;
+
     // Check if migration table exists and has correct schema
     const tableCheck = await client.query(`
       SELECT column_name
@@ -231,6 +240,26 @@ async function runMigrations() {
         error_message TEXT
       )
     `);
+
+    // If core tables exist but migration table was just created/fixed,
+    // mark initial schema as already executed
+    if (coreTablesExist) {
+      const migrationCount = await client.query(
+        `SELECT COUNT(*) as count FROM ${CONFIG.migrationTable}`,
+      );
+
+      if (parseInt(migrationCount.rows[0].count) === 0) {
+        console.log(
+          "📝 Database already initialized, marking initial schema as complete...",
+        );
+        await client.query(
+          `INSERT INTO ${CONFIG.migrationTable}
+           (migration_name, success, executed_at)
+           VALUES ('001_initial_schema.sql', true, NOW())
+           ON CONFLICT (migration_name) DO NOTHING`,
+        );
+      }
+    }
 
     // Get executed migrations
     const executedResult = await client.query(
