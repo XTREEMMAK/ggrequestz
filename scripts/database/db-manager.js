@@ -433,16 +433,18 @@ async function fixMigrationTable() {
     await client.connect();
     console.log("🔧 Fixing migration table...");
 
-    // Recreate migration table with proper structure
+    // Recreate migration table with proper structure (consistent with runMigrations)
     await client.query(`DROP TABLE IF EXISTS ${CONFIG.migrationTable}`);
     await client.query(`
       CREATE TABLE ${CONFIG.migrationTable} (
         id SERIAL PRIMARY KEY,
-        version VARCHAR(255) NOT NULL UNIQUE,
-        name VARCHAR(255) NOT NULL,
+        migration_name VARCHAR(255) NOT NULL UNIQUE,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        success BOOLEAN DEFAULT true,
         checksum VARCHAR(64),
-        executed_at TIMESTAMP DEFAULT NOW(),
-        execution_time INTEGER
+        version INTEGER,
+        execution_time INTEGER,
+        error_message TEXT
       )
     `);
 
