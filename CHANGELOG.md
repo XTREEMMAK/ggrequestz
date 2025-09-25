@@ -5,6 +5,47 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2025-09-25
+
+### Fixed
+
+- **Database Migration System**
+  - Fixed migration table schema detection and automatic repair
+  - Added intelligent detection for existing database installations
+  - Automatically marks initial schema as executed for existing databases
+  - Prevents "trigger already exists" errors when migration history is reset
+  - Database Manager now shows version number (v1.1.3) in console output
+
+### Enhanced
+
+- **Migration Robustness**
+  - Improved handling of schema mismatches between old and new migration tables
+  - Better error recovery when migration table needs to be recreated
+  - Preserves database integrity during migration table fixes
+
+### Technical Details
+
+- Checks for core tables (`ggr_users`, `ggr_games_cache`, etc.) to detect initialized databases
+- When migration table is fixed/recreated, automatically marks `001_initial_schema.sql` as complete if database exists
+- Prevents re-running initial schema on already-initialized databases
+
+## [1.1.2] - 2025-09-25
+
+### Fixed
+
+- **Migration Table Schema**
+  - Fixed inconsistent column names in migration table
+  - Changed from `version` column to `migration_name` column
+  - Added automatic detection and repair of old schema
+
+## [1.1.1] - 2025-09-25
+
+### Fixed
+
+- **Migration Table Schema Inconsistency**
+  - Fixed `fixMigrationTable()` function to use correct column names
+  - Resolved startup error: "column migration_name does not exist"
+
 ## [1.1.0] - 2025-09-24
 
 ### Added
