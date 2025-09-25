@@ -2,8 +2,7 @@
  * Search page data loader with cache-first strategy
  */
 
-import { searchGames as searchCachedGames } from "$lib/gameCache.js";
-import { searchGames } from "$lib/typesense.server.js";
+import { searchGames } from "$lib/gameCache.js";
 import { watchlist, query } from "$lib/database.js";
 
 import { redirect } from "@sveltejs/kit";
@@ -51,18 +50,19 @@ export async function load({ url, parent }) {
       };
 
       try {
-        // Try Typesense first for advanced search
-        searchResults = await searchGames(searchQuery, searchOptions);
-      } catch (error) {
-        console.error(
-          "Typesense search failed, falling back to cache search:",
-          error,
-        );
-        // Fallback to cached games search
-        const cachedResults = await searchCachedGames(searchQuery, perPage);
+        // Use IGDB search (cached games)
+        const cachedResults = await searchGames(searchQuery, perPage);
         searchResults = {
           hits: cachedResults.map((game) => ({ document: game })),
           found: cachedResults.length,
+          facet_counts: [],
+        };
+      } catch (error) {
+        console.error("IGDB search failed:", error);
+        // Return empty results on error
+        searchResults = {
+          hits: [],
+          found: 0,
           facet_counts: [],
         };
       }

@@ -1,24 +1,40 @@
 # ROMM Integration Troubleshooting
 
-## Current Issue: 403 Forbidden API Access
+## Common Issues and Solutions
 
-Your ROMM authentication is working correctly, but the user account lacks the necessary permissions to access API endpoints.
+### Issue 1: Basic Troubleshooting Steps
 
-### Root Cause
+**Before diving into specific issues, try these basic steps:**
+
+1. **Clear your browser cache first** - This resolves many caching-related issues
+2. **Verify ROMM credentials** with this test command:
+   ```bash
+   curl -X POST <your-install-URL-or-IP-and-Port>/api/setup/check \
+     -H "Content-Type: application/json" \
+     -d '{"service": "romm_library"}'
+   ```
+   This should return `{"success":true}` if credentials are correct.
+3. **Try with protocol** - Add `http://` or `https://` to your `ROMM_SERVER_URL` environment variable
+
+### Issue 2: 403 Forbidden API Access
+
+If ROMM authentication works but you get permission errors, the user account lacks API access permissions.
+
+#### Root Cause
 
 The JWT token received from ROMM contains empty scopes (`"scopes": ""`), which means your user account can log in but has no API access permissions.
 
-### Diagnostic Evidence
+#### Diagnostic Evidence
 
 ```bash
 # Authentication works ✅
-curl -X POST https://gl.keyjaycompound.com/api/token \
+curl -X POST http://your-romm-server/api/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=XTREEMMAK&password=ENIGNIX_3000"
+  -d "username=YOUR_USERNAME&password=YOUR_PASSWORD"
 # Returns: {"access_token": "...", "refresh_token": "...", "token_type": "bearer", "expires": 1800}
 
 # But API access fails ❌
-curl -H "Authorization: Bearer <token>" https://gl.keyjaycompound.com/api/platforms?size=1
+curl -H "Authorization: Bearer <token>" http://your-romm-server/api/platforms?size=1
 # Returns: HTTP 403 {"detail":"Forbidden"}
 ```
 
@@ -33,25 +49,7 @@ curl -H "Authorization: Bearer <token>" https://gl.keyjaycompound.com/api/platfo
 5. Save the changes
 6. The JWT tokens will now include the necessary scopes for API access
 
-### Option 2: Use API Key Authentication
-
-1. Log into your ROMM web interface as an administrator
-2. Go to **Settings** → **API Keys**
-3. Create a new API key with appropriate permissions
-4. Update your `.env` file:
-
-   ```env
-   # Comment out username/password
-   # ROMM_USERNAME=XTREEMMAK
-   # ROMM_PASSWORD=ENIGNIX_3000
-
-   # Add API key instead
-   ROMM_API_KEY=your_generated_api_key_here
-   ```
-
-5. Restart your application
-
-### Option 3: Check ROMM Configuration
+### Option 2: Check ROMM Configuration
 
 If you are the ROMM administrator, check:
 
@@ -61,7 +59,7 @@ If you are the ROMM administrator, check:
 
 ## Testing the Fix
 
-After applying one of the solutions above, test with:
+After applying the solution above, test with:
 
 ```bash
 # For username/password (after role upgrade)
@@ -70,8 +68,14 @@ npm run dev
 
 # For API key
 curl -H "Authorization: Bearer YOUR_API_KEY" \
-     https://gl.keyjaycompound.com/api/platforms?size=1
+     http://your-romm-server/api/platforms?size=1
 # Should return platform data instead of {"detail":"Forbidden"}
+
+# Test GG Requestz connection
+curl -X POST http://your-ggrequestz-server/api/setup/check \
+  -H "Content-Type: application/json" \
+  -d '{"service": "romm_library"}'
+# Should return {"success": true}
 ```
 
 ## Why This Happens

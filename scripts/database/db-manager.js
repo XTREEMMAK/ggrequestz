@@ -19,8 +19,9 @@ const __dirname = dirname(__filename);
 // Database Manager Version
 const DB_MANAGER_VERSION = "1.1.3";
 
-// Load environment variables
-config();
+// Load environment variables - respect DOTENV_CONFIG_PATH if specified
+const configPath = process.env.DOTENV_CONFIG_PATH;
+config(configPath ? { path: configPath } : {});
 
 console.log("🗄️  G.G Requestz Database Manager v" + DB_MANAGER_VERSION);
 console.log("==================================");
@@ -454,24 +455,6 @@ async function cacheStats() {
 }
 
 /**
- * Sync data to Typesense
- */
-async function syncTypesense() {
-  console.log("🔍 Syncing to Typesense...");
-
-  try {
-    // Dynamic import to avoid circular dependencies
-    const { syncToTypesense } = await import(
-      "../../src/lib/typesense.server.js"
-    );
-    await syncToTypesense();
-    console.log("✅ Typesense sync completed!");
-  } catch (error) {
-    console.error("❌ Typesense sync failed:", error.message);
-  }
-}
-
-/**
  * Fix migration table issues
  */
 async function fixMigrationTable() {
@@ -533,10 +516,6 @@ async function main() {
         await cacheStats();
         break;
 
-      case "sync":
-        await syncTypesense();
-        break;
-
       case "fix":
         await fixMigrationTable();
         break;
@@ -551,7 +530,6 @@ async function main() {
         console.log("  status   - Show migration status");
         console.log("  warm     - Warm up the games cache");
         console.log("  stats    - Show cache statistics");
-        console.log("  sync     - Sync data to Typesense");
         console.log("  fix      - Fix migration table issues");
         console.log("\nExamples:");
         console.log("  node scripts/database/db-manager.js init");

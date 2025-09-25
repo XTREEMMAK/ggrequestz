@@ -1,19 +1,10 @@
 /**
- * Typesense search endpoint
+ * IGDB-based search endpoint (replaces Typesense)
  */
 
 import { json, error } from "@sveltejs/kit";
-import {
-  searchGames,
-  getAutocompleteSuggestions,
-  initializeGamesCollection,
-} from "$lib/typesense.server.js";
+import { searchGames } from "$lib/gameCache.js";
 import { normalizeTitle, createSearchVariations } from "$lib/utils.js";
-
-// Initialize Typesense collection on server start
-initializeGamesCollection().catch((err) => {
-  console.error("Failed to initialize Typesense collection:", err);
-});
 
 export async function GET({ url }) {
   try {
@@ -21,9 +12,6 @@ export async function GET({ url }) {
     const query = searchParams.get("q") || "";
     const page = parseInt(searchParams.get("page")) || 1;
     const perPage = parseInt(searchParams.get("per_page")) || 20;
-    const sortBy = searchParams.get("sort_by") || "popularity:desc";
-    const platforms = searchParams.get("platforms");
-    const genres = searchParams.get("genres");
     const autocomplete = searchParams.get("autocomplete") === "true";
 
     // Handle autocomplete requests
@@ -35,44 +23,38 @@ export async function GET({ url }) {
         });
       }
 
-      const suggestions = await getAutocompleteSuggestions(query, 5);
+      // Use IGDB search for autocomplete with small limit
+      const results = await searchGames(query, 5);
+      const suggestions = results.map((game) => game.name);
+
       return json({
         success: true,
         suggestions,
       });
     }
 
-    // Build filters
-    let filters = [];
-    if (platforms) {
-      const platformList = platforms.split(",").map((p) => p.trim());
-      filters.push(
-        `platforms:=[${platformList.map((p) => `'${p}'`).join(",")}]`,
-      );
-    }
-    if (genres) {
-      const genreList = genres.split(",").map((g) => g.trim());
-      filters.push(`genres:=[${genreList.map((g) => `'${g}'`).join(",")}]`);
-    }
+    // For regular search, get more results to handle pagination
+    const limit = Math.min(perPage * page, 100); // IGDB limit
+    const results = await searchGames(query, limit);
 
-    const searchOptions = {
-      page,
-      perPage,
-      sortBy,
-      filters: filters.length > 0 ? filters.join(" && ") : undefined,
-    };
+    // Calculate pagination
+    const startIndex = (page - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    const paginatedResults = results.slice(startIndex, endIndex);
 
-    // Perform search
-    const results = await searchGames(query, searchOptions);
+    // Format results to match Typesense structure
+    const hits = paginatedResults.map((game) => ({
+      document: game,
+    }));
 
     return json({
       success: true,
-      hits: results.hits,
-      found: results.found,
-      page: results.page,
-      per_page: results.request_params.per_page,
-      facet_counts: results.facet_counts,
-      search_time_ms: results.search_time_ms,
+      hits,
+      found: results.length,
+      page,
+      per_page: perPage,
+      facet_counts: [], // No faceting with IGDB
+      search_time_ms: 0, // Not tracked
     });
   } catch (err) {
     console.error("Search API error:", err);
@@ -86,9 +68,6 @@ export async function POST({ request }) {
       query = "",
       page = 1,
       perPage = 20,
-      sortBy = "popularity:desc",
-      platforms = [],
-      genres = [],
       advanced = false,
     } = await request.json();
 
@@ -96,44 +75,35 @@ export async function POST({ request }) {
 
     // Advanced search processing
     if (advanced && query) {
-      // Normalize the search query
       const normalizedQuery = normalizeTitle(query);
-
-      // Create search variations
       const variations = createSearchVariations(query);
 
-      // Use the best variation or original query
-      searchQuery =
-        variations.length > 1 ? variations.join(" OR ") : normalizedQuery;
+      // For IGDB, use the normalized query (variations don't work the same way)
+      searchQuery = normalizedQuery;
     }
 
-    // Build filters
-    let filters = [];
-    if (platforms.length > 0) {
-      filters.push(`platforms:=[${platforms.map((p) => `'${p}'`).join(",")}]`);
-    }
-    if (genres.length > 0) {
-      filters.push(`genres:=[${genres.map((g) => `'${g}'`).join(",")}]`);
-    }
+    // Get results from IGDB
+    const limit = Math.min(perPage * page, 100);
+    const results = await searchGames(searchQuery, limit);
 
-    const searchOptions = {
-      page,
-      perPage,
-      sortBy,
-      filters: filters.length > 0 ? filters.join(" && ") : undefined,
-    };
+    // Calculate pagination
+    const startIndex = (page - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    const paginatedResults = results.slice(startIndex, endIndex);
 
-    // Perform search
-    const results = await searchGames(searchQuery, searchOptions);
+    // Format results to match Typesense structure
+    const hits = paginatedResults.map((game) => ({
+      document: game,
+    }));
 
     return json({
       success: true,
-      hits: results.hits,
-      found: results.found,
-      page: results.page,
-      per_page: results.request_params.per_page,
-      facet_counts: results.facet_counts,
-      search_time_ms: results.search_time_ms,
+      hits,
+      found: results.length,
+      page,
+      per_page: perPage,
+      facet_counts: [], // No faceting with IGDB
+      search_time_ms: 0, // Not tracked
       normalized_query: advanced ? searchQuery : undefined,
     });
   } catch (err) {

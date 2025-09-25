@@ -30,7 +30,7 @@
   let selectedPlatforms = $state(data?.initialFilters?.platforms || []);
   let selectedGenres = $state(data?.initialFilters?.genres || []);
   let sortBy = $state(data?.initialFilters?.sortBy || 'popularity:desc');
-  let showFilters = $state(false);
+  let showFilters = $state(true);
   
   // Available filter options - using $state for reactivity
   let availablePlatforms = $state([]);
@@ -46,14 +46,57 @@
   
   // Initialize from URL on mount - only run once
   onMount(() => {
+    // Restore all filters from URL parameters
+    restoreFiltersFromUrl();
+
     // Extract available filters from results
     updateAvailableFilters();
-    
+
     // Apply initial filter from URL
     if (filterFromUrl) {
       applyFilterFromUrl(filterFromUrl);
     }
+
+    // Perform search if there are URL parameters
+    if (queryFromUrl || selectedPlatforms.length > 0 || selectedGenres.length > 0) {
+      performSearch();
+    }
   });
+
+  // Restore filters from URL parameters
+  function restoreFiltersFromUrl() {
+    const urlParams = $page.url.searchParams;
+
+    // Restore platforms
+    const platformsParam = urlParams.get('platforms');
+    if (platformsParam) {
+      selectedPlatforms = platformsParam.split(',').filter(Boolean);
+    }
+
+    // Restore genres
+    const genresParam = urlParams.get('genres');
+    if (genresParam) {
+      selectedGenres = genresParam.split(',').filter(Boolean);
+    }
+
+    // Restore sort
+    const sortParam = urlParams.get('sort');
+    if (sortParam) {
+      sortBy = sortParam;
+    }
+
+    // Restore page
+    const pageParam = urlParams.get('page');
+    if (pageParam) {
+      currentPage = parseInt(pageParam) || 1;
+    }
+
+    // Restore search query
+    const queryParam = urlParams.get('q');
+    if (queryParam) {
+      searchQuery = queryParam;
+    }
+  }
   
   // Debounced search is now handled by SearchBar component events
   
@@ -72,11 +115,45 @@
   }
   
   function updateAvailableFilters() {
-    if (searchResults.facet_counts) {
-      availablePlatforms = searchResults.facet_counts
-        .find(f => f.field_name === 'platforms')?.counts || [];
-      availableGenres = searchResults.facet_counts
-        .find(f => f.field_name === 'genres')?.counts || [];
+    if (searchResults.hits && searchResults.hits.length > 0) {
+      // Extract platforms and genres from IGDB search results
+      const platformCounts = {};
+      const genreCounts = {};
+
+      searchResults.hits.forEach(hit => {
+        const game = hit.document;
+
+        // Count platforms
+        if (game.platforms && Array.isArray(game.platforms)) {
+          game.platforms.forEach(platform => {
+            if (platform && typeof platform === 'string') {
+              platformCounts[platform] = (platformCounts[platform] || 0) + 1;
+            }
+          });
+        }
+
+        // Count genres
+        if (game.genres && Array.isArray(game.genres)) {
+          game.genres.forEach(genre => {
+            if (genre && typeof genre === 'string') {
+              genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+            }
+          });
+        }
+      });
+
+      // Convert to format expected by template (sorted by count, then name)
+      availablePlatforms = Object.entries(platformCounts)
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+
+      availableGenres = Object.entries(genreCounts)
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    } else {
+      // No results, clear filters
+      availablePlatforms = [];
+      availableGenres = [];
     }
   }
   
@@ -98,23 +175,57 @@
       
       if (data.success) {
         // Format IGDB response to match expected structure
+        let allGames = data.data.map(game => ({
+          document: {
+            id: game.igdb_id,
+            igdb_id: game.igdb_id,
+            title: game.title,
+            cover_url: game.cover_url,
+            rating: game.rating,
+            release_date: game.release_date,
+            platforms: game.platforms || [],
+            genres: game.genres || [],
+            summary: game.summary
+          }
+        }));
+
+        // Apply client-side filtering for platforms and genres
+        let filteredGames = allGames.filter(hit => {
+          const game = hit.document;
+
+          // Filter by selected platforms
+          if (selectedPlatforms.length > 0) {
+            const hasMatchingPlatform = selectedPlatforms.some(selectedPlatform =>
+              game.platforms && game.platforms.some(platform => platform === selectedPlatform)
+            );
+            if (!hasMatchingPlatform) return false;
+          }
+
+          // Filter by selected genres
+          if (selectedGenres.length > 0) {
+            const hasMatchingGenre = selectedGenres.some(selectedGenre =>
+              game.genres && game.genres.some(genre => genre === selectedGenre)
+            );
+            if (!hasMatchingGenre) return false;
+          }
+
+          return true;
+        });
+
         searchResults = {
-          hits: data.data.map(game => ({
-            document: {
-              id: game.igdb_id,
-              igdb_id: game.igdb_id,
-              title: game.title,
-              cover_url: game.cover_url,
-              rating: game.rating,
-              release_date: game.release_date,
-              platforms: game.platforms || [],
-              genres: game.genres || [],
-              summary: game.summary
-            }
-          })),
-          found: data.data.length,
+          hits: filteredGames,
+          found: filteredGames.length,
           page: currentPage
         };
+
+        // Update available filters based on ALL search results (not filtered)
+        // This ensures filters show all available options from the search
+        const tempResults = { hits: allGames, found: allGames.length };
+        const originalResults = searchResults;
+        searchResults = tempResults;
+        updateAvailableFilters();
+        searchResults = originalResults;
+
         // Only update URL on explicit search submit, not during typing
         // updateUrl();
       } else {
@@ -140,6 +251,9 @@
     } else {
       // Clear URL if submitting empty search
       searchResults = { hits: [], found: 0 };
+      // Clear available filters which will hide the filter panel
+      availablePlatforms = [];
+      availableGenres = [];
       const newUrl = '/search';
       goto(newUrl, { replaceState: true, noScroll: true });
     }
@@ -157,6 +271,9 @@
     if (!searchQuery.trim()) {
       // Just clear results when search is empty, don't navigate at all
       searchResults = { hits: [], found: 0 };
+      // Clear available filters which will hide the filter panel
+      availablePlatforms = [];
+      availableGenres = [];
       // No URL update to preserve focus completely
     }
   }
@@ -444,72 +561,83 @@
   </div>
   
   <!-- Filter Panel (Desktop) or Collapsible (Mobile) -->
-  <div class="mb-6" class:hidden={!showFilters} class:lg:block={true}>
-    <div class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 p-4">
-      <div class="flex flex-col lg:flex-row lg:items-start lg:space-x-8 space-y-4 lg:space-y-0">
-        <!-- Platform Filters -->
-        {#if availablePlatforms.length > 0}
-          <div class="flex-1">
-            <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
-              Platforms
-            </h3>
-            <div class="grid grid-cols-2 gap-2">
-              {#each availablePlatforms.slice(0, 8) as platform}
-                <label class="flex items-center space-x-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedPlatforms.includes(platform.value)}
-                    onchange={() => togglePlatformFilter(platform.value)}
-                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span class="text-gray-700 dark:text-gray-300">
-                    {platform.value} ({platform.count})
-                  </span>
-                </label>
-              {/each}
+  {#if availablePlatforms.length > 0 || availableGenres.length > 0 || showFilters}
+    <div
+      class="mb-6 transition-all duration-300 ease-in-out overflow-hidden"
+      class:hidden={!showFilters && availablePlatforms.length === 0 && availableGenres.length === 0}
+      class:lg:block={true}
+      style="margin-top: 30px;"
+    >
+      <div class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 p-4 transform transition-all duration-300 ease-in-out"
+           class:translate-y-0={availablePlatforms.length > 0 || availableGenres.length > 0}
+           class:opacity-100={availablePlatforms.length > 0 || availableGenres.length > 0}
+           class:-translate-y-4={availablePlatforms.length === 0 && availableGenres.length === 0}
+           class:opacity-0={availablePlatforms.length === 0 && availableGenres.length === 0}>
+        <div class="flex flex-col lg:flex-row lg:items-start lg:space-x-8 space-y-4 lg:space-y-0">
+          <!-- Platform Filters -->
+          {#if availablePlatforms.length > 0}
+            <div class="flex-1">
+              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                Platforms
+              </h3>
+              <div class="grid grid-cols-2 gap-2">
+                {#each availablePlatforms.slice(0, 8) as platform}
+                  <label class="flex items-center space-x-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedPlatforms.includes(platform.value)}
+                      onchange={() => togglePlatformFilter(platform.value)}
+                      class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span class="text-gray-700 dark:text-gray-300">
+                      {platform.value} ({platform.count})
+                    </span>
+                  </label>
+                {/each}
+              </div>
             </div>
-          </div>
-        {/if}
-        
-        <!-- Genre Filters -->
-        {#if availableGenres.length > 0}
-          <div class="flex-1">
-            <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
-              Genres
-            </h3>
-            <div class="grid grid-cols-2 gap-2">
-              {#each availableGenres.slice(0, 8) as genre}
-                <label class="flex items-center space-x-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedGenres.includes(genre.value)}
-                    onchange={() => toggleGenreFilter(genre.value)}
-                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span class="text-gray-700 dark:text-gray-300">
-                    {genre.value} ({genre.count})
-                  </span>
-                </label>
-              {/each}
+          {/if}
+
+          <!-- Genre Filters -->
+          {#if availableGenres.length > 0}
+            <div class="flex-1">
+              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                Genres
+              </h3>
+              <div class="grid grid-cols-2 gap-2">
+                {#each availableGenres.slice(0, 8) as genre}
+                  <label class="flex items-center space-x-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedGenres.includes(genre.value)}
+                      onchange={() => toggleGenreFilter(genre.value)}
+                      class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span class="text-gray-700 dark:text-gray-300">
+                      {genre.value} ({genre.count})
+                    </span>
+                  </label>
+                {/each}
+              </div>
             </div>
-          </div>
-        {/if}
-        
-        <!-- Clear Filters -->
-        {#if hasActiveFilters}
-          <div class="flex-shrink-0">
-            <button
-              type="button"
-              onclick={clearAllFilters}
-              class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-            >
-              Clear all filters
-            </button>
-          </div>
-        {/if}
+          {/if}
+
+          <!-- Clear Filters -->
+          {#if hasActiveFilters}
+            <div class="flex-shrink-0">
+              <button
+                type="button"
+                onclick={clearAllFilters}
+                class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+              >
+                Clear all filters
+              </button>
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
-  </div>
+  {/if}
   
   <!-- Search Error -->
   {#if searchError}

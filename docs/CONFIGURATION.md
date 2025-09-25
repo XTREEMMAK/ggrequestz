@@ -99,24 +99,17 @@ If not configured, falls back to in-memory caching.
 | ----------------- | -------------------- | ------- |
 | `N8N_WEBHOOK_URL` | n8n webhook endpoint | -       |
 
-### Search Engine (Optional)
-
-| Variable             | Description           | Default     |
-| -------------------- | --------------------- | ----------- |
-| `TYPESENSE_HOST`     | Typesense host        | `typesense` |
-| `TYPESENSE_PORT`     | Typesense port        | `8108`      |
-| `TYPESENSE_PROTOCOL` | Protocol (http/https) | `http`      |
-| `TYPESENSE_API_KEY`  | API key               | `xyz123`    |
-
 ## Docker Compose Configuration
 
 ### Using External Services
 
-To use external PostgreSQL, Redis, or Typesense:
+To use external PostgreSQL or Redis:
 
 1. Remove the service from `docker-compose.yml`
 2. Update the connection variables in `.env`
 3. Ensure network connectivity
+
+> **Note**: As of v1.1.4, Typesense has been removed and is no longer supported. All search functionality now uses direct IGDB API integration.
 
 Example for external PostgreSQL:
 
@@ -193,7 +186,9 @@ docker compose logs postgres
 docker compose ps
 ```
 
-## Migration from v1.0.2
+## Migration Notes
+
+### From v1.0.2
 
 If upgrading from v1.0.2:
 
@@ -201,3 +196,29 @@ If upgrading from v1.0.2:
 2. Add PUID/PGID variables
 3. Pull new images: `docker compose pull`
 4. Restart: `docker compose up -d`
+
+### From v1.1.3 and earlier (Typesense Removal)
+
+If upgrading from v1.1.3 or earlier:
+
+1. **Remove Typesense configuration** from your `.env` file:
+
+   ```bash
+   # Remove these lines:
+   # TYPESENSE_HOST=typesense
+   # TYPESENSE_PORT=8108
+   # TYPESENSE_PROTOCOL=http
+   # TYPESENSE_API_KEY=xyz123
+   ```
+
+2. **Update Docker Compose** - Remove the `typesense` service from your `docker-compose.yml` if present
+
+3. **Clean up containers**:
+
+   ```bash
+   docker compose down
+   docker compose pull
+   docker compose up -d
+   ```
+
+4. **No data loss** - All game data remains in your PostgreSQL database. The search now uses direct IGDB API calls for better performance and accuracy.

@@ -5,6 +5,66 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2025-09-25
+
+### Major Changes
+
+- **Typesense Search Engine Removal**
+  - Completely removed Typesense dependency and container from Docker setup
+  - Replaced all search functionality with direct IGDB API integration
+  - Simplified architecture by eliminating search index synchronization
+  - Reduced Docker container count and system complexity
+
+### Fixed
+
+- **Admin Interface Search Focus Issues**
+  - Fixed search input focus loss in Admin Users page during typing
+  - Fixed search input focus loss in Admin Requests page during typing
+  - Implemented client-side filtering with SvelteKit 5 reactive patterns
+  - Search inputs now maintain focus throughout the entire search experience
+
+- **Search Functionality**
+  - Fixed game name search in Admin Requests (changed from `game_name` to `title`)
+  - Restored advanced filters (platforms/genres) on main search page
+  - Fixed filter persistence when navigating back from game details
+  - Added smooth CSS transitions for filter appearance with proper spacing
+
+- **404 Protection Security System**
+  - Fixed missing database table causing 404 protection failures
+  - Updated time window from 5 minutes to 60 seconds for better brute force protection
+  - Fixed database table name mismatch (`ggr_settings` → `ggr_system_settings`)
+  - Fixed IP address validation for database storage (INET column compatibility)
+  - Added comprehensive security logging and violation tracking
+
+### Enhanced
+
+- **Search Performance**
+  - Direct IGDB API searches eliminate intermediate indexing delays
+  - Real-time search results without synchronization lag
+  - Improved search accuracy using native IGDB data
+
+- **Security**
+  - Enhanced 404 attempt monitoring with detailed logging
+  - Automatic user logout after excessive 404 attempts (if authenticated)
+  - Admin notifications for security violations via Gotify
+  - Comprehensive audit trail in `ggr_security_logs` table
+
+### Removed
+
+- **Dependencies**
+  - Removed `typesense` npm package
+  - Removed Typesense container from `docker-compose.yml`
+  - Removed database synchronization scripts and commands
+  - Cleaned up unused search indexing code
+
+### Technical Changes
+
+- Updated search API endpoints to use IGDB directly
+- Migrated admin search interfaces to client-side filtering
+- Added database migration for security logs table
+- Implemented in-memory rate limiting for 404 protection
+- Updated Docker compose files to remove Typesense service
+
 ## [1.1.3] - 2025-09-25
 
 ### Fixed

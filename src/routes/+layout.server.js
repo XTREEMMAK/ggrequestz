@@ -237,7 +237,7 @@ export async function load({ request, cookies }) {
       if (rommAvailable) {
         // Get ROMM server URL from environment
         const { ROMM_SERVER_URL } = process.env;
-        rommServerUrl = ROMM_SERVER_URL || "https://gl.keyjaycompound.com";
+        rommServerUrl = ROMM_SERVER_URL || "http://localhost:8080";
       }
     } catch (rommError) {
       console.warn("Failed to check ROMM availability:", rommError);

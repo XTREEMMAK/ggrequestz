@@ -39,12 +39,6 @@ services:
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
 
-      # Search Engine (optional)
-      TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
-      TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
-      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
-      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz123}
-
       # Redis Cache (optional - falls back to memory if not available)
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
 
@@ -65,8 +59,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      typesense:
-        condition: service_started
       redis:
         condition: service_healthy
     networks:
@@ -128,33 +120,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # Typesense Search Engine
-  typesense:
-    image: typesense/typesense:0.25.2
-    container_name: ggrequestz-typesense
-    restart: unless-stopped
-    # Local Typesense search for testing
-    environment:
-      TYPESENSE_DATA_DIR: /data
-      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz123}
-      TYPESENSE_ENABLE_CORS: "true"
-    volumes:
-      - typesense-data:/data
-    ports:
-      - "${TYPESENSE_EXTERNAL_PORT:-8108}:8108"
-    networks:
-      - ggrequestz-network
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -f --retry 2 --max-time 10 http://localhost:8108/health || curl -f -H 'X-TYPESENSE-API-KEY: ${TYPESENSE_API_KEY:-xyz123}' http://localhost:8108/collections || exit 1",
-        ]
-      interval: 35s
-      timeout: 20s
-      retries: 8
-      start_period: 60s
-
   # Optional: Gotify Notification Server
   gotify:
     image: gotify/server
@@ -211,8 +176,6 @@ volumes:
   postgres-data:
     driver: local
   redis-data:
-    driver: local
-  typesense-data:
     driver: local
   gotify-data:
     driver: local

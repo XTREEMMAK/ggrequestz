@@ -1,13 +1,11 @@
 <!--
-  Custom error page with gaming theme and security monitoring
+  Custom error page with gaming theme
 -->
 
 <script>
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
   import Icon from '@iconify/svelte';
-  import { browser } from '$app/environment';
 
   let { data } = $props();
 
@@ -16,147 +14,9 @@
   let status = $derived($page.status || 500);
   let message = $derived(error.message || 'Something went wrong');
 
-  // 404 attempt tracking (pure client-side)
-  let is404 = $derived(status === 404);
-  let showWarning = $state(false);
-  let securitySettings = $state({
-    enabled: true,
-    maxAttempts: 5,
-    timeWindow: 300, // 5 minutes in seconds
-    logoutUser: true,
-    notifyAdmin: true
-  });
 
-  // Load admin settings from server data or defaults
-  async function loadSecuritySettings() {
-    try {
-      // Try to get security settings from parent data
-      // The admin settings are loaded in the root layout and available in page stores
-      // For now, use localStorage cache if available, otherwise use defaults
-      const cached = localStorage.getItem('ggr_security_settings');
-      if (cached) {
-        try {
-          securitySettings = JSON.parse(cached);
-          return;
-        } catch (e) {
-          // Invalid JSON, remove and use defaults
-          localStorage.removeItem('ggr_security_settings');
-        }
-      }
 
-      // Try to fetch from server-side data (will need to be added to error layout)
-      // For now, keep the default settings
-    } catch (err) {
-      console.warn('Failed to load security settings, using defaults:', err);
-    }
-  }
 
-  // Track 404 attempt with client-side enforcement
-  async function track404Attempt() {
-    if (!securitySettings.enabled) return;
-
-    const now = Date.now();
-    const attemptKey = 'ggr_404_attempts';
-    const warningKey = 'ggr_404_warning_shown';
-
-    // Get existing tracking data
-    let trackingData = {};
-    try {
-      const existing = localStorage.getItem(attemptKey);
-      if (existing) {
-        trackingData = JSON.parse(existing);
-      }
-    } catch (err) {
-      trackingData = {};
-    }
-
-    // Initialize tracking data
-    if (!trackingData.firstAttempt) {
-      trackingData = {
-        count: 0,
-        firstAttempt: now,
-        lastAttempt: now,
-        paths: [],
-        warned: false
-      };
-    }
-
-    // Clean old attempts outside time window
-    const timeWindow = securitySettings.timeWindow * 1000; // Convert to milliseconds
-    if (now - trackingData.firstAttempt > timeWindow) {
-      // Reset tracking window
-      trackingData = {
-        count: 0,
-        firstAttempt: now,
-        lastAttempt: now,
-        paths: [],
-        warned: false
-      };
-      localStorage.removeItem(warningKey);
-    }
-
-    // Update tracking
-    trackingData.count++;
-    trackingData.lastAttempt = now;
-    trackingData.paths.push($page.url.pathname);
-
-    // Keep only unique paths and limit to last 10
-    trackingData.paths = [...new Set(trackingData.paths)].slice(-10);
-
-    // Save tracking data
-    localStorage.setItem(attemptKey, JSON.stringify(trackingData));
-
-    // Show warning after 3 attempts (client-side only)
-    if (trackingData.count >= 3) {
-      showWarning = true;
-    }
-
-    // Check if user exceeded limits
-    if (trackingData.count >= securitySettings.maxAttempts) {
-      // Note: Admin notifications are now handled server-side
-      // This client-side approach focuses on user enforcement only
-      if (!trackingData.warned) {
-        trackingData.warned = true;
-        localStorage.setItem(attemptKey, JSON.stringify(trackingData));
-      }
-
-      // Handle logout for authenticated users
-      if (securitySettings.logoutUser) {
-        try {
-          // Call logout API
-          await fetch('/api/security/logout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reason: 'excessive_404_attempts' })
-          });
-
-          // Clear client-side tracking
-          localStorage.removeItem(attemptKey);
-          localStorage.removeItem(warningKey);
-          sessionStorage.clear();
-
-          // Redirect to login with message
-          window.location.href = '/login?message=security_violation';
-          return;
-        } catch (err) {
-          console.warn('Security logout failed:', err);
-          // Still redirect even if API fails
-          window.location.href = '/login?message=security_violation';
-          return;
-        }
-      }
-    }
-  }
-
-  onMount(async () => {
-    if (is404 && browser) {
-      // Load security settings first
-      await loadSecuritySettings();
-
-      // Then track the attempt
-      await track404Attempt();
-    }
-  });
 
   // Get appropriate error message and icon
   let errorInfo = $derived(() => {
@@ -247,19 +107,6 @@
       <p class="error-message">{errorInfo.message}</p>
     </div>
 
-    <!-- 404 Security Warning -->
-    {#if is404 && showWarning}
-      <div class="security-warning" role="alert">
-        <Icon icon="heroicons:shield-exclamation" class="warning-icon" />
-        <div class="warning-content">
-          <h3>Security Notice</h3>
-          <p>
-            Multiple failed page attempts detected in this session.
-            Continued attempts may result in temporary access restrictions.
-          </p>
-        </div>
-      </div>
-    {/if}
 
     <!-- Action Buttons -->
     <div class="action-buttons">
@@ -445,41 +292,6 @@
     margin: 0 auto;
   }
 
-  .security-warning {
-    background: linear-gradient(45deg, #fed7d7, #fbb6ce);
-    border: 2px solid #e53e3e;
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin: 2rem 0;
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    animation: pulse-warning 2s infinite;
-  }
-
-  @keyframes pulse-warning {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.4); }
-    50% { box-shadow: 0 0 0 10px rgba(229, 62, 62, 0); }
-  }
-
-  :global(.warning-icon) {
-    width: 2rem;
-    height: 2rem;
-    color: #e53e3e;
-    flex-shrink: 0;
-    margin-top: 0.25rem;
-  }
-
-  .warning-content h3 {
-    color: #c53030;
-    font-weight: bold;
-    margin-bottom: 0.5rem;
-  }
-
-  .warning-content p {
-    color: #742a2a;
-    margin: 0;
-  }
 
   .action-buttons {
     display: flex;

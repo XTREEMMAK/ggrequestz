@@ -16,8 +16,8 @@ GG Requestz follows a modern, scalable architecture designed for performance and
         ▼                       ▼                       ▼
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │                 │     │                 │     │                 │
-│   Cache Layer   │     │   Search        │     │   External      │
-│   (Redis)       │     │   (Typesense)   │     │   Services      │
+│   Cache Layer   │     │   Authentication│     │   External      │
+│   (Redis)       │     │   & Security    │     │   APIs          │
 │                 │     │                 │     │   (IGDB, ROMM)  │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
@@ -81,6 +81,23 @@ providers/
 - **Event-driven** invalidation for updates
 - **Manual purge** via admin panel
 
+## Search Architecture
+
+### Direct IGDB Integration (v1.1.4+)
+
+- **Real-time Search** - Direct API calls to IGDB without intermediate indexing
+- **Advanced Filtering** - Platform and genre filters extracted from search results
+- **Client-side Processing** - Filter aggregation and result manipulation
+- **Performance Benefits** - Eliminates search index synchronization delays
+
+### Search Flow
+
+1. User enters search query
+2. Client-side debouncing (300ms)
+3. Direct IGDB API call with filters
+4. Result processing and filter extraction
+5. Real-time display with smooth transitions
+
 ## Performance Optimizations
 
 ### Server-Side
@@ -123,7 +140,7 @@ providers/
 - **OIDC/OAuth2** authentication
 - **Session management** with secure cookies
 - **CORS protection** with whitelisting
-- **Rate limiting** ready to implement
+- **Rate limiting** with security logging
 - **Input validation** throughout
 
 ### Infrastructure Security
@@ -165,12 +182,12 @@ providers/
 - Cached availability status
 - Fallback handling
 
-### Typesense Search
+### Direct IGDB Search (v1.1.4+)
 
-- Full-text search capability
-- Faceted filtering
-- Real-time indexing
-- Typo tolerance
+- Direct API integration for real-time results
+- Advanced filter extraction from results
+- No intermediate indexing required
+- Reduced infrastructure complexity
 
 ## Deployment Architecture
 
@@ -180,9 +197,10 @@ providers/
 services:
   app: # Main application
   postgres: # Database
-  redis: # Cache layer
-  typesense: # Search engine
+  redis: # Cache layer (optional)
 ```
+
+> **Note**: As of v1.1.4, the Typesense search engine has been removed to simplify the architecture and improve performance through direct IGDB API integration.
 
 ### Environment Configurations
 
@@ -196,9 +214,11 @@ services:
 
 - `/api/health` - Application health
 - `/api/version` - Version info
+- `/api/setup/check` - Service connectivity validation
 - Database connectivity
 - Redis availability
-- External service status
+- External service status (IGDB, ROMM)
+- Security monitoring
 
 ### Performance Metrics
 

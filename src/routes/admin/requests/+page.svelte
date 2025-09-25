@@ -75,16 +75,47 @@
     goto(url.toString());
   }
   
-  function handleSearch(event) {
-    const query = event.target.value;
-    const url = new URL(pageUrl);
-    if (query) {
-      url.searchParams.set('search', query);
-    } else {
-      url.searchParams.delete('search');
+  let searchInput = $state(currentSearch);
+  let allRequests = $state(data?.requests || []); // Store all requests from server
+
+  // Sync searchInput with URL changes (for back/forward navigation)
+  $effect(() => {
+    searchInput = currentSearch;
+  });
+
+  // Update allRequests when data changes
+  $effect(() => {
+    allRequests = data?.requests || [];
+  });
+
+  // Filter requests based on search input (client-side filtering)
+  let filteredRequests = $derived.by(() => {
+    if (!searchInput || !searchInput.trim()) {
+      return allRequests;
     }
-    url.searchParams.delete('page'); // Reset to first page
-    goto(url.toString());
+
+    const query = searchInput.toLowerCase();
+    return allRequests.filter(request => {
+      const searchableFields = [
+        request.title, // The game name is stored in 'title', not 'game_name'
+        request.requester_username,
+        request.status,
+        request.notes,
+        request.fulfilled_by_username
+      ].filter(Boolean).map(field => field.toLowerCase());
+
+      return searchableFields.some(field => field.includes(query));
+    });
+  });
+
+  // Update requests to show filtered results
+  $effect(() => {
+    requests = filteredRequests;
+  });
+
+  function handleSearch(event) {
+    searchInput = event.target.value;
+    // No navigation needed - filtering happens client-side via reactive derived state
   }
   
   function handlePageChange(page) {
@@ -362,7 +393,7 @@
         <input
           type="text"
           placeholder="Search requests..."
-          value={currentSearch}
+          value={searchInput}
           oninput={handleSearch}
           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />

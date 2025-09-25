@@ -65,20 +65,3 @@ services:
       options:
         max-size: "5m"
         max-file: "3"
-
-  typesense:
-    restart: always
-    profiles: [] # Always include in production
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "1.0"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"

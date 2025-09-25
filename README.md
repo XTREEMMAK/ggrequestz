@@ -6,7 +6,7 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.4-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
@@ -106,8 +106,10 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:v1.1.0
+docker pull ghcr.io/xtreemmak/ggrequestz:v1.1.4
 ```
+
+> **📋 v1.1.4 Release Notes:** This version removes the Typesense search container dependency. The system now uses direct IGDB API integration, reducing Docker container count and improving performance. If upgrading from a previous version, remove the `typesense` service from your docker-compose.yml file.
 
 ## 🤝 Contributing
 
