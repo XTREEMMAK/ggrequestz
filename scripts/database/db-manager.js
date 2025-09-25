@@ -8,7 +8,6 @@
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import os from "os";
 import crypto from "crypto";
 import { config } from "dotenv";
 import pkg from "pg";
@@ -17,10 +16,13 @@ const { Client } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Database Manager Version
+const DB_MANAGER_VERSION = "1.1.2";
+
 // Load environment variables
 config();
 
-console.log("🗄️  G.G Requestz Database Manager");
+console.log("🗄️  G.G Requestz Database Manager v" + DB_MANAGER_VERSION);
 console.log("==================================");
 
 // Configuration
@@ -79,7 +81,6 @@ function splitSQLStatements(sql) {
 
   for (let i = 0; i < sql.length; i++) {
     const char = sql[i];
-    const nextChar = sql[i + 1];
 
     current += char;
 
@@ -199,7 +200,25 @@ async function runMigrations() {
     await client.connect();
     console.log("✅ Connected for migrations");
 
-    // Ensure migration table exists
+    // Check if migration table exists and has correct schema
+    const tableCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = '${CONFIG.migrationTable}'
+    `);
+
+    const columns = tableCheck.rows.map((row) => row.column_name);
+    const hasOldSchema =
+      columns.includes("version") && !columns.includes("migration_name");
+
+    if (hasOldSchema) {
+      console.log("🔧 Detected old migration table schema, fixing...");
+      // Drop old table and recreate with correct schema
+      await client.query(`DROP TABLE IF EXISTS ${CONFIG.migrationTable}`);
+      console.log("✅ Old migration table removed");
+    }
+
+    // Ensure migration table exists with correct schema
     await client.query(`
       CREATE TABLE IF NOT EXISTS ${CONFIG.migrationTable} (
         id SERIAL PRIMARY KEY,
