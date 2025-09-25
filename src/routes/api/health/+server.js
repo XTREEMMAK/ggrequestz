@@ -11,10 +11,9 @@ export async function GET() {
   const health = {
     status: "ok",
     timestamp: new Date().toISOString(),
-    version: "1.0.0",
+    version: "1.1.4",
     services: {
       database: "unknown",
-      search: "unknown",
       cache: "unknown",
       redis: "unknown",
     },
@@ -38,31 +37,8 @@ export async function GET() {
       health.database_error = dbError.message;
     }
 
-    // Test search engine (Typesense) connectivity
-    try {
-      if (process.env.TYPESENSE_HOST && process.env.TYPESENSE_API_KEY) {
-        const typesenseUrl = `${process.env.TYPESENSE_PROTOCOL || "http"}://${process.env.TYPESENSE_HOST}:${process.env.TYPESENSE_PORT || 8108}/health`;
-
-        const searchResponse = await fetch(typesenseUrl, {
-          headers: {
-            "X-TYPESENSE-API-KEY": process.env.TYPESENSE_API_KEY,
-          },
-          signal: AbortSignal.timeout(5000), // 5 second timeout
-        });
-
-        if (searchResponse.ok) {
-          health.services.search = "healthy";
-        } else {
-          health.services.search = "unhealthy";
-        }
-      } else {
-        health.services.search = "not_configured";
-      }
-    } catch (searchError) {
-      console.error("Health check search error:", searchError);
-      health.services.search = "unhealthy";
-      health.search_error = searchError.message;
-    }
+    // Search functionality now uses direct IGDB API integration
+    // No separate search service to check
 
     // Test cache availability and Redis connectivity
     try {
