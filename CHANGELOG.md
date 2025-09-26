@@ -5,7 +5,7 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.4] - 2025-09-25
+## [1.1.4] - 2025-09-26
 
 ### Major Changes
 
@@ -16,6 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduced Docker container count and system complexity
 
 ### Fixed
+
+- **Authentication & Request Management**
+  - Fixed 401 Unauthorized error for basic auth users trying to remove their own requests
+  - Enhanced `getSession` function to properly handle both JWT and basic auth tokens
+  - Improved authentication flow to check both `session` and `basic_auth_session` cookies
+  - Added comprehensive authentication debugging for troubleshooting
+
+- **User Experience**
+  - Replaced generic alert dialogs with toast notifications for better UX
+  - Added success messages when requests are successfully removed
+  - Enhanced error messages to show specific server errors instead of generic failures
+  - Improved search page to auto-hide advanced filters when search is cleared
+
+- **Docker Health Checks**
+  - Fixed persistent "unhealthy" container status despite running application
+  - Resolved IPv6 connection issues in health check script (localhost → 127.0.0.1)
+  - Removed conflicting health check configurations between Dockerfile and Docker Compose
+  - Created dedicated Node.js health check script with proper ES module compatibility
 
 - **Admin Interface Search Focus Issues**
   - Fixed search input focus loss in Admin Users page during typing
@@ -29,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed filter persistence when navigating back from game details
   - Added smooth CSS transitions for filter appearance with proper spacing
 
-- **404 Protection Security System**
+- **404 Protection Security System** _(Later Removed)_
   - Fixed missing database table causing 404 protection failures
   - Updated time window from 5 minutes to 60 seconds for better brute force protection
   - Fixed database table name mismatch (`ggr_settings` → `ggr_system_settings`)
@@ -50,6 +68,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive audit trail in `ggr_security_logs` table
 
 ### Removed
+
+- **404 Protection System**
+  - Removed 404 protection system after security evaluation
+  - Removed security API endpoints and database tables
+  - Removed client-side 404 tracking and warnings
+  - Simplified error handling and removed unnecessary complexity
+  - Cleaned up migration files and security-related code
 
 - **Dependencies**
   - Removed `typesense` npm package

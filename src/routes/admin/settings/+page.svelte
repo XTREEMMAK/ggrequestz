@@ -47,12 +47,6 @@
       label: 'System Settings',
       icon: 'heroicons:cog-6-tooth',
       description: 'Core system configuration'
-    },
-    {
-      id: 'security',
-      label: 'Security Settings',
-      icon: 'heroicons:shield-check',
-      description: 'Security monitoring and protection'
     }
   ];
   
@@ -78,12 +72,6 @@
     'system.maintenance_mode': settings['system.maintenance_mode'] === 'true',
     'system.registration_enabled': settings['system.registration_enabled'] === 'true',
 
-    // Security settings
-    'security.404_limit_enabled': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').enabled : true,
-    'security.404_max_attempts': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').maxAttempts : 5,
-    'security.404_time_window': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').timeWindow : 300,
-    'security.404_logout_user': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').logoutUser : true,
-    'security.404_notify_admin': settings['security_404_limit'] ? JSON.parse(settings['security_404_limit'] || '{}').notifyAdmin : true
   });
   
   // Editable form state
@@ -100,11 +88,6 @@
     'request.require_approval': false,
     'system.maintenance_mode': false,
     'system.registration_enabled': false,
-    'security.404_limit_enabled': true,
-    'security.404_max_attempts': 5,
-    'security.404_time_window': 300,
-    'security.404_logout_user': true,
-    'security.404_notify_admin': true
   });
   
   // Sync editable data with settings on load
@@ -125,29 +108,12 @@
       // Convert form data to API format
       const settingsToSave = {};
       for (const [key, value] of Object.entries(editableFormData)) {
-        // Handle security settings as a JSON object
-        if (key.startsWith('security.404_')) {
-          continue; // Skip individual security settings, handle them together below
-        }
-
         if (typeof value === 'boolean') {
           settingsToSave[key] = value.toString();
         } else {
           settingsToSave[key] = value;
         }
       }
-
-      // Combine security settings into a single JSON object
-      const securitySettings = {
-        enabled: editableFormData['security.404_limit_enabled'],
-        maxAttempts: parseInt(editableFormData['security.404_max_attempts']) || 5,
-        timeWindow: parseInt(editableFormData['security.404_time_window']) || 300,
-        logoutUser: editableFormData['security.404_logout_user'],
-        notifyAdmin: editableFormData['security.404_notify_admin']
-      };
-
-      // Update both the old format and new API format
-      settingsToSave['security_404_limit'] = JSON.stringify(securitySettings);
 
       const response = await fetch('/admin/api/settings/update', {
         method: 'POST',
@@ -161,10 +127,6 @@
         // Update local settings
         settings = { ...settings, ...settingsToSave };
 
-        // Update client-side cache for 404 security system
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem('ggr_security_settings', JSON.stringify(securitySettings));
-        }
 
         setTimeout(() => { saveStatus = ''; }, 3000);
       } else {
@@ -664,174 +626,6 @@
             </div>
           {/if}
 
-          <!-- Security Settings Section -->
-          {#if activeSection === 'security'}
-            <div class="space-y-6">
-              <div>
-                <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  <Icon icon="heroicons:shield-check" class="inline-block w-5 h-5 mr-2" />
-                  Security Configuration
-                </h2>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  Configure security monitoring and protection settings to keep your application safe.
-                </p>
-              </div>
-
-              <!-- 404 Attack Protection -->
-              <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-6 border border-gray-200 dark:border-gray-600">
-                <div class="flex items-start space-x-3 mb-4">
-                  <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
-                      <Icon icon="heroicons:exclamation-triangle" class="w-5 h-5 text-red-600 dark:text-red-400" />
-                    </div>
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">404 Attack Protection</h3>
-                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      Protect against excessive 404 attempts that could indicate malicious activity or reconnaissance.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="space-y-4">
-                  <!-- Enable/Disable -->
-                  <div class="flex items-center justify-between">
-                    <div class="flex-1 min-w-0">
-                      <label for="security-404-enabled" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Enable 404 Protection
-                      </label>
-                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Monitor and limit excessive 404 attempts from users
-                      </p>
-                    </div>
-                    <div class="ml-4">
-                      <label class="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          id="security-404-enabled"
-                          bind:checked={editableFormData['security.404_limit_enabled']}
-                          disabled={!canEditSettings}
-                          class="sr-only peer"
-                        />
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {#if editableFormData['security.404_limit_enabled']}
-                    <!-- Max Attempts -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label for="security-404-max-attempts" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Maximum Attempts
-                        </label>
-                        <input
-                          type="number"
-                          id="security-404-max-attempts"
-                          bind:value={editableFormData['security.404_max_attempts']}
-                          disabled={!canEditSettings}
-                          min="1"
-                          max="20"
-                          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white text-sm"
-                          placeholder="5"
-                        />
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Number of 404 attempts before taking action (1-20)
-                        </p>
-                      </div>
-
-                      <div>
-                        <label for="security-404-time-window" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Time Window (seconds)
-                        </label>
-                        <input
-                          type="number"
-                          id="security-404-time-window"
-                          bind:value={editableFormData['security.404_time_window']}
-                          disabled={!canEditSettings}
-                          min="60"
-                          max="3600"
-                          step="60"
-                          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white text-sm"
-                          placeholder="300"
-                        />
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Time window for counting attempts (60-3600 seconds)
-                        </p>
-                      </div>
-                    </div>
-
-                    <!-- Actions -->
-                    <div class="space-y-3 pt-2">
-                      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Actions to take when limit is exceeded:</h4>
-
-                      <div class="flex items-center justify-between">
-                        <div class="flex-1 min-w-0">
-                          <label for="security-404-logout" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Logout User
-                          </label>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Automatically log out authenticated users who exceed the limit
-                          </p>
-                        </div>
-                        <div class="ml-4">
-                          <label class="relative inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              id="security-404-logout"
-                              bind:checked={editableFormData['security.404_logout_user']}
-                              disabled={!canEditSettings}
-                              class="sr-only peer"
-                            />
-                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-600"></div>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div class="flex items-center justify-between">
-                        <div class="flex-1 min-w-0">
-                          <label for="security-404-notify" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Notify Administrators
-                          </label>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Send notifications to admins when security violations are detected
-                          </p>
-                        </div>
-                        <div class="ml-4">
-                          <label class="relative inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              id="security-404-notify"
-                              bind:checked={editableFormData['security.404_notify_admin']}
-                              disabled={!canEditSettings}
-                              class="sr-only peer"
-                            />
-                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Security Info -->
-                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-                      <div class="flex">
-                        <div class="flex-shrink-0">
-                          <Icon icon="heroicons:information-circle" class="w-5 h-5 text-blue-400" />
-                        </div>
-                        <div class="ml-3">
-                          <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">Security Note</h4>
-                          <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
-                            This feature helps protect against automated scanning and potential attackers trying to enumerate your application structure.
-                            All security events are logged and can be reviewed in the admin dashboard.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              </div>
-            </div>
-          {/if}
         {/if}
       </div>
     </div>

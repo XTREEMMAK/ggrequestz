@@ -123,5 +123,18 @@ export async function rescindRequest(requestId) {
     }),
   });
 
+  if (!response.ok) {
+    // Try to get error details from response
+    try {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+      );
+    } catch (jsonError) {
+      // If JSON parsing fails, use status text
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+  }
+
   return response.json();
 }

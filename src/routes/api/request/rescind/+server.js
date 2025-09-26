@@ -44,6 +44,7 @@ export async function POST({ request }) {
     const { request_id } = await request.json();
 
     if (!request_id) {
+      console.error("Rescind request error: Missing request_id");
       throw error(400, "Missing request_id");
     }
 
@@ -54,6 +55,9 @@ export async function POST({ request }) {
     );
 
     if (requestCheck.rows.length === 0) {
+      console.error(
+        `Rescind request error: Request ${request_id} not found for user ${localUserId}`,
+      );
       return json(
         {
           success: false,

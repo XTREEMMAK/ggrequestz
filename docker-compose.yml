@@ -64,15 +64,11 @@ services:
     networks:
       - ggrequestz-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -f --retry 3 --max-time 10 http://localhost:3000/api/health || curl -f http://localhost:3000/ || exit 1",
-        ]
+      test: ["CMD", "node", "/app/scripts/healthcheck.cjs"]
       interval: 30s
-      timeout: 25s
-      retries: 6
-      start_period: 120s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # PostgreSQL Database
   postgres:

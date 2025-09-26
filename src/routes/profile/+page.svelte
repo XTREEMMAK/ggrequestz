@@ -254,20 +254,31 @@
     loading = true;
     try {
       const result = await rescindRequest(request.id);
-      
+
       if (result.success) {
         // Update local state
-        userRequests = userRequests.map(req => 
-          req.id === request.id 
+        userRequests = userRequests.map(req =>
+          req.id === request.id
             ? { ...req, status: 'cancelled', updated_at: result.request.updated_at }
             : req
         );
+        toasts.success(`Successfully removed request for "${request.title}"`);
       } else {
         throw new Error(result.error || 'Failed to remove request');
       }
     } catch (error) {
       console.error('Remove request error:', error);
-      alert('Failed to remove request. Please try again.');
+
+      // Extract more specific error information
+      let errorMessage = 'Failed to remove request. Please try again.';
+      if (error.message && error.message !== 'Failed to remove request') {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      // Show error in toast instead of alert
+      toasts.error(errorMessage);
     } finally {
       loading = false;
     }

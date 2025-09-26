@@ -219,29 +219,38 @@ export async function getSession(cookieHeader) {
 
   const cookies = parse(cookieHeader);
   const sessionToken = cookies.session;
-
-  if (!sessionToken) {
-    return null;
-  }
+  const basicAuthToken = cookies.basic_auth_session;
 
   // First try to verify as JWT (Authentik session)
-  const jwtUser = await verifySessionToken(sessionToken);
-  if (jwtUser) {
-    return jwtUser;
+  if (sessionToken) {
+    const jwtUser = await verifySessionToken(sessionToken);
+    if (jwtUser) {
+      return jwtUser;
+    }
+
+    // If JWT fails, try basic auth token on session cookie
+    try {
+      const { verifyBasicAuthToken } = await import("./basicAuth.js");
+      const basicUser = verifyBasicAuthToken(sessionToken);
+      if (basicUser) {
+        return basicUser;
+      }
+    } catch (error) {
+      console.error("Basic auth verification on session cookie failed:", error);
+    }
   }
 
-  // If JWT fails, try basic auth token
-  try {
-    const { verifyBasicAuthToken } = await import("./basicAuth.js");
-    const basicUser = verifyBasicAuthToken(sessionToken);
-    if (basicUser) {
-      return basicUser;
+  // Check for basic auth session cookie
+  if (basicAuthToken) {
+    try {
+      const { getBasicAuthUser } = await import("./basicAuth.js");
+      const basicUser = getBasicAuthUser(basicAuthToken);
+      if (basicUser) {
+        return basicUser;
+      }
+    } catch (error) {
+      console.error("Basic auth session verification failed:", error);
     }
-  } catch (error) {
-    console.error(
-      `❌ AUTH DEBUG: Error during basic auth verification:`,
-      error,
-    );
   }
 
   return null;
