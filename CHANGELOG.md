@@ -5,6 +5,39 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-09-27
+
+### Bug Fixes
+
+- **Popular Games Display**
+  - Fixed Popular Games section not showing on homepage due to progressive loading logic
+  - Changed showPopularGames state from false to true for immediate display
+  - Popular Games API was working correctly but frontend visibility was blocked
+
+- **Cover Image Quality**
+  - Upgraded Popular Games to use high-quality covers instead of low-quality thumbnails
+  - Fixed cover URLs to use `t_cover_big` format instead of default `t_thumb`
+  - Applied existing `getHighQualityCover()` function to Popular Games formatting
+
+- **Admin Panel Improvements**
+  - Added missing collapse button functionality to admin sidebar
+  - Integrated admin layout with shared sidebar collapse state store
+  - Added responsive sidebar width transitions and floating expand button
+  - Added tooltips for navigation items when sidebar is collapsed
+  - Fixed main content padding to adjust for collapsed admin sidebar
+
+- **User Interface Polish**
+  - Removed dark background from user button when main sidebar is collapsed
+  - Improved visual consistency between main and admin layouts
+  - Enhanced sidebar collapse functionality across all admin pages
+
+### Technical Improvements
+
+- Fixed IGDB query concatenation issues that were causing API syntax errors
+- Improved genre filtering reliability in Popular Games section
+- Enhanced sidebar state management with proper store integration
+- Better responsive design for admin panel with collapsed sidebar support
+
 ## [1.2.0] - 2025-09-27
 
 ### Major Features

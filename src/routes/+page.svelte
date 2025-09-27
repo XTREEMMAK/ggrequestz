@@ -35,23 +35,32 @@
 
   // Helper function to get user ID for API calls
   function getUserId() {
+    // First try to use the resolved database user ID from server
+    if (data.resolvedUserId) {
+      return data.resolvedUserId;
+    }
+
     if (!user) return null;
 
     // Direct ID from user object
     if (user.id) return user.id;
+
+    // Check for user_id property (Authentik sessions)
+    if (user.user_id) return user.user_id;
 
     // Extract from Basic Auth sub
     if (user.sub?.startsWith("basic_auth_")) {
       return user.sub.replace("basic_auth_", "");
     }
 
+    // For other auth methods (Authentik), the ID should be in resolvedUserId
     return null;
   }
   
   // Progressive loading states to prevent image overload
   let showNewInLibrary = $state(true); // Show ROMM first
-  let showNewReleases = $state(false); // Show second
-  let showPopularGames = $state(false); // Show last
+  let showNewReleases = $state(true); // Show second
+  let showPopularGames = $state(true); // Show immediately - API is working
   let progressiveLoadingComplete = $state(false); // Track if progressive loading is done
   let recentRequests = $derived(data?.recentRequests || []);
   let userWatchlist = $derived(data?.userWatchlist || []);
@@ -709,7 +718,9 @@
       
       if (!data) {
         // Fallback to manual fetch if no preloaded data
-        const response = await fetch(`/api/games/recent?page=${newReleasesPage + 1}&limit=${ITEMS_PER_PAGE}`);
+        const userId = getUserId();
+        const userParam = userId ? `&user_id=${userId}` : '';
+        const response = await fetch(`/api/games/recent?page=${newReleasesPage + 1}&limit=${ITEMS_PER_PAGE}${userParam}`);
         if (response.ok) {
           data = await response.json();
         }
@@ -1185,7 +1196,11 @@
   
   // Create hover preloaders for Load More buttons
   const newReleasesPreloader = $derived(createHoverPreloader(
-    () => fetch(`/api/games/recent?page=${newReleasesPage + 1}&limit=${ITEMS_PER_PAGE}`).then(r => r.json()),
+    () => {
+      const userId = getUserId();
+      const userParam = userId ? `&user_id=${userId}` : '';
+      return fetch(`/api/games/recent?page=${newReleasesPage + 1}&limit=${ITEMS_PER_PAGE}${userParam}`).then(r => r.json());
+    },
     { delay: 200, cacheKey: `new-releases-${newReleasesPage + 1}` }
   ));
   
@@ -1723,7 +1738,14 @@
   }
 
   /* Responsive breakpoints with much smaller max widths */
-  @media (max-width: 640px) {
+  /* Very small mobile devices */
+  @media (max-width: 416px) {
+    .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    }
+  }
+
+  @media (min-width: 417px) and (max-width: 640px) {
     .responsive-grid {
       grid-template-columns: repeat(auto-fit, minmax(150px, 170px));
     }

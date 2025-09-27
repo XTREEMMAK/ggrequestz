@@ -384,7 +384,7 @@
 					<div class="relative user-menu-container">
 						<button
 							on:click={toggleUserMenu}
-							class="w-full flex flex-col items-center space-y-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors group"
+							class="w-full flex flex-col items-center space-y-2 p-2 rounded-lg hover:bg-gray-700 transition-colors group"
 							aria-label="User menu"
 						>
 							<div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">

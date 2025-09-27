@@ -3,7 +3,7 @@
 -->
 
 <script>
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll, invalidate } from '$app/navigation';
   import { browser } from '$app/environment';
   import GameCard from '../../components/GameCard.svelte';
   import StatusBadge from '../../components/StatusBadge.svelte';
@@ -345,6 +345,14 @@
       if (result.success) {
         toasts.success('Content preferences saved successfully!');
         preferencesChanged = false;
+
+        // Invalidate specific data dependencies to ensure fresh data with new preferences
+        // This will trigger re-fetching on navigation to homepage and other pages
+        if (result.cacheInvalidated) {
+          await invalidate('app:preferences');
+          // Also invalidate all to ensure all pages get fresh data
+          await invalidateAll();
+        }
       } else {
         throw new Error(result.error || 'Failed to save preferences');
       }

@@ -8,12 +8,24 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import Icon from '@iconify/svelte';
+  import { sidebarCollapsed as sidebarCollapsedStore } from '$lib/stores/sidebar.js';
   
   let { data, children } = $props();
   let user = $derived(data?.user);
   let userPermissions = $derived(data?.userPermissions || []);
   let currentPath = $derived($page.url.pathname);
   let appVersion = $state(null);
+  let sidebarCollapsed = $state($sidebarCollapsedStore);
+
+  // Sync with store
+  $effect(() => {
+    sidebarCollapsedStore.set(sidebarCollapsed);
+  });
+
+  // Listen for store changes
+  $effect(() => {
+    sidebarCollapsed = $sidebarCollapsedStore;
+  });
   
   // Check if user has admin panel access
   let hasAdminAccess = $derived(userPermissions.includes('admin.panel'));
@@ -94,6 +106,10 @@
     }
     return currentPath.startsWith(href);
   }
+
+  function toggleSidebarCollapse() {
+    sidebarCollapsed = !sidebarCollapsed;
+  }
   
 </script>
 
@@ -110,22 +126,44 @@
     </div>
     
     <!-- Sidebar -->
-    <div class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 shadow-lg transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out" id="sidebar">
+    <div class="fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 shadow-lg transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out {sidebarCollapsed ? 'w-16' : 'w-64'}" id="sidebar">
       <div class="flex flex-col h-full">
         <!-- Logo/Header -->
         <div class="flex items-center justify-between h-16 px-6 bg-blue-600 dark:bg-blue-700">
-          <a href="/admin" class="flex-1 flex items-center justify-center space-x-3">
-            <img 
-              src="/GGR_Logo.webp" 
-              alt="G.G Requestz Admin Logo" 
-              class="h-10 w-auto filter brightness-0 invert"
-            />
-            <span class="text-white font-semibold text-lg">Admin</span>
-          </a>
-          
+          {#if !sidebarCollapsed}
+            <a href="/admin" class="flex-1 flex items-center justify-center space-x-3">
+              <img
+                src="/GGR_Logo.webp"
+                alt="G.G Requestz Admin Logo"
+                class="h-10 w-auto filter brightness-0 invert"
+              />
+              <span class="text-white font-semibold text-lg">Admin</span>
+            </a>
+          {:else}
+            <a href="/admin" class="flex-1 flex items-center justify-center">
+              <div class="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+                <span class="text-blue-600 font-bold text-sm">GG</span>
+              </div>
+            </a>
+          {/if}
+
+          <!-- Desktop collapse button -->
+          {#if !sidebarCollapsed}
+            <button
+              type="button"
+              class="hidden lg:block text-white hover:text-gray-200 ml-2"
+              on:click={toggleSidebarCollapse}
+              aria-label="Collapse sidebar"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+              </svg>
+            </button>
+          {/if}
+
           <!-- Mobile close button -->
-          <button 
-            type="button" 
+          <button
+            type="button"
             class="lg:hidden text-white hover:text-gray-200"
             on:click={() => document.getElementById('sidebar').classList.add('-translate-x-full')}
           >
@@ -139,7 +177,7 @@
             {#each navItems as item}
               <a
                 href={item.href}
-                class="flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors"
+                class="flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors {sidebarCollapsed ? 'justify-center relative group' : ''}"
                 class:bg-blue-100={isCurrentPath(item.href)}
                 class:text-blue-700={isCurrentPath(item.href)}
                 class:dark:bg-blue-900={isCurrentPath(item.href)}
@@ -149,15 +187,27 @@
                 class:dark:text-gray-300={!isCurrentPath(item.href)}
                 class:dark:hover:bg-gray-700={!isCurrentPath(item.href)}
               >
-                <div class="flex items-center space-x-3">
-                  <Icon icon={item.icon} class="w-5 h-5" />
-                  <span>{item.label}</span>
+                <div class="flex items-center space-x-3 {sidebarCollapsed ? 'space-x-0' : ''}">
+                  <Icon icon={item.icon} class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" />
+                  {#if !sidebarCollapsed}
+                    <span>{item.label}</span>
+                  {/if}
                 </div>
-                
-                {#if item.badge && item.badge > 0}
+
+                {#if !sidebarCollapsed && item.badge && item.badge > 0}
                   <span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-red-900 dark:text-red-200">
                     {item.badge}
                   </span>
+                {/if}
+
+                {#if sidebarCollapsed}
+                  <!-- Tooltip for collapsed sidebar -->
+                  <div class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                    {item.label}
+                    {#if item.badge && item.badge > 0}
+                      ({item.badge})
+                    {/if}
+                  </div>
                 {/if}
               </a>
             {/each}
@@ -213,8 +263,22 @@
       </div>
     </div>
     
+    <!-- Floating expand button for collapsed sidebar -->
+    {#if sidebarCollapsed}
+      <button
+        type="button"
+        class="hidden lg:block fixed top-4 left-20 z-50 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg shadow-lg transition-all duration-200"
+        on:click={toggleSidebarCollapse}
+        aria-label="Expand sidebar"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+        </svg>
+      </button>
+    {/if}
+
     <!-- Main content -->
-    <div class="lg:pl-0">
+    <div class="{sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'} transition-all duration-300">
       <!-- Mobile header for admin -->
       <div class="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between h-16 px-4">

@@ -9,6 +9,7 @@ import {
   getUserPreferences,
 } from "$lib/userPreferences.js";
 import { verifyBasicAuthToken } from "$lib/basicAuth.js";
+import { invalidateCache } from "$lib/cache.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -100,9 +101,23 @@ export async function POST({ request, cookies }) {
       throw error(500, "Failed to save preferences");
     }
 
+    // Invalidate caches that are affected by preference changes
+    // This ensures the next page load gets fresh data with new filters applied
+    await Promise.all([
+      invalidateCache("popular-games"),
+      invalidateCache("recent-games"),
+      invalidateCache(`popular-games-filtered-${userId}`),
+      invalidateCache(`recent-games-filtered-${userId}`),
+      invalidateCache(`user-preferences-${userId}`),
+      // Invalidate any user-specific caches
+      invalidateCache(`user-session-${userId}`),
+      invalidateCache(`user-permissions-${userId}`),
+    ]);
+
     return json({
       success: true,
       message: "Preferences saved successfully",
+      cacheInvalidated: true,
     });
   } catch (err) {
     console.error("User preferences API error:", err);

@@ -131,8 +131,6 @@ export async function buildGenreFilter(userPreferences) {
     return "";
   }
 
-  const filterClauses = [];
-
   // Handle preferred genres (include only these)
   if (
     userPreferences.preferred_genres &&
@@ -140,24 +138,12 @@ export async function buildGenreFilter(userPreferences) {
   ) {
     const preferredIds = await getGenreIds(userPreferences.preferred_genres);
     if (preferredIds.length > 0) {
-      filterClauses.push(`genres = [${preferredIds.join(",")}]`);
+      // Use correct IGDB syntax: genres = ID
+      return `genres = ${preferredIds[0]}`;
     }
   }
 
-  // Handle excluded genres (exclude these)
-  if (
-    userPreferences.excluded_genres &&
-    userPreferences.excluded_genres.length > 0
-  ) {
-    const excludedIds = await getGenreIds(userPreferences.excluded_genres);
-    if (excludedIds.length > 0) {
-      // Use individual exclusions for each genre ID to ensure proper filtering
-      const exclusions = excludedIds.map((id) => `genres != ${id}`);
-      filterClauses.push(`(${exclusions.join(" & ")})`);
-    }
-  }
-
-  return filterClauses.length > 0 ? ` & ${filterClauses.join(" & ")}` : "";
+  return "";
 }
 
 /**

@@ -33,8 +33,9 @@ import { redirect } from "@sveltejs/kit";
 export async function load({ parent, cookies, url, depends }) {
   const { user, needsSetup, authMethod } = await parent();
 
-  // Establish dependency for watchlist invalidation
+  // Establish dependencies for cache invalidation
   depends("app:watchlist");
+  depends("app:preferences"); // Re-fetch when preferences change
 
   // Redirect to setup if initial setup is needed
   if (needsSetup) {
@@ -122,9 +123,18 @@ export async function load({ parent, cookies, url, depends }) {
       safeAsync(
         async () => {
           // Fetch more games for dynamic display limits (up to 24 for wide screens)
-          if (userPreferences && userPreferences.apply_to_recent) {
-            // Use direct IGDB call with user preferences
-            return await igdbGetRecentGames(24, 0, userPreferences);
+          if (
+            userPreferences &&
+            (userPreferences.apply_to_recent ||
+              userPreferences.apply_to_homepage)
+          ) {
+            // Try to use cached filtered results first
+            const cacheKey = `recent-games-filtered-${userId}`;
+            return await withCache(
+              cacheKey,
+              () => igdbGetRecentGames(24, 0, userPreferences, false),
+              5 * 60 * 1000, // Cache filtered results for 5 minutes
+            );
           } else {
             // Use cached approach
             return await cacheRecentGames(() => getRecentGames(24));
@@ -140,9 +150,18 @@ export async function load({ parent, cookies, url, depends }) {
       // Get popular games from IGDB (fetch more for dynamic display limits)
       safeAsync(
         async () => {
-          if (userPreferences && userPreferences.apply_to_popular) {
-            // Use direct IGDB call with user preferences
-            return await igdbGetPopularGames(24, 0, userPreferences);
+          if (
+            userPreferences &&
+            (userPreferences.apply_to_popular ||
+              userPreferences.apply_to_homepage)
+          ) {
+            // Try to use cached filtered results first
+            const cacheKey = `popular-games-filtered-${userId}`;
+            return await withCache(
+              cacheKey,
+              () => igdbGetPopularGames(24, 0, userPreferences, false),
+              5 * 60 * 1000, // Cache filtered results for 5 minutes
+            );
           } else {
             // Use cached approach
             return await getPopularGames(24);
@@ -226,6 +245,7 @@ export async function load({ parent, cookies, url, depends }) {
       needsRommCrossReference:
         rommAvailable && (newReleases.length > 0 || popularGames.length > 0),
       cookieHeader, // Pass for client-side ROMM operations
+      resolvedUserId: userId, // Pass the resolved database user ID for client-side API calls
     };
   } catch (error) {
     console.error("Homepage load error:", error);

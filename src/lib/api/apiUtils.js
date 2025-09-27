@@ -32,7 +32,12 @@ export async function loadUserPreferences(userId, filterType) {
     const preferences = await getUserPreferences(parseInt(userId));
 
     // Check if user wants to apply filtering to this type of content
-    if (filterType && !preferences[filterType]) {
+    // Also check for apply_to_homepage which acts as a master switch for all homepage sections
+    if (
+      filterType &&
+      !preferences[filterType] &&
+      !preferences.apply_to_homepage
+    ) {
       return null;
     }
 
