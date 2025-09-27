@@ -31,10 +31,9 @@ export default defineConfig({
         manualChunks: {
           vendor: ["svelte"],
           icons: ["@iconify/svelte"],
-          utils: ["$lib/utils.js", "$lib/auth.js", "$lib/api.client.js"],
+          utils: ["$lib/api.client.js"],
           cache: ["$lib/gameCache.js", "$lib/cache.js"],
-          integrations: ["$lib/clientServices.js"],
-          performance: ["$lib/performance.js"],
+          client: ["$lib/clientServices.js", "$lib/performance.js"],
         },
       },
     },
