@@ -88,7 +88,10 @@ export async function POST({ request, cookies }) {
     console.log("✅ Extracted userId:", userId);
 
     // Batch fetch watchlist status directly (watchlist.batchContains returns a Map)
-    const watchlistStatuses = await watchlist.batchContains(userId, validGameIds);
+    const watchlistStatuses = await watchlist.batchContains(
+      userId,
+      validGameIds,
+    );
 
     // Convert Map to object for JSON response
     const statusObject = {};
@@ -97,9 +100,12 @@ export async function POST({ request, cookies }) {
         statusObject[gameId] = status;
       });
     } else {
-      console.error("Unexpected watchlistStatuses type:", typeof watchlistStatuses);
+      console.error(
+        "Unexpected watchlistStatuses type:",
+        typeof watchlistStatuses,
+      );
       // Fallback: treat all as not in watchlist
-      validGameIds.forEach(gameId => {
+      validGameIds.forEach((gameId) => {
         statusObject[gameId] = false;
       });
     }
