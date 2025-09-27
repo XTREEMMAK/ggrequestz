@@ -14,6 +14,15 @@
   let status = $derived($page.status || 500);
   let message = $derived(error.message || 'Something went wrong');
 
+  // Generate error ID with fallback for older browsers
+  function generateErrorId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID().slice(0, 8);
+    }
+    // Fallback for older browsers
+    return Math.random().toString(36).substr(2, 8);
+  }
+
 
 
 
@@ -133,7 +142,7 @@
             <li>Clear your browser cache</li>
             <li>Contact an administrator if the problem persists</li>
           </ul>
-          <p class="error-id">Error ID: {crypto.randomUUID().slice(0, 8)}</p>
+          <p class="error-id">Error ID: {generateErrorId()}</p>
         </div>
       </details>
     </div>

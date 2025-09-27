@@ -10,7 +10,10 @@
   import Icon from '@iconify/svelte';
   import { browser } from '$app/environment';
   import { getGameByIdClient } from '$lib/gameCache.js';
-  import { lazyLoader } from '$lib/performance.js';
+  import { goto } from '$app/navigation';
+  // Temporarily disabled performance features to fix circular dependencies
+  // import { lazyLoader } from '$lib/performance.js';
+  // import { observeGameCard } from '$lib/performance/viewportObserver.js';
   
   let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null, preserveState = false, enablePreloading = false } = $props();
   
@@ -25,9 +28,15 @@
   
   // Ghost click effect state
   let isClicked = $state(false);
+
+  // Heart animation state
+  let heartAnimating = $state(false);
   
   // Cache warming state
   let hasWarmedCache = false;
+
+  // Card element reference for viewport observation
+  let cardElement;
   
   function getGameStatus(game) {
     if (game.status) return game.status;
@@ -43,23 +52,45 @@
   }
   
   function handleWatchlist() {
+    // Trigger heart animation when adding to watchlist
+    if (!isInWatchlist) {
+      triggerHeartAnimation();
+    }
     dispatch('watchlist', { game, add: !isInWatchlist });
+  }
+
+  function triggerHeartAnimation() {
+    heartAnimating = true;
+    setTimeout(() => {
+      heartAnimating = false;
+    }, 600);
   }
   
   function handleClick(event) {
     triggerGhostClick();
-    
+
+    // Always prevent default link behavior to control navigation
+    event.preventDefault();
+
+    // Dispatch click event for parent components (before navigation)
+    dispatch('click', { game, event });
+
     // Store referrer information for proper back navigation
     if (browser) {
       sessionStorage.setItem('gameDetailReferrer', window.location.pathname + window.location.search);
     }
-    
-    // If preserveState is true, prevent default link behavior and use event dispatcher
+
+    // If preserveState is true, use event dispatcher, otherwise navigate
     if (preserveState) {
-      event.preventDefault();
       dispatch('view-details', { game });
+    } else {
+      // Use goto with scroll reset to prevent scroll position inheritance
+      const gameId = game.igdb_id || game.id;
+      if (gameId) {
+        // Navigate to game details
+        goto(`/game/${gameId}`, { noScroll: false, replaceState: false });
+      }
     }
-    // Otherwise, let the normal link navigation happen
   }
 
   function handleShowModal() {
@@ -73,6 +104,19 @@
       isClicked = false;
     }, 300);
   }
+
+  // Set up viewport observation for intelligent preloading
+  onMount(() => {
+    if (enablePreloading && cardElement && browser) {
+      const gameId = game.igdb_id || game.id;
+      const imageUrl = game.cover_url;
+
+      // Temporarily disabled viewport observation
+      // if (gameId) {
+      //   observeGameCard(cardElement, gameId, imageUrl);
+      // }
+    }
+  });
   
   // Check if game has additional screenshots (more than just cover)
   let hasAdditionalScreenshots = $derived(
@@ -124,7 +168,7 @@
   $effect(() => {
     return () => {
       if (rotationInterval) {
-        clearInterval(rotationInterval);
+        cancelAnimationFrame(rotationInterval);
         rotationInterval = null;
       }
     };
@@ -153,20 +197,17 @@
     }
   }
 
-  // Enhanced lazy loading with performance monitoring
+  // Temporarily disabled lazy loading to fix circular dependencies
   function lazyLoad(node) {
-    // Set up lazy loading for the node
-    lazyLoader.observe(node);
-    
-    // Add custom event listener for when lazy loading completes
-    node.addEventListener('lazyload', () => {
-      handleImageLoad();
-      warmGameCache();
-    });
-    
+    // Fallback - set src immediately
+    const dataSrc = node.getAttribute('data-src');
+    if (dataSrc) {
+      node.src = dataSrc;
+    }
+
     return {
       destroy() {
-        lazyLoader.unobserve(node);
+        // No-op
       }
     };
   }
@@ -175,20 +216,31 @@
     if (!shouldRotate || isRotating || allImages.length <= 1) {
       return;
     }
-    
+
     isRotating = true;
-    rotationInterval = setInterval(() => {
-      // Ensure we have valid images array
-      if (allImages.length > 1) {
+    let lastRotation = Date.now();
+
+    const rotateImages = () => {
+      if (!isRotating) return;
+
+      const now = Date.now();
+      if (now - lastRotation >= 2500 && allImages.length > 1) {
         const newIndex = (currentImageIndex + 1) % allImages.length;
         currentImageIndex = newIndex;
+        lastRotation = now;
       }
-    }, 2500); // Rotate every 2.5 seconds
+
+      if (isRotating) {
+        rotationInterval = requestAnimationFrame(rotateImages);
+      }
+    };
+
+    rotationInterval = requestAnimationFrame(rotateImages);
   }
   
   function stopImageRotation() {
     if (rotationInterval) {
-      clearInterval(rotationInterval);
+      cancelAnimationFrame(rotationInterval);
       rotationInterval = null;
     }
     isRotating = false;
@@ -215,11 +267,12 @@
   });
 </script>
 
-<a 
+<a
+  bind:this={cardElement}
   href="/game/{game.igdb_id || game.id}"
   class="poster-card group relative rounded-xl overflow-hidden cursor-pointer aspect-[2/3] bg-gray-800 w-full block {isClicked ? 'ghost-click' : ''}"
-  onmouseenter={() => handleMouseEnter()}
-  onmouseleave={() => handleMouseLeave()}
+  onmouseenter={handleMouseEnter}
+  onmouseleave={handleMouseLeave}
   onclick={handleClick}
   aria-label="View details for {game.title || 'Unknown Game'}"
   data-sveltekit-preload-data={enablePreloading ? (isMobile ? "tap" : "hover") : "off"}
@@ -288,6 +341,7 @@
           {Math.round(game.rating)}%
         </div>
       {/if}
+
     </div>
     
     <!-- Watchlist actions -->
@@ -309,7 +363,7 @@
             class="bg-gray-800 bg-opacity-70 hover:bg-green-600 text-white p-2 rounded-full transition-all opacity-90 hover:opacity-100"
             title="Add to watchlist"
           >
-            <Icon icon="heroicons:heart" class="w-5 h-5" />
+            <Icon icon="heroicons:heart" class="w-5 h-5 {heartAnimating ? 'heart-animate' : ''}" />
           </button>
         {/if}
       </div>

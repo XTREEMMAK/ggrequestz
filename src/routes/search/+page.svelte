@@ -12,6 +12,7 @@
   import StatusBadge from '../../components/StatusBadge.svelte';
   import { debounce } from '$lib/utils.js';
   import { igdbRequest } from '$lib/api.client.js';
+  import Icon from '@iconify/svelte';
   
   let { data } = $props();
   
@@ -742,9 +743,7 @@
         <div class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 p-12 text-center">
           <!-- Empty game cover placeholder -->
           <div class="w-32 h-40 mx-auto mb-6 bg-gradient-to-br from-gray-400 to-gray-600 rounded-lg shadow-lg flex items-center justify-center">
-            <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 20.5a7.962 7.962 0 01-5.207-1.209c-2.925-2.399-3.269-6.638-.753-9.595a7.05 7.05 0 0111.92 0c2.516 2.957 2.172 7.196-.753 9.595A7.962 7.962 0 0112 20.5z"/>
-            </svg>
+            <Icon icon="line-md:remove" class="w-16 h-16 text-white" />
           </div>
           <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
             No games found
@@ -767,9 +766,7 @@
         <div class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 p-12 text-center">
           <!-- Game cover placeholder -->
           <div class="w-32 h-40 mx-auto mb-6 bg-gradient-to-br from-blue-400 to-purple-500 rounded-lg shadow-lg flex items-center justify-center">
-            <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
+            <Icon icon="line-md:search" class="w-16 h-16 text-white" />
           </div>
           <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
             Start searching for games

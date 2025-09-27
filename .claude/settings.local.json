@@ -8,7 +8,8 @@
       "Bash(npm run dev:*)",
       "Bash(npm run format:*)",
       "Bash(npm run build:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

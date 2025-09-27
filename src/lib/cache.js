@@ -1,82 +1,64 @@
 /**
- * Redis + Memory fallback cache system for API responses and database queries
- * Helps reduce 2-second page load times by caching frequently requested data
- * Uses Redis when available, falls back to in-memory cache
+ * Simplified cache system with Redis primary and memory fallback
+ * Streamlined for performance and maintainability
  */
 
-import { createClient } from "redis";
 import { browser } from "$app/environment";
 
-class HybridCache {
+class SimpleCache {
   constructor() {
     // Memory cache fallback
     this.memoryCache = new Map();
     this.memoryTtlMap = new Map();
-    this.defaultTTL = 5 * 60 * 1000; // 5 minutes default
+    this.defaultTTL = 15 * 60 * 1000; // 15 minutes
 
     // Redis client
     this.redisClient = null;
     this.redisConnected = false;
-    this.initRedis();
 
-    // Clean up expired memory entries every 2 minutes
-    setInterval(() => this.memoryCleanup(), 2 * 60 * 1000);
+    // Initialize Redis if not in browser
+    if (!browser) {
+      this.initRedis();
+    }
+
+    // Clean up expired memory entries every 5 minutes
+    setInterval(() => this.memoryCleanup(), 5 * 60 * 1000);
   }
 
   async initRedis() {
-    // Skip Redis initialization on client-side
-    if (browser) {
-      return;
-    }
-
     const redisUrl = process.env.REDIS_URL;
-    if (!redisUrl) {
-      return;
-    }
+    if (!redisUrl) return;
 
     try {
-      // Parse Redis URL (handle http:// prefix)
+      // Dynamic import to prevent Redis from being bundled for browser
+      const { createClient } = await import("redis");
       const parsedRedisUrl = redisUrl.replace("http://", "redis://");
 
-      // Configure Redis client with Docker-friendly settings
       this.redisClient = createClient({
         url: parsedRedisUrl,
         socket: {
-          connectTimeout: 5000,
-          reconnectStrategy: (retries) => {
-            if (retries > 10) {
-              console.warn("🚨 Redis: Max reconnection attempts reached");
-              return false;
-            }
-            // Exponential backoff with max 3 seconds
-            return Math.min(retries * 100, 3000);
-          },
+          connectTimeout: 3000,
+          reconnectStrategy: (retries) =>
+            retries > 5 ? false : Math.min(retries * 200, 2000),
         },
       });
 
       this.redisClient.on("error", (err) => {
-        // Only log non-connection errors
         if (
           !err.message.includes("ECONNREFUSED") &&
           !err.message.includes("ETIMEDOUT")
         ) {
-          console.warn("🚨 Redis error:", err.message);
+          console.error("Redis error:", err.message);
         }
         this.redisConnected = false;
       });
 
       this.redisClient.on("connect", () => {
-        console.log("✅ Redis connected successfully");
         this.redisConnected = true;
-      });
-
-      this.redisClient.on("reconnecting", () => {
-        console.log("🔄 Redis reconnecting...");
       });
 
       await this.redisClient.connect();
     } catch (error) {
-      // Silently fail and fall back to memory cache
       this.redisConnected = false;
     }
   }
@@ -95,8 +77,9 @@ class HybridCache {
           return JSON.parse(value);
         }
       } catch (error) {
+        // Only log in development
         if (process.env.NODE_ENV === "development") {
-          console.warn("🚨 Redis get error for key", key, ":", error.message);
+          console.warn("Redis get error for key", key, ":", error.message);
         }
         this.redisConnected = false;
       }
@@ -129,7 +112,7 @@ class HybridCache {
         await this.redisClient.setEx(key, ttlSeconds, JSON.stringify(value));
       } catch (error) {
         if (process.env.NODE_ENV === "development") {
-          console.warn("🚨 Redis set error for key", key, ":", error.message);
+          console.warn("Redis set error for key", key, ":", error.message);
         }
         this.redisConnected = false;
       }
@@ -203,42 +186,10 @@ class HybridCache {
       }
     }
   }
-
-  /**
-   * Get cache statistics
-   * @returns {Promise<Object>}
-   */
-  async stats() {
-    let redisStats = { size: 0, connected: false };
-
-    if (this.redisConnected && this.redisClient) {
-      try {
-        const info = await this.redisClient.info("keyspace");
-        const dbInfo = info.match(/db0:keys=(\d+)/);
-        redisStats = {
-          size: dbInfo ? parseInt(dbInfo[1]) : 0,
-          connected: true,
-        };
-      } catch (error) {
-        if (process.env.NODE_ENV === "development") {
-          console.warn("🚨 Redis stats error:", error.message);
-        }
-        redisStats.connected = false;
-      }
-    }
-
-    return {
-      redis: redisStats,
-      memory: {
-        size: this.memoryCache.size,
-        keys: Array.from(this.memoryCache.keys()),
-      },
-    };
-  }
 }
 
 // Global cache instance
-const cache = new HybridCache();
+const cache = new SimpleCache();
 
 /**
  * Cache wrapper for async functions
@@ -248,80 +199,35 @@ const cache = new HybridCache();
  * @returns {Promise<any>} - Cached or fresh result
  */
 export async function withCache(key, fn, ttl = 5 * 60 * 1000) {
-  // Try to get from cache first
   const cached = await cache.get(key);
-  if (cached !== null) {
-    return cached;
-  }
+  if (cached !== null) return cached;
 
-  // Execute function and cache result
   try {
     const result = await fn();
     await cache.set(key, result, ttl);
     return result;
   } catch (error) {
-    // Don't cache errors, but still throw them
     throw error;
   }
 }
 
-/**
- * Cache popular games (longer TTL since they change less frequently)
- * @param {Function} fn - Function to get popular games
- * @returns {Promise<Array>} - Popular games array
- */
-export async function cachePopularGames(fn) {
-  return withCache("popular-games", fn, 10 * 60 * 1000); // 10 minutes
-}
-
-/**
- * Cache recent games (medium TTL)
- * @param {Function} fn - Function to get recent games
- * @returns {Promise<Array>} - Recent games array
- */
-export async function cacheRecentGames(fn) {
-  return withCache("recent-games", fn, 5 * 60 * 1000); // 5 minutes
-}
-
-/**
- * Cache ROMM games (shorter TTL since library changes more frequently)
- * @param {Function} fn - Function to get ROMM games
- * @param {number} page - Page number for cache key
- * @returns {Promise<Array>} - ROMM games array
- */
-export async function cacheRommGames(fn, page = 0) {
-  return withCache(`romm-games-${page}`, fn, 3 * 60 * 1000); // 3 minutes
-}
-
-/**
- * Cache game requests (short TTL since they update frequently)
- * @param {Function} fn - Function to get game requests
- * @returns {Promise<Array>} - Game requests array
- */
-export async function cacheGameRequests(fn) {
-  return withCache("game-requests", fn, 2 * 60 * 1000); // 2 minutes
-}
-
-/**
- * Cache user-specific data (per user)
- * @param {string} userId - User ID
- * @param {string} type - Type of user data (watchlist, requests)
- * @param {Function} fn - Function to get user data
- * @returns {Promise<any>} - User data
- */
-export async function cacheUserData(userId, type, fn) {
-  return withCache(`user-${userId}-${type}`, fn, 3 * 60 * 1000); // 3 minutes
-}
-
-/**
- * Cache game details (longer TTL since game info doesn't change often)
- * @param {string} gameId - Game ID
- * @param {Function} fn - Function to get game details
- * @returns {Promise<Object>} - Game details
- */
-export async function cacheGameDetails(gameId, fn) {
-  return withCache(`game-details-${gameId}`, fn, 15 * 60 * 1000); // 15 minutes
-}
+// Simplified cache helpers with standard TTL
+export const cachePopularGames = (fn) =>
+  withCache("popular-games", fn, 10 * 60 * 1000);
+export const cacheRecentGames = (fn) =>
+  withCache("recent-games", fn, 5 * 60 * 1000);
+export const cacheRommGames = (fn, page = 0) =>
+  withCache(`romm-games-${page}`, fn, 3 * 60 * 1000);
+export const cacheGameRequests = (fn) =>
+  withCache("game-requests", fn, 2 * 60 * 1000);
+export const cacheGameDetails = (gameId, fn) =>
+  withCache(`game-details-${gameId}`, fn, 15 * 60 * 1000);
+export const cacheUserSession = (userId, fn) =>
+  withCache(`user-session-${userId}`, fn, 15 * 60 * 1000);
+export const cacheUserPermissions = (userId, fn) =>
+  withCache(`user-permissions-${userId}`, fn, 15 * 60 * 1000);
+export const cacheAuthCredentials = (key, fn) =>
+  withCache(`auth-${key}`, fn, 15 * 60 * 1000);
 
 /**
  * Invalidate specific cache entries
@@ -343,18 +249,29 @@ export async function clearAllCache() {
 
 /**
  * Get cache statistics
- * @returns {Promise<Object>}
+ * @returns {Object} Cache statistics
  */
 export async function getCacheStats() {
-  return await cache.stats();
+  return {
+    memoryCache: {
+      size: cache.memoryCache.size,
+      ttlEntries: cache.memoryTtlMap.size,
+    },
+    redis: {
+      connected: cache.redisConnected,
+      client: cache.redisClient ? "initialized" : "not_initialized",
+    },
+    defaultTTL: cache.defaultTTL,
+    timestamp: Date.now(),
+  };
 }
 
 /**
- * Get Redis client instance (for health checks and direct operations)
+ * Get Redis client instance
  * @returns {Object|null} Redis client or null if not connected
  */
 export function getRedisClient() {
-  return cache.redisConnected ? cache.redisClient : null;
+  return cache.redisClient;
 }
 
 export default cache;

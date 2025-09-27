@@ -7,6 +7,11 @@ import {
   getPopularGames,
   warmUpCache,
 } from "$lib/gameCache.js";
+import {
+  getRecentGames as igdbGetRecentGames,
+  getPopularGames as igdbGetPopularGames,
+} from "$lib/igdb.js";
+import { getUserPreferences } from "$lib/userPreferences.js";
 import { gameRequests, watchlist } from "$lib/database.js";
 import {
   getRecentlyAddedROMs,
@@ -51,6 +56,46 @@ export async function load({ parent, cookies, url, depends }) {
       ? `session=${cookies.get("session")}`
       : null;
 
+    // Get user ID for preferences
+    let userId = user.id;
+    if (!userId) {
+      if (user.sub?.startsWith("basic_auth_")) {
+        // For Basic Auth users, extract actual user ID from sub
+        userId = user.sub.replace("basic_auth_", "");
+      } else {
+        // For Authentik users, look up database ID by authentik_sub
+        const { query } = await import("$lib/database.js");
+        const userResult = await query(
+          "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+          [user.sub],
+        );
+        if (userResult.rows.length === 0) {
+          throw new Error("User not found in database");
+        }
+        userId = userResult.rows[0].id;
+      }
+    }
+
+    // Get user preferences
+    let userPreferences = null;
+    try {
+      userPreferences = await getUserPreferences(parseInt(userId));
+      // Check if user has enabled filtering for homepage sections
+      const hasHomepageFiltering =
+        userPreferences &&
+        (userPreferences.apply_to_homepage ||
+          userPreferences.apply_to_popular ||
+          userPreferences.apply_to_recent);
+
+      // If no homepage filtering is enabled, don't use preferences
+      if (!hasHomepageFiltering) {
+        userPreferences = null;
+      }
+    } catch (error) {
+      console.warn("Failed to load user preferences for homepage:", error);
+      userPreferences = null;
+    }
+
     // Check if ROMM is available (with caching and timeout) - optimized for speed
     const rommAvailable = await safeAsync(
       () =>
@@ -73,13 +118,17 @@ export async function load({ parent, cookies, url, depends }) {
 
     // Prioritize critical data first - load games without ROMM cross-reference for speed
     const criticalDataPromise = Promise.all([
-      // Get new releases from IGDB (fast, no ROMM cross-reference yet)
+      // Get new releases from IGDB (optimized - fetch only what we need initially)
       safeAsync(
         async () => {
-          // Fetch enough games for pagination (at least 50 for multiple pages)
-          const allGames = await cacheRecentGames(() => getRecentGames(50));
-          // Return only first 8 for initial display
-          return allGames.slice(0, 8);
+          // Fetch more games for dynamic display limits (up to 24 for wide screens)
+          if (userPreferences && userPreferences.apply_to_recent) {
+            // Use direct IGDB call with user preferences
+            return await igdbGetRecentGames(24, 0, userPreferences);
+          } else {
+            // Use cached approach
+            return await cacheRecentGames(() => getRecentGames(24));
+          }
         },
         {
           timeout: 3000 * timeoutMultiplier,
@@ -88,13 +137,23 @@ export async function load({ parent, cookies, url, depends }) {
         },
       ),
 
-      // Get popular games from IGDB (fast, no ROMM cross-reference yet)
-      // Let the API endpoint handle caching - just fetch initial 8 games for display
-      safeAsync(() => getPopularGames(8), {
-        timeout: 3000 * timeoutMultiplier,
-        fallback: [],
-        errorContext: "Popular games loading",
-      }),
+      // Get popular games from IGDB (fetch more for dynamic display limits)
+      safeAsync(
+        async () => {
+          if (userPreferences && userPreferences.apply_to_popular) {
+            // Use direct IGDB call with user preferences
+            return await igdbGetPopularGames(24, 0, userPreferences);
+          } else {
+            // Use cached approach
+            return await getPopularGames(24);
+          }
+        },
+        {
+          timeout: 3000 * timeoutMultiplier,
+          fallback: [],
+          errorContext: "Popular games loading",
+        },
+      ),
 
       // Get recent game requests (with caching)
       safeAsync(() => cacheGameRequests(() => gameRequests.getRecent(6)), {
@@ -106,27 +165,6 @@ export async function load({ parent, cookies, url, depends }) {
       // Get user's watchlist - optimize with cache
       safeAsync(
         async () => {
-          // Check if user ID is already in the user object (optimized auth)
-          let userId = user.id;
-
-          if (!userId) {
-            if (user.sub?.startsWith("basic_auth_")) {
-              // For Basic Auth users, extract actual user ID from sub
-              userId = user.sub.replace("basic_auth_", "");
-            } else {
-              // For Authentik users, look up database ID by authentik_sub
-              const { query } = await import("$lib/database.js");
-              const userResult = await query(
-                "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-                [user.sub],
-              );
-              if (userResult.rows.length === 0) {
-                throw new Error("User not found in database");
-              }
-              userId = userResult.rows[0].id;
-            }
-          }
-
           // Force a fresh database connection to avoid stale reads
           const { query } = await import("$lib/database.js");
 
@@ -142,14 +180,14 @@ export async function load({ parent, cookies, url, depends }) {
       ),
     ]);
 
-    // Secondary data - ROMM integration (can be slower)
+    // Secondary data - ROMM integration (optimized)
     const secondaryDataPromise = rommAvailable
       ? Promise.all([
-          // Get top 16 newest ROMs from ROMM library
+          // Get newest ROMs from ROMM library (increased for dynamic display limits)
           safeAsync(
             () =>
               cacheRommGames(
-                () => getRecentlyAddedROMs(16, 0, cookieHeader),
+                () => getRecentlyAddedROMs(24, 0, cookieHeader),
                 0,
               ),
             {

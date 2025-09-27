@@ -106,7 +106,7 @@ docker compose down -v
 
 ### Basic Auth (Simplest)
 
-Set `AUTH_METHOD=basic` in `.env`. Create admin account on first visit.
+Set `AUTH_METHOD=basic` in `.env`. Create admin account on first visit or register new users at `/register`.
 
 ### Authentik
 

@@ -35,7 +35,7 @@ Complete reference for all GG Requestz configuration options.
 
 #### Basic Auth
 
-No additional configuration needed. Admin account created on first visit.
+No additional configuration needed. Admin account created on first visit. New users can register at `/register`.
 
 #### Authentik Configuration
 

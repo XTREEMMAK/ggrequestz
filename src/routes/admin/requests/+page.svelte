@@ -564,23 +564,35 @@
                 <td class="px-6 py-4">
                   <div class="w-16 h-20">
                     {#if request.cover_url}
-                      <img
-                        src={request.cover_url}
-                        alt="{request.title} cover"
-                        class="w-full h-full object-cover rounded-lg shadow-sm bg-gray-200 dark:bg-gray-700"
-                        loading="lazy"
-                        onerror={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextElementSibling.style.display = 'flex';
-                        }}
-                      />
-                      <div class="w-full h-full hidden items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
-                        <Icon icon="heroicons:photo" class="w-6 h-6 text-gray-400" />
-                      </div>
+                      <a
+                        href="/admin/requests/{request.id}"
+                        class="block w-full h-full hover:opacity-90 transition-opacity cursor-pointer"
+                        title="View request details"
+                      >
+                        <img
+                          src={request.cover_url}
+                          alt="{request.title} cover"
+                          class="w-full h-full object-cover rounded-lg shadow-sm bg-gray-200 dark:bg-gray-700"
+                          loading="lazy"
+                          onerror={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextElementSibling.style.display = 'flex';
+                          }}
+                        />
+                        <div class="w-full h-full hidden items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
+                          <Icon icon="heroicons:photo" class="w-6 h-6 text-gray-400" />
+                        </div>
+                      </a>
                     {:else}
-                      <div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
-                        <Icon icon="heroicons:photo" class="w-6 h-6 text-gray-400" />
-                      </div>
+                      <a
+                        href="/admin/requests/{request.id}"
+                        class="block w-full h-full hover:opacity-90 transition-opacity cursor-pointer"
+                        title="View request details"
+                      >
+                        <div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
+                          <Icon icon="heroicons:photo" class="w-6 h-6 text-gray-400" />
+                        </div>
+                      </a>
                     {/if}
                   </div>
                 </td>

@@ -7,7 +7,8 @@
   import { goto } from '$app/navigation';
   import { getLoginUrl, getLogoutUrl, getUserInitials } from '$lib/auth.js';
   import Icon from '@iconify/svelte';
-  import { prefetcher } from '$lib/performance.js';
+  // Temporarily disabled performance features to fix circular dependencies
+  // import { prefetcher } from '$lib/performance.js';
   import { onMount } from 'svelte';
   
   let { user = null } = $props();

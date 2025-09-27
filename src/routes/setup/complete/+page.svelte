@@ -229,7 +229,7 @@
               </div>
               <div class="flex items-center space-x-2">
                 <span class="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center text-xs font-bold text-purple-300">4</span>
-                <span>Set up optional integrations like notifications and workflows</span>
+                <span>Configure notifications and external services in admin settings</span>
               </div>
             </div>
           </div>

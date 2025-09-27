@@ -14,7 +14,13 @@
   
   let loading = $state(false);
   let saveStatus = $state('');
-  let activeSection = $state('notifications');
+  let activeSection = $state('integrations');
+
+  // Test result states
+  let rommTestResult = $state(null);
+  let gotifyTestResult = $state(null);
+  let showRommTestDetails = $state(false);
+  let showGotifyTestDetails = $state(false);
 
   // Confirmation modal state
   let showConfirmDialog = $state(false);
@@ -24,21 +30,21 @@
   
   // Settings sections
   let sections = [
-    { 
-      id: 'notifications', 
-      label: 'Notifications', 
-      icon: 'heroicons:bell',
-      description: 'Configure notification services'
-    },
-    { 
-      id: 'integrations', 
-      label: 'Integrations', 
+    {
+      id: 'integrations',
+      label: 'Integrations',
       icon: 'heroicons:puzzle-piece',
-      description: 'External service integrations'
+      description: 'Configure external service connections'
     },
-    { 
-      id: 'requests', 
-      label: 'Request Settings', 
+    {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: 'heroicons:bell',
+      description: 'Configure notification preferences'
+    },
+    {
+      id: 'requests',
+      label: 'Request Settings',
       icon: 'heroicons:clipboard-document-list',
       description: 'Manage request handling behavior'
     },
@@ -90,9 +96,13 @@
     'system.registration_enabled': false,
   });
   
-  // Sync editable data with settings on load
+  // Sync editable data with settings on load only if form is empty
+  let hasInitialized = $state(false);
   $effect(() => {
-    Object.assign(editableFormData, formData);
+    if (!hasInitialized) {
+      Object.assign(editableFormData, formData);
+      hasInitialized = true;
+    }
   });
   
   // Permission check
@@ -146,8 +156,11 @@
       toasts.error('Please enter both Gotify URL and token');
       return;
     }
-    
+
     loading = true;
+    gotifyTestResult = null;
+    const startTime = Date.now();
+
     try {
       const response = await fetch('/admin/api/settings/test-gotify', {
         method: 'POST',
@@ -157,15 +170,28 @@
           token: editableFormData['gotify.token']
         })
       });
-      
+
       const result = await response.json();
+      const responseTime = Date.now() - startTime;
+
       if (result.success) {
+        gotifyTestResult = {
+          success: true,
+          response_time: responseTime,
+          timestamp: new Date().toLocaleString()
+        };
         toasts.success('Gotify connection successful! Test notification sent.');
       } else {
         throw new Error(result.error || 'Connection failed');
       }
     } catch (error) {
       console.error('Test Gotify error:', error);
+      gotifyTestResult = {
+        success: false,
+        error: error.message,
+        response_time: Date.now() - startTime,
+        timestamp: new Date().toLocaleString()
+      };
       toasts.error('Gotify connection failed: ' + error.message);
     } finally {
       loading = false;
@@ -177,8 +203,11 @@
       toasts.error('Please enter ROMM server URL, username, and password');
       return;
     }
-    
+
     loading = true;
+    rommTestResult = null;
+    const startTime = Date.now();
+
     try {
       const response = await fetch('/admin/api/settings/test-romm', {
         method: 'POST',
@@ -189,15 +218,30 @@
           password: editableFormData['romm.password']
         })
       });
-      
+
       const result = await response.json();
+      const responseTime = Date.now() - startTime;
+
       if (result.success) {
-        toasts.success('ROMM connection successful! Found ' + (result.total_games || 0) + ' games.');
+        rommTestResult = {
+          success: true,
+          server_info: result.server_info,
+          total_games: result.total_games,
+          response_time: responseTime,
+          timestamp: new Date().toLocaleString()
+        };
+        toasts.success(`ROMM connection successful! Found ${result.total_games || 0} games.`);
       } else {
         throw new Error(result.error || 'Connection failed');
       }
     } catch (error) {
       console.error('Test ROMM error:', error);
+      rommTestResult = {
+        success: false,
+        error: error.message,
+        response_time: Date.now() - startTime,
+        timestamp: new Date().toLocaleString()
+      };
       toasts.error('ROMM connection failed: ' + error.message);
     } finally {
       loading = false;
@@ -237,7 +281,7 @@
         System Settings
       </h1>
       <p class="text-gray-600 dark:text-gray-400 mt-1">
-        Configure system behavior and integrations
+        Configure system behavior and external services
       </p>
     </div>
     
@@ -314,25 +358,183 @@
             </p>
           </div>
         {:else}
-          <!-- Notifications Section -->
-          {#if activeSection === 'notifications'}
+          <!-- Integrations Section -->
+          {#if activeSection === 'integrations'}
             <div class="space-y-6">
               <div>
                 <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  Notification Settings
+                  External Service Integrations
                 </h2>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  Configure push notifications for important events like request approvals.
+                  Configure connections to external services like ROMM library and notification providers.
                 </p>
               </div>
-              
+
+              <!-- ROMM Integration -->
+              <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                  <Icon icon="heroicons:server" class="w-5 h-5 mr-2" />
+                  ROMM Library Integration
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Connect to your ROMM instance to display game availability and library status.
+                </p>
+
+                <div class="space-y-4">
+                  <div>
+                    <label for="romm-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      ROMM Server URL
+                    </label>
+                    <input
+                      id="romm-url"
+                      type="url"
+                      bind:value={editableFormData['romm.server_url']}
+                      placeholder="http://your-romm-server:8080"
+                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      The base URL of your ROMM server (include http:// or https://)
+                    </p>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label for="romm-username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Username
+                      </label>
+                      <input
+                        id="romm-username"
+                        type="text"
+                        bind:value={editableFormData['romm.username']}
+                        placeholder="ROMM username"
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="romm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Password
+                      </label>
+                      <input
+                        id="romm-password"
+                        type="password"
+                        bind:value={editableFormData['romm.password']}
+                        placeholder="ROMM password"
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="flex items-center space-x-3">
+                    <button
+                      type="button"
+                      onclick={testRommConnection}
+                      disabled={loading || !editableFormData['romm.server_url'] || !editableFormData['romm.username'] || !editableFormData['romm.password']}
+                      class="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Test ROMM Connection
+                    </button>
+
+                    <a
+                      href="https://github.com/XTREEMMAK/ggrequestz/blob/main/docs/guides/INTEGRATION_GUIDE.md#romm-library-integration"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm flex items-center space-x-1"
+                    >
+                      <Icon icon="heroicons:question-mark-circle" class="w-4 h-4" />
+                      <span>Setup Guide</span>
+                      <Icon icon="heroicons:arrow-top-right-on-square" class="w-3 h-3" />
+                    </a>
+                  </div>
+
+                  <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <p><strong>Requirements:</strong> ROMM user must have "Editor" or "Admin" role for API access.</p>
+                    <p><strong>Troubleshooting:</strong> Check network connectivity, credentials, and ROMM server status.</p>
+                  </div>
+
+                  <!-- ROMM Test Results -->
+                  {#if rommTestResult}
+                    <div class="mt-4 p-3 rounded-lg border {rommTestResult.success ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'}">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                          {#if rommTestResult.success}
+                            <Icon icon="heroicons:check-circle" class="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <span class="text-sm font-medium text-green-800 dark:text-green-200">
+                              Connection Successful
+                            </span>
+                          {:else}
+                            <Icon icon="heroicons:x-circle" class="w-5 h-5 text-red-600 dark:text-red-400" />
+                            <span class="text-sm font-medium text-red-800 dark:text-red-200">
+                              Connection Failed
+                            </span>
+                          {/if}
+                        </div>
+                        <button
+                          type="button"
+                          onclick={() => showRommTestDetails = !showRommTestDetails}
+                          class="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center space-x-1"
+                        >
+                          <span>{showRommTestDetails ? 'Hide' : 'Show'} Details</span>
+                          <Icon icon="heroicons:chevron-{showRommTestDetails ? 'up' : 'down'}" class="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      {#if rommTestResult.success}
+                        <div class="mt-2 text-sm text-green-700 dark:text-green-300">
+                          <p>🎮 Found {rommTestResult.total_games} games in library</p>
+                          <p>🖥️ Server: {rommTestResult.server_info?.url}</p>
+                        </div>
+                      {:else}
+                        <div class="mt-2 text-sm text-red-700 dark:text-red-300">
+                          <p class="font-medium">Error:</p>
+                          <p class="font-mono text-xs bg-red-100 dark:bg-red-900/30 p-2 rounded mt-1">{rommTestResult.error}</p>
+                        </div>
+                      {/if}
+
+                      {#if showRommTestDetails}
+                        <div class="mt-3 pt-3 border-t {rommTestResult.success ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'}">
+                          <div class="grid grid-cols-2 gap-4 text-xs {rommTestResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+                            <div>
+                              <span class="font-medium">Response Time:</span>
+                              <span class="ml-1">{rommTestResult.response_time}ms</span>
+                            </div>
+                            <div>
+                              <span class="font-medium">Tested:</span>
+                              <span class="ml-1">{rommTestResult.timestamp}</span>
+                            </div>
+                          </div>
+
+                          {#if !rommTestResult.success}
+                            <div class="mt-3">
+                              <p class="text-xs font-medium {rommTestResult.success ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'} mb-2">
+                                Common Solutions:
+                              </p>
+                              <ul class="text-xs {rommTestResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} space-y-1 list-disc list-inside">
+                                <li>Verify ROMM server is running and accessible</li>
+                                <li>Check URL format includes http:// or https://</li>
+                                <li>Ensure user has "Editor" or "Admin" role in ROMM</li>
+                                <li>Test credentials by logging into ROMM web interface</li>
+                                <li>Check network connectivity between servers</li>
+                              </ul>
+                            </div>
+                          {/if}
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              </div>
+
               <!-- Gotify Configuration -->
               <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                 <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
                   <Icon icon="heroicons:bell" class="w-5 h-5 mr-2" />
                   Gotify Push Notifications
                 </h3>
-                
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Configure Gotify server for push notifications about new requests and status changes.
+                </p>
+
                 <div class="space-y-4">
                   <div>
                     <label for="gotify-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -349,7 +551,7 @@
                       The base URL of your Gotify server (without /message)
                     </p>
                   </div>
-                  
+
                   <div>
                     <label for="gotify-token" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Application Token
@@ -365,18 +567,103 @@
                       Create an application in Gotify and paste the token here
                     </p>
                   </div>
-                  
+
                   <button
                     type="button"
                     onclick={testGotifyConnection}
                     disabled={loading || !editableFormData['gotify.url'] || !editableFormData['gotify.token']}
                     class="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                   >
-                    Test Connection
+                    Test Gotify Connection
                   </button>
+
+                  <!-- Gotify Test Results -->
+                  {#if gotifyTestResult}
+                    <div class="mt-4 p-3 rounded-lg border {gotifyTestResult.success ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'}">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                          {#if gotifyTestResult.success}
+                            <Icon icon="heroicons:check-circle" class="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <span class="text-sm font-medium text-green-800 dark:text-green-200">
+                              Connection Successful
+                            </span>
+                          {:else}
+                            <Icon icon="heroicons:x-circle" class="w-5 h-5 text-red-600 dark:text-red-400" />
+                            <span class="text-sm font-medium text-red-800 dark:text-red-200">
+                              Connection Failed
+                            </span>
+                          {/if}
+                        </div>
+                        <button
+                          type="button"
+                          onclick={() => showGotifyTestDetails = !showGotifyTestDetails}
+                          class="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center space-x-1"
+                        >
+                          <span>{showGotifyTestDetails ? 'Hide' : 'Show'} Details</span>
+                          <Icon icon="heroicons:chevron-{showGotifyTestDetails ? 'up' : 'down'}" class="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      {#if gotifyTestResult.success}
+                        <div class="mt-2 text-sm text-green-700 dark:text-green-300">
+                          <p>✅ Test notification sent successfully</p>
+                          <p>📱 Check your Gotify client for the test message</p>
+                        </div>
+                      {:else}
+                        <div class="mt-2 text-sm text-red-700 dark:text-red-300">
+                          <p class="font-medium">Error:</p>
+                          <p class="font-mono text-xs bg-red-100 dark:bg-red-900/30 p-2 rounded mt-1">{gotifyTestResult.error}</p>
+                        </div>
+                      {/if}
+
+                      {#if showGotifyTestDetails}
+                        <div class="mt-3 pt-3 border-t {gotifyTestResult.success ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'}">
+                          <div class="grid grid-cols-2 gap-4 text-xs {gotifyTestResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+                            <div>
+                              <span class="font-medium">Response Time:</span>
+                              <span class="ml-1">{gotifyTestResult.response_time}ms</span>
+                            </div>
+                            <div>
+                              <span class="font-medium">Tested:</span>
+                              <span class="ml-1">{gotifyTestResult.timestamp}</span>
+                            </div>
+                          </div>
+
+                          {#if !gotifyTestResult.success}
+                            <div class="mt-3">
+                              <p class="text-xs font-medium text-red-700 dark:text-red-300 mb-2">
+                                Common Solutions:
+                              </p>
+                              <ul class="text-xs text-red-600 dark:text-red-400 space-y-1 list-disc list-inside">
+                                <li>Verify Gotify server is running and accessible</li>
+                                <li>Check URL format (should not include /message)</li>
+                                <li>Ensure application token is valid and not expired</li>
+                                <li>Test by accessing Gotify web interface directly</li>
+                                <li>Check network connectivity and firewall settings</li>
+                              </ul>
+                            </div>
+                          {/if}
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
                 </div>
               </div>
-              
+            </div>
+          {/if}
+
+          <!-- Notifications Section -->
+          {#if activeSection === 'notifications'}
+            <div class="space-y-6">
+              <div>
+                <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  Notification Preferences
+                </h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Configure which events should trigger notifications. Set up notification providers in the Integrations section.
+                </p>
+              </div>
+
               <!-- Notification Types Configuration -->
               <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                 <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
@@ -440,83 +727,6 @@
             </div>
           {/if}
           
-          <!-- Integrations Section -->
-          {#if activeSection === 'integrations'}
-            <div class="space-y-6">
-              <div>
-                <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  External Integrations
-                </h2>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  Configure connections to external services like ROMM for game library access.
-                </p>
-              </div>
-              
-              <!-- ROMM Configuration -->
-              <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
-                  <Icon icon="heroicons:server" class="w-5 h-5 mr-2" />
-                  ROMM Game Library
-                </h3>
-                
-                <div class="space-y-4">
-                  <div>
-                    <label for="romm-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      ROMM Server URL
-                    </label>
-                    <input
-                      id="romm-url"
-                      type="url"
-                      bind:value={editableFormData['romm.server_url']}
-                      placeholder="https://romm.yourdomain.com"
-                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      The base URL of your ROMM server instance
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label for="romm-username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Username
-                    </label>
-                    <input
-                      id="romm-username"
-                      type="text"
-                      bind:value={editableFormData['romm.username']}
-                      placeholder="Your ROMM username"
-                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label for="romm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Password
-                    </label>
-                    <input
-                      id="romm-password"
-                      type="password"
-                      bind:value={editableFormData['romm.password']}
-                      placeholder="Your ROMM password"
-                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Password for authenticating with your ROMM server
-                    </p>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    onclick={testRommConnection}
-                    disabled={loading || !editableFormData['romm.server_url'] || !editableFormData['romm.username'] || !editableFormData['romm.password']}
-                    class="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Test ROMM Connection
-                  </button>
-                </div>
-              </div>
-            </div>
-          {/if}
           
           <!-- Request Settings Section -->
           {#if activeSection === 'requests'}

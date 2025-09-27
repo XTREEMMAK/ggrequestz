@@ -104,15 +104,19 @@ export async function POST({ request, cookies }) {
     // Step 1: Try to authenticate with ROMM
     const authUrl = `${rommUrl.toString().replace(/\/$/, "")}/api/token`;
 
+    // ROMM expects form-encoded data with OAuth2 parameters
+    const formData = new URLSearchParams();
+    formData.append("grant_type", "password");
+    formData.append("username", username);
+    formData.append("password", password);
+    formData.append("scope", "roms.read");
+
     const authResponse = await fetch(authUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: JSON.stringify({
-        username: username,
-        password: password,
-      }),
+      body: formData.toString(),
       // Add timeout to prevent hanging
       signal: AbortSignal.timeout(10000), // 10 second timeout
     });

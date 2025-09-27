@@ -6,14 +6,15 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.1.4-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
 
 - **🔍 Advanced Search** - Search 200,000+ games with filters and real-time results
+- **🛡️ Content Filtering** - Comprehensive ESRB rating filters and custom content blocks
 - **📚 ROMM Integration** - Seamless integration with your ROMM game library
-- **🔐 Flexible Authentication** - Support for OIDC providers (Authentik, Keycloak, Auth0) and basic auth
+- **🔐 Flexible Authentication** - Support for OIDC providers (Authentik, Keycloak, Auth0) and basic auth with user registration
 - **⚡ High Performance** - Redis caching, hover preloading, and optimized data fetching
 - **🎨 Modern UI** - Responsive design with dark mode and smooth animations
 
@@ -106,10 +107,10 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:v1.1.4
+docker pull ghcr.io/xtreemmak/ggrequestz:v1.2.0
 ```
 
-> **📋 v1.1.4 Release Notes:** This version removes the Typesense search container dependency. The system now uses direct IGDB API integration, reducing Docker container count and improving performance. If upgrading from a previous version, remove the `typesense` service from your docker-compose.yml file.
+> **📋 v1.2.0 Release Notes:** Major content filtering system with comprehensive ESRB rating filters, custom content blocks UI, enhanced genre filtering, user registration system, and significant code quality improvements. Content filtering now works properly across all game discovery sections.
 
 ## 🤝 Contributing
 

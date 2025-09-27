@@ -53,6 +53,11 @@ function formatForCache(igdbGame) {
     companies: igdbGame.companies || [],
     game_modes: igdbGame.game_modes || [],
     popularity_score: igdbGame.popularity_score || 0,
+    // Include content rating fields
+    content_rating: igdbGame.content_rating,
+    esrb_rating: igdbGame.esrb_rating,
+    is_mature: igdbGame.is_mature,
+    is_nsfw: igdbGame.is_nsfw,
   };
 }
 
@@ -74,7 +79,7 @@ function formatFromCache(cachedGame) {
     return `/api/images/proxy?url=${encodeURIComponent(url)}`;
   };
 
-  return {
+  const result = {
     id: cachedGame.igdb_id,
     igdb_id: cachedGame.igdb_id,
     title: cachedGame.title,
@@ -92,7 +97,14 @@ function formatFromCache(cachedGame) {
     companies: cachedGame.companies || [],
     game_modes: cachedGame.game_modes || [],
     popularity_score: cachedGame.popularity_score || 0,
+    // Include content rating fields
+    content_rating: cachedGame.content_rating,
+    esrb_rating: cachedGame.esrb_rating,
+    is_mature: cachedGame.is_mature,
+    is_nsfw: cachedGame.is_nsfw,
   };
+
+  return result;
 }
 
 // Request deduplication map to prevent parallel fetches of the same game
@@ -108,7 +120,6 @@ export async function getGameById(igdbId, forceRefresh = false) {
   // Check if there's already a pending request for this game
   const requestKey = `${igdbId}-${forceRefresh}`;
   if (pendingRequests.has(requestKey)) {
-    console.log(`♻️ Reusing pending request for game ${igdbId}`);
     return pendingRequests.get(requestKey);
   }
 
@@ -135,7 +146,11 @@ async function _getGameByIdInternal(igdbId, forceRefresh = false) {
     // Try cache first (if not forcing refresh)
     if (!forceRefresh) {
       const cached = await gamesCache.get(igdbId);
-      if (cached && !isStale(cached.last_updated, CACHE_TTL.GAME_DETAILS)) {
+      if (
+        cached &&
+        !isStale(cached.last_updated, CACHE_TTL.GAME_DETAILS) &&
+        !cached.needs_refresh
+      ) {
         return formatFromCache(cached);
       }
     }
@@ -358,11 +373,11 @@ export async function warmUpCache() {
     // Clean up old cache first
     await cleanupStaleCache();
 
-    // Warm up popular games
-    await getPopularGames(30);
+    // Warm up popular games (reduced from 30 to 12)
+    await getPopularGames(12);
 
-    // Warm up recent games
-    await getRecentGames(30);
+    // Warm up recent games (reduced from 30 to 12)
+    await getRecentGames(12);
   } catch (error) {
     console.error("Error warming up cache:", error);
   }

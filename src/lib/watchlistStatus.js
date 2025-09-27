@@ -95,7 +95,7 @@ export function getCachedWatchlistStatus(gameId) {
   return getCachedStatus(gameId);
 }
 
-// Batch fetch watchlist status for multiple games
+// Batch fetch watchlist status for multiple games (optimized with batch API)
 export async function batchGetWatchlistStatus(gameIds) {
   if (!browser || !Array.isArray(gameIds) || gameIds.length === 0) {
     return new Map();
@@ -104,8 +104,13 @@ export async function batchGetWatchlistStatus(gameIds) {
   const results = new Map();
   const uncachedIds = [];
 
-  // Check cache for each game
+  // Check cache for each game (filter out invalid IDs)
   for (const gameId of gameIds) {
+    // Skip invalid game IDs
+    if (!gameId || gameId === null || gameId === undefined) {
+      continue;
+    }
+
     const cached = getCachedStatus(gameId);
     if (cached !== null) {
       results.set(gameId, cached);
@@ -114,18 +119,78 @@ export async function batchGetWatchlistStatus(gameIds) {
     }
   }
 
-  // Fetch uncached games in parallel
+  // Batch fetch uncached games using the optimized API endpoint
   if (uncachedIds.length > 0) {
-    const promises = uncachedIds.map(async (gameId) => {
-      const status = await fetchWatchlistStatus(gameId);
-      if (status !== null) {
-        cacheStatus(gameId, status);
-        results.set(gameId, status);
-      }
-      return { gameId, status };
-    });
+    try {
+      // Final validation: filter out any remaining invalid IDs
+      const validIds = uncachedIds.filter(
+        (id) =>
+          id && id !== null && id !== undefined && String(id).trim() !== "",
+      );
 
-    await Promise.allSettled(promises);
+      if (validIds.length === 0) {
+        return results;
+      }
+
+      // Sending batch request to API
+
+      // Use batch API for better performance
+      const response = await fetch("/api/watchlist/batch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ gameIds: validIds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.statuses) {
+          // Cache and store results from batch response
+          for (const [gameId, status] of Object.entries(data.statuses)) {
+            cacheStatus(gameId, status);
+            results.set(gameId, status);
+          }
+        }
+      } else {
+        // Log the error details for debugging
+        const errorText = await response.text();
+        console.warn("Batch watchlist API failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        });
+        console.warn(
+          "Batch watchlist API failed, falling back to individual requests",
+        );
+
+        // Fallback to individual requests if batch fails
+        const promises = validIds.map(async (gameId) => {
+          const status = await fetchWatchlistStatus(gameId);
+          if (status !== null) {
+            cacheStatus(gameId, status);
+            results.set(gameId, status);
+          }
+          return { gameId, status };
+        });
+
+        await Promise.allSettled(promises);
+      }
+    } catch (error) {
+      // Fallback to individual requests on error
+      console.warn("Batch watchlist request failed, using fallback:", error);
+      const promises = uncachedIds.map(async (gameId) => {
+        const status = await fetchWatchlistStatus(gameId);
+        if (status !== null) {
+          cacheStatus(gameId, status);
+          results.set(gameId, status);
+        }
+        return { gameId, status };
+      });
+
+      await Promise.allSettled(promises);
+    }
   }
 
   return results;

@@ -19,6 +19,9 @@
   let user = $derived(data?.user);
   let userWatchlist = $state(data?.userWatchlist || []);
   let userRequests = $state(data?.userRequests || []);
+  let userPreferences = $state(data?.userPreferences || null);
+  let availableGenres = $state(data?.availableGenres || []);
+  let localUserId = $state(data?.localUserId);
   let loading = $state(false);
   
   // Store cover URLs for requests
@@ -37,9 +40,14 @@
   let confirmMessage = $state('');
   let confirmTitle = $state('');
 
+  // Preferences state
+  let preferencesChanged = $state(false);
+  let savingPreferences = $state(false);
+
   let tabs = $derived([
     { id: 'watchlist', label: 'My Watchlist', count: userWatchlist.length },
-    { id: 'requests', label: 'My Requests', count: userRequests.length }
+    { id: 'requests', label: 'My Requests', count: userRequests.length },
+    { id: 'preferences', label: 'Content Preferences', count: null }
   ]);
   
   // Redirect to login if not authenticated
@@ -287,12 +295,98 @@
   function getRequestStatusColor(status) {
     const colorMap = {
       'pending': 'text-yellow-600',
-      'approved': 'text-blue-600', 
+      'approved': 'text-blue-600',
       'fulfilled': 'text-green-600',
       'rejected': 'text-red-600',
       'cancelled': 'text-gray-600'
     };
     return colorMap[status] || 'text-gray-600';
+  }
+
+  // Initialize preferences if they don't exist
+  $effect(() => {
+    if (!userPreferences && localUserId) {
+      // Initialize with default preferences
+      userPreferences = {
+        content_filter_level: 'none',
+        hide_mature_content: false,
+        hide_nsfw_content: false,
+        max_esrb_rating: 'M',
+        custom_content_blocks: [],
+        preferred_genres: [],
+        excluded_genres: [],
+        apply_to_homepage: false,
+        apply_to_popular: false,
+        apply_to_recent: false,
+        apply_to_search: true,
+        show_content_warnings: true,
+        safe_mode_enabled: false,
+        require_confirmation_for_mature: false
+      };
+    }
+  });
+
+  // Save preferences function
+  async function savePreferences() {
+    if (!userPreferences || !localUserId) return;
+
+    savingPreferences = true;
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userPreferences)
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toasts.success('Content preferences saved successfully!');
+        preferencesChanged = false;
+      } else {
+        throw new Error(result.error || 'Failed to save preferences');
+      }
+    } catch (error) {
+      console.error('Save preferences error:', error);
+      toasts.error('Failed to save preferences. Please try again.');
+    } finally {
+      savingPreferences = false;
+    }
+  }
+
+  // Watch for changes to preferences
+  function updatePreference(key, value) {
+    if (userPreferences) {
+      userPreferences[key] = value;
+      preferencesChanged = true;
+    }
+  }
+
+  // Toggle genre in preferred/excluded lists
+  function toggleGenrePreference(genreName, type) {
+    if (!userPreferences) return;
+
+    if (type === 'preferred') {
+      if (userPreferences.preferred_genres.includes(genreName)) {
+        userPreferences.preferred_genres = userPreferences.preferred_genres.filter(g => g !== genreName);
+      } else {
+        userPreferences.preferred_genres = [...userPreferences.preferred_genres, genreName];
+        // Remove from excluded if present
+        userPreferences.excluded_genres = userPreferences.excluded_genres.filter(g => g !== genreName);
+      }
+    } else if (type === 'excluded') {
+      if (userPreferences.excluded_genres.includes(genreName)) {
+        userPreferences.excluded_genres = userPreferences.excluded_genres.filter(g => g !== genreName);
+      } else {
+        userPreferences.excluded_genres = [...userPreferences.excluded_genres, genreName];
+        // Remove from preferred if present
+        userPreferences.preferred_genres = userPreferences.preferred_genres.filter(g => g !== genreName);
+      }
+    }
+
+    preferencesChanged = true;
   }
 </script>
 
@@ -346,7 +440,7 @@
             class:dark:hover:text-gray-300={activeTab !== tab.id}
           >
             {tab.label}
-            {#if tab.count > 0}
+            {#if tab.count !== null && tab.count > 0}
               <span class="ml-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 py-0.5 px-2 rounded-full text-xs">
                 {tab.count}
               </span>
@@ -666,6 +760,365 @@
               >
                 Make Your First Request
               </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Preferences Tab -->
+      {#if activeTab === 'preferences'}
+        <div class="space-y-8">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+              Content Preferences
+            </h2>
+            {#if preferencesChanged}
+              <button
+                type="button"
+                onclick={savePreferences}
+                disabled={savingPreferences}
+                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                {#if savingPreferences}
+                  <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Saving...
+                {:else}
+                  Save Changes
+                {/if}
+              </button>
+            {/if}
+          </div>
+
+          {#if userPreferences}
+            <!-- Content Filtering Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Content Filtering</h3>
+
+              <div class="space-y-4">
+                <!-- ESRB Rating Limit -->
+                <div>
+                  <label for="max-esrb-rating" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Maximum ESRB Rating
+                  </label>
+                  <select
+                    id="max-esrb-rating"
+                    value={userPreferences.max_esrb_rating}
+                    onchange={(e) => updatePreference('max_esrb_rating', e.target.value)}
+                    class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="EC">Early Childhood (EC)</option>
+                    <option value="E">Everyone (E)</option>
+                    <option value="E10+">Everyone 10+ (E10+)</option>
+                    <option value="T">Teen (T)</option>
+                    <option value="M">Mature 17+ (M)</option>
+                    <option value="AO">Adults Only 18+ (AO)</option>
+                  </select>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Games with ratings above this level will be filtered out
+                  </p>
+                </div>
+
+                <!-- Content Checkboxes -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label class="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={userPreferences.hide_mature_content}
+                      onchange={(e) => updatePreference('hide_mature_content', e.target.checked)}
+                      class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Hide mature content</span>
+                  </label>
+
+                  <label class="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={userPreferences.hide_nsfw_content}
+                      onchange={(e) => updatePreference('hide_nsfw_content', e.target.checked)}
+                      class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Hide NSFW content</span>
+                  </label>
+
+                  <label class="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={userPreferences.show_content_warnings}
+                      onchange={(e) => updatePreference('show_content_warnings', e.target.checked)}
+                      class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Show content warnings</span>
+                  </label>
+
+                  <label class="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={userPreferences.safe_mode_enabled}
+                      onchange={(e) => updatePreference('safe_mode_enabled', e.target.checked)}
+                      class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Enable safe mode</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Custom Content Blocks Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Custom Content Blocks</h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Add custom words or phrases to filter out. Games with these terms in their titles or content warnings will be hidden.
+              </p>
+
+              <div class="space-y-4">
+                <!-- Current Custom Blocks -->
+                {#if userPreferences.custom_content_blocks && userPreferences.custom_content_blocks.length > 0}
+                  <div>
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Blocks</h4>
+                    <div class="flex flex-wrap gap-2">
+                      {#each userPreferences.custom_content_blocks as block, index}
+                        <div class="inline-flex items-center bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300 px-3 py-1 rounded-full text-sm">
+                          <span>{block}</span>
+                          <button
+                            type="button"
+                            onclick={() => {
+                              userPreferences.custom_content_blocks = userPreferences.custom_content_blocks.filter((_, i) => i !== index);
+                              preferencesChanged = true;
+                            }}
+                            class="ml-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 focus:outline-none"
+                            aria-label="Remove {block}"
+                          >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+
+                <!-- Add New Block -->
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Add New Block</h4>
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter word or phrase to block..."
+                      class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const value = e.target.value.trim().toLowerCase();
+                          if (value && !userPreferences.custom_content_blocks.includes(value)) {
+                            userPreferences.custom_content_blocks = [...(userPreferences.custom_content_blocks || []), value];
+                            preferencesChanged = true;
+                            e.target.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onclick={(e) => {
+                        const input = e.target.parentElement.querySelector('input');
+                        const value = input.value.trim().toLowerCase();
+                        if (value && !userPreferences.custom_content_blocks.includes(value)) {
+                          userPreferences.custom_content_blocks = [...(userPreferences.custom_content_blocks || []), value];
+                          preferencesChanged = true;
+                          input.value = '';
+                        }
+                      }}
+                      class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Press Enter or click Add to include a new term. Terms are case-insensitive.
+                  </p>
+                </div>
+
+                <!-- Info Box -->
+                <div class="p-4 bg-amber-50 dark:bg-amber-900/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div class="flex">
+                    <svg class="flex-shrink-0 w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                    </svg>
+                    <div class="ml-3">
+                      <p class="text-sm text-amber-800 dark:text-amber-300">
+                        <strong>How it works:</strong> Custom blocks filter games by checking both the game title and official content warnings.
+                        The system also includes predefined mature content keywords like "adult", "nsfw", "hentai", etc.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Genre Preferences Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Genre Preferences</h3>
+
+              <div class="space-y-6">
+                <!-- Preferred Genres -->
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Preferred Genres</h4>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Only show games from these genres (leave empty to show all)</p>
+                  <div class="flex flex-wrap gap-2">
+                    {#each availableGenres as genre}
+                      <button
+                        type="button"
+                        onclick={() => toggleGenrePreference(genre.name, 'preferred')}
+                        class="px-3 py-1 text-xs rounded-full border transition-colors"
+                        class:bg-green-100={userPreferences.preferred_genres.includes(genre.name)}
+                        class:border-green-500={userPreferences.preferred_genres.includes(genre.name)}
+                        class:text-green-800={userPreferences.preferred_genres.includes(genre.name)}
+                        class:dark:bg-green-900={userPreferences.preferred_genres.includes(genre.name)}
+                        class:dark:text-green-300={userPreferences.preferred_genres.includes(genre.name)}
+                        class:bg-gray-100={!userPreferences.preferred_genres.includes(genre.name)}
+                        class:border-gray-300={!userPreferences.preferred_genres.includes(genre.name)}
+                        class:text-gray-700={!userPreferences.preferred_genres.includes(genre.name)}
+                        class:dark:bg-gray-700={!userPreferences.preferred_genres.includes(genre.name)}
+                        class:dark:border-gray-600={!userPreferences.preferred_genres.includes(genre.name)}
+                        class:dark:text-gray-300={!userPreferences.preferred_genres.includes(genre.name)}
+                        class:hover:bg-green-50={!userPreferences.preferred_genres.includes(genre.name)}
+                        class:dark:hover:bg-gray-600={!userPreferences.preferred_genres.includes(genre.name)}
+                      >
+                        {genre.name}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+
+                <!-- Excluded Genres -->
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Excluded Genres</h4>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Hide games from these genres</p>
+                  <div class="flex flex-wrap gap-2">
+                    {#each availableGenres as genre}
+                      <button
+                        type="button"
+                        onclick={() => toggleGenrePreference(genre.name, 'excluded')}
+                        class="px-3 py-1 text-xs rounded-full border transition-colors"
+                        class:bg-red-100={userPreferences.excluded_genres.includes(genre.name)}
+                        class:border-red-500={userPreferences.excluded_genres.includes(genre.name)}
+                        class:text-red-800={userPreferences.excluded_genres.includes(genre.name)}
+                        class:dark:bg-red-900={userPreferences.excluded_genres.includes(genre.name)}
+                        class:dark:text-red-300={userPreferences.excluded_genres.includes(genre.name)}
+                        class:bg-gray-100={!userPreferences.excluded_genres.includes(genre.name)}
+                        class:border-gray-300={!userPreferences.excluded_genres.includes(genre.name)}
+                        class:text-gray-700={!userPreferences.excluded_genres.includes(genre.name)}
+                        class:dark:bg-gray-700={!userPreferences.excluded_genres.includes(genre.name)}
+                        class:dark:border-gray-600={!userPreferences.excluded_genres.includes(genre.name)}
+                        class:dark:text-gray-300={!userPreferences.excluded_genres.includes(genre.name)}
+                        class:hover:bg-red-50={!userPreferences.excluded_genres.includes(genre.name)}
+                        class:dark:hover:bg-gray-600={!userPreferences.excluded_genres.includes(genre.name)}
+                      >
+                        {genre.name}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Apply Filtering Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Apply Filtering To</h3>
+
+              <div class="space-y-3">
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_homepage}
+                    onchange={(e) => updatePreference('apply_to_homepage', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Homepage (all sections)</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_popular}
+                    onchange={(e) => updatePreference('apply_to_popular', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Popular Games section</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_recent}
+                    onchange={(e) => updatePreference('apply_to_recent', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">New Releases section</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_search}
+                    onchange={(e) => updatePreference('apply_to_search', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Search results</span>
+                </label>
+              </div>
+
+              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div class="flex">
+                  <svg class="flex-shrink-0 w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                  </svg>
+                  <div class="ml-3">
+                    <p class="text-sm text-blue-800 dark:text-blue-300">
+                      <strong>Note:</strong> Enabling filters may reduce the number of games shown and affect caching performance. Search filtering is enabled by default and recommended for the best experience.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Button (Mobile) -->
+            {#if preferencesChanged}
+              <div class="sm:hidden">
+                <button
+                  type="button"
+                  onclick={savePreferences}
+                  disabled={savingPreferences}
+                  class="w-full inline-flex justify-center items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  {#if savingPreferences}
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  {:else}
+                    Save Changes
+                  {/if}
+                </button>
+              </div>
+            {/if}
+          {:else}
+            <div class="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                Loading preferences...
+              </h3>
+              <p class="text-gray-500 dark:text-gray-400">
+                Please wait while we load your content preferences.
+              </p>
             </div>
           {/if}
         </div>

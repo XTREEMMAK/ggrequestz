@@ -10,6 +10,7 @@
   import StatusBadge from './StatusBadge.svelte';
   import { formatDate, truncateText } from '$lib/utils.js';
   import Icon from '@iconify/svelte';
+  import ESRBRating from './ESRBRating.svelte';
   
   let { game = null, isOpen = false } = $props();
   
@@ -28,6 +29,7 @@
   let truncatedSummary = $derived(game?.summary ? truncateText(game.summary, 200) : '');
   let releaseDate = $derived(game?.release_date ? formatDate(game.release_date) : null);
   let gameStatus = $derived(getGameStatus(game));
+  let esrbRating = $derived(game?.esrb_rating || null);
   
   function getGameStatus(game) {
     if (!game) return 'available';
@@ -250,7 +252,14 @@
               <span class="text-gray-600 dark:text-gray-400 text-sm">User Rating</span>
             </div>
           {/if}
-          
+
+          <!-- ESRB Rating -->
+          {#if esrbRating}
+            <div class="mb-4">
+              <ESRBRating rating={esrbRating} size="sm" />
+            </div>
+          {/if}
+
           <!-- Platforms -->
           {#if game.platforms && game.platforms.length > 0}
             <div class="mb-4">

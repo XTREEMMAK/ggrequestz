@@ -4,6 +4,8 @@
  */
 
 import { browser } from "$app/environment";
+import { assessContentSafety, processIGDBAgeRatings } from "./contentRating.js";
+import { buildGenreFilter, filterGamesByGenre } from "./genreFiltering.js";
 
 // Only load environment variables on server-side
 let IGDB_CLIENT_ID, IGDB_CLIENT_SECRET;
@@ -96,7 +98,7 @@ async function getAccessToken() {
  * @param {string} query - IGDB query string
  * @returns {Promise<Array>} - API response data
  */
-async function igdbRequest(endpoint, query) {
+export async function igdbRequest(endpoint, query) {
   // Rate limiting: ensure minimum interval between requests
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
@@ -143,14 +145,15 @@ export async function searchGamesByTitle(title, limit = 10) {
     );
   }
   const query = `
-    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, websites.category, websites.url, total_rating_count;
+    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, websites.category, websites.url, total_rating_count, age_ratings.organization, age_ratings.rating_category.rating, age_ratings.rating_content_descriptions;
     search "${title}";
     limit ${limit};
   `;
 
   try {
     const games = await igdbRequest("games", query);
-    return games.map(formatGameData);
+    const gamesWithResolvedRatings = await resolveGamesAgeRatings(games);
+    return gamesWithResolvedRatings.map(formatGameData);
   } catch (error) {
     console.error("IGDB search error:", error);
     return [];
@@ -169,13 +172,17 @@ export async function getGameById(igdbId) {
     );
   }
   const query = `
-    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, screenshots.url, videos.video_id, involved_companies.company.name, game_modes.name, websites.category, websites.url, total_rating_count;
+    fields id, name, slug, summary, first_release_date, rating, cover.url, platforms.name, genres.name, screenshots.url, videos.video_id, involved_companies.company.name, game_modes.name, websites.category, websites.url, total_rating_count, age_ratings.organization, age_ratings.rating_category.rating, age_ratings.rating_content_descriptions, age_ratings.checksum;
     where id = ${igdbId};
   `;
 
   try {
     const games = await igdbRequest("games", query);
-    return games.length > 0 ? formatGameData(games[0], true) : null;
+    if (games.length > 0) {
+      const gameWithResolvedRatings = await resolveGameAgeRatings(games[0]);
+      return formatGameData(gameWithResolvedRatings, true);
+    }
+    return null;
   } catch (error) {
     console.error("IGDB get game error:", error);
     return null;
@@ -186,19 +193,21 @@ export async function getGameById(igdbId) {
  * Get popular/trending games using IGDB popularity primitives
  * @param {number} limit - Number of games to return
  * @param {number} offset - Offset for pagination
+ * @param {Object} userPreferences - User's filtering preferences (optional)
  * @returns {Promise<Array>} - Array of popular games
  */
-export async function getPopularGames(limit = 20, offset = 0) {
+export async function getPopularGames(
+  limit = 20,
+  offset = 0,
+  userPreferences = null,
+  skipESRB = false,
+) {
   if (browser) {
     throw new Error(
       "IGDB functions cannot be used in browser - use API routes instead",
     );
   }
   try {
-    console.log(
-      `🎯 getPopularGames called with limit=${limit}, offset=${offset}`,
-    );
-
     // Request more than needed to account for games without covers
     // For larger offsets, request even more to ensure we get enough games
     const multiplier = offset > 100 ? 3 : 2; // Request 3x for high offsets, 2x for low
@@ -215,84 +224,138 @@ where popularity_type = 1;`;
       "popularity_primitives",
       popularityQuery,
     );
-    console.log(`📊 Got ${popularityData.length} popularity entries`);
 
     if (popularityData.length === 0) {
-      console.log("No popularity data found, falling back to high rated games");
-      return await getHighRatedGames(limit, offset);
+      return await getHighRatedGames(limit, offset, userPreferences, skipESRB);
     }
 
     // If we're requesting beyond available popularity data, mix strategies
     if (offset >= popularityData.length) {
-      console.log(
-        `Offset ${offset} beyond popularity data (${popularityData.length}), using high-rated games`,
+      return await getHighRatedGames(
+        limit,
+        offset - popularityData.length,
+        userPreferences,
+        skipESRB,
       );
-      return await getHighRatedGames(limit, offset - popularityData.length);
     }
 
     // Extract game IDs from popularity data
     const gameIds = popularityData.map((item) => item.game_id);
-    console.log(`🎯 Top 5 game IDs by popularity:`, gameIds.slice(0, 5));
+
+    // Build genre filter if user preferences exist
+    let genreFilter = "";
+    if (userPreferences) {
+      genreFilter = await buildGenreFilter(userPreferences);
+    }
 
     // Get game details for these IDs
-    const gameQuery = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count;
-where id = (${gameIds.join(",")}) & cover != null;
+    const gameQuery = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count,age_ratings.organization,age_ratings.rating_category.rating,age_ratings.rating_content_descriptions;
+where id = (${gameIds.join(",")}) & cover != null${genreFilter};
 limit ${fetchLimit};`;
 
     const games = await igdbRequest("games", gameQuery);
-    console.log(`📊 Got ${games.length} game details`);
 
-    // Sort games by their popularity order
-    const sortedGames = gameIds
+    // Sort games by their popularity order and resolve age ratings
+    const sortedGamesRaw = gameIds
       .map((id) => games.find((game) => game.id === id))
-      .filter(Boolean)
-      .slice(0, limit); // Only return requested amount
+      .filter(Boolean);
 
-    console.log(
-      `🎯 Final sorted games:`,
-      sortedGames.slice(0, 3).map((g) => `${g.name} (${g.id})`),
-    );
+    const gamesWithResolvedRatings =
+      await resolveGamesAgeRatings(sortedGamesRaw);
+    let sortedGames = gamesWithResolvedRatings.map(formatGameData);
+
+    // Apply content filtering if user preferences exist
+    if (userPreferences) {
+      sortedGames = sortedGames.filter((game) => {
+        const assessment = assessContentSafety(
+          game.content_rating,
+          userPreferences,
+          game.title,
+        );
+        return assessment.allowed;
+      });
+
+      // Apply genre filtering (client-side backup)
+      sortedGames = filterGamesByGenre(sortedGames, userPreferences);
+    }
+
+    // Take only the requested amount
+    sortedGames = sortedGames.slice(0, limit);
 
     // If we still don't have enough games, supplement with high-rated games
     if (sortedGames.length < limit) {
-      console.log(
-        `⚠️ Only got ${sortedGames.length} popular games, supplementing with high-rated games`,
-      );
       // Calculate offset for high-rated games (account for popular games already fetched)
       const highRatedOffset = Math.max(0, offset - 50); // Assume ~50 popular games available
       const additionalGames = await getHighRatedGames(
         limit - sortedGames.length,
         highRatedOffset,
+        userPreferences,
+        skipESRB,
       );
-      return [...sortedGames.map(formatGameData), ...additionalGames];
+      return [...sortedGames, ...additionalGames];
     }
 
-    return sortedGames.map(formatGameData);
+    return sortedGames;
   } catch (error) {
     console.error("IGDB popularity games error:", error);
     // Fallback to rating-based query if popularity endpoint fails
-    console.log("Falling back to high rated games due to error");
-    return await getHighRatedGames(limit, offset);
+    return await getHighRatedGames(limit, offset, userPreferences, skipESRB);
   }
 }
 
 /**
  * Fallback function to get highly rated games
  * @param {number} limit - Number of games to return
+ * @param {number} offset - Offset for pagination
+ * @param {Object} userPreferences - User's filtering preferences (optional)
  * @returns {Promise<Array>} - Array of highly rated games
  */
-async function getHighRatedGames(limit = 20, offset = 0) {
+async function getHighRatedGames(
+  limit = 20,
+  offset = 0,
+  userPreferences = null,
+  skipESRB = false,
+) {
   const oneYearAgo = Math.floor(Date.now() / 1000) - 365 * 24 * 60 * 60;
 
-  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count;
-where rating >= 80 & first_release_date > ${oneYearAgo} & cover != null;
+  // Build genre filter if user preferences exist
+  let genreFilter = "";
+  if (userPreferences) {
+    genreFilter = await buildGenreFilter(userPreferences);
+  }
+
+  // Request more games than needed to account for filtering
+  const fetchLimit = userPreferences ? Math.min(limit * 2, 500) : limit;
+
+  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count,age_ratings.organization,age_ratings.rating_category.rating,age_ratings.rating_content_descriptions;
+where rating >= 80 & first_release_date > ${oneYearAgo} & cover != null${genreFilter};
 sort rating desc;
 offset ${offset};
-limit ${limit};`;
+limit ${fetchLimit};`;
 
   try {
     const games = await igdbRequest("games", query);
-    return games.map(formatGameData);
+    const gamesWithResolvedRatings = skipESRB
+      ? games
+      : await resolveGamesAgeRatings(games);
+    let formattedGames = gamesWithResolvedRatings.map(formatGameData);
+
+    // Apply content filtering if user preferences exist
+    if (userPreferences) {
+      formattedGames = formattedGames.filter((game) => {
+        const assessment = assessContentSafety(
+          game.content_rating,
+          userPreferences,
+          game.title,
+        );
+        return assessment.allowed;
+      });
+
+      // Apply genre filtering (client-side backup)
+      formattedGames = filterGamesByGenre(formattedGames, userPreferences);
+    }
+
+    return formattedGames.slice(0, limit);
   } catch (error) {
     console.error("IGDB high rated games error:", error);
     return [];
@@ -303,25 +366,61 @@ limit ${limit};`;
  * Get recently released games
  * @param {number} limit - Number of games to return
  * @param {number} offset - Offset for pagination
+ * @param {Object} userPreferences - User's filtering preferences (optional)
  * @returns {Promise<Array>} - Array of recent games
  */
-export async function getRecentGames(limit = 20, offset = 0) {
+export async function getRecentGames(
+  limit = 20,
+  offset = 0,
+  userPreferences = null,
+  skipESRB = false,
+) {
   if (browser) {
     throw new Error(
       "IGDB functions cannot be used in browser - use API routes instead",
     );
   }
+
+  // Build genre filter if user preferences exist
+  let genreFilter = "";
+  if (userPreferences) {
+    genreFilter = await buildGenreFilter(userPreferences);
+  }
+
+  // Request more games than needed to account for filtering
+  const fetchLimit = userPreferences ? Math.min(limit * 2, 500) : limit;
+
   // Get recently released games (past releases only, no future games)
   const currentTimestamp = Math.floor(Date.now() / 1000);
-  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count;
-where first_release_date != null & first_release_date < ${currentTimestamp} & version_parent = null & cover != null;
+  const query = `fields id,name,slug,summary,first_release_date,rating,cover.url,platforms.name,genres.name,websites.category,websites.url,total_rating_count,age_ratings.organization,age_ratings.rating_category.rating,age_ratings.rating_content_descriptions;
+where first_release_date != null & first_release_date < ${currentTimestamp} & version_parent = null & cover != null${genreFilter};
 sort first_release_date desc;
 offset ${offset};
-limit ${limit};`;
+limit ${fetchLimit};`;
 
   try {
     const games = await igdbRequest("games", query);
-    return games.map(formatGameData);
+    const gamesWithResolvedRatings = skipESRB
+      ? games
+      : await resolveGamesAgeRatings(games);
+    let formattedGames = gamesWithResolvedRatings.map(formatGameData);
+
+    // Apply content filtering if user preferences exist
+    if (userPreferences) {
+      formattedGames = formattedGames.filter((game) => {
+        const assessment = assessContentSafety(
+          game.content_rating,
+          userPreferences,
+          game.title,
+        );
+        return assessment.allowed;
+      });
+
+      // Apply genre filtering (client-side backup)
+      formattedGames = filterGamesByGenre(formattedGames, userPreferences);
+    }
+
+    return formattedGames.slice(0, limit);
   } catch (error) {
     console.error("IGDB recent games error:", error);
     return [];
@@ -438,6 +537,21 @@ export function getHighQualityCover(coverUrl) {
  * @returns {Object} - Formatted game object
  */
 export function formatGameData(game, detailed = false) {
+  // Use resolved age ratings if available, otherwise use empty ratings
+  const contentRatings = game.resolved_age_ratings || {
+    esrb_rating: null,
+    esrb_descriptors: [],
+    pegi_rating: null,
+    pegi_descriptors: [],
+    content_warnings: [],
+    is_mature: false,
+    is_nsfw: false,
+    has_violence: false,
+    has_sexual_content: false,
+    has_drug_use: false,
+    has_gambling: false,
+  };
+
   const formatted = {
     id: game.id,
     igdb_id: game.id.toString(),
@@ -454,6 +568,11 @@ export function formatGameData(game, detailed = false) {
     websites: processWebsites(game.websites || []),
     // Add popularity score for node.js scripts compatibility
     popularity_score: game.total_rating_count || 0,
+    // Add content rating information
+    content_rating: contentRatings,
+    esrb_rating: contentRatings.esrb_rating,
+    is_mature: contentRatings.is_mature,
+    is_nsfw: contentRatings.is_nsfw,
   };
 
   if (detailed) {
@@ -494,16 +613,71 @@ export async function getPopularGamesByRating(limit = 20) {
   }
   try {
     const query = `
-      fields id, name, slug, summary, cover.url, rating, first_release_date, platforms.name, genres.name, screenshots.url, videos.video_id, involved_companies.company.name, game_modes.name, total_rating_count, websites.category, websites.url;
+      fields id, name, slug, summary, cover.url, rating, first_release_date, platforms.name, genres.name, screenshots.url, videos.video_id, involved_companies.company.name, game_modes.name, total_rating_count, websites.category, websites.url, age_ratings.organization, age_ratings.rating_category.rating, age_ratings.rating_content_descriptions;
       where total_rating_count >= 50;
       sort total_rating_count desc;
       limit ${limit};
     `;
 
     const games = await igdbRequest("games", query);
-    return games.map((game) => formatGameData(game, true));
+    const gamesWithResolvedRatings = await resolveGamesAgeRatings(games);
+    return gamesWithResolvedRatings.map((game) => formatGameData(game, true));
   } catch (error) {
     console.error("IGDB popular games by rating error:", error);
     return [];
   }
+}
+
+/**
+ * Resolve IGDB age rating data using static reference tables
+ * @param {Array} ageRatings - Raw IGDB age ratings data
+ * @returns {Object} - Resolved age rating data
+ */
+// Use processIGDBAgeRatings from contentRating.js to avoid duplication
+export const resolveAgeRatings = processIGDBAgeRatings;
+
+/**
+ * Helper function to resolve age ratings for a game and attach them
+ * @param {Object} game - Raw IGDB game object
+ * @returns {Promise<Object>} - Game object with resolved age ratings
+ */
+async function resolveGameAgeRatings(game) {
+  try {
+    const resolvedRatings = await resolveAgeRatings(game.age_ratings);
+    return {
+      ...game,
+      resolved_age_ratings: resolvedRatings,
+    };
+  } catch (error) {
+    console.error(
+      `[resolveGameAgeRatings] Error resolving ratings for game ${game.name}:`,
+      error,
+    );
+    // Return game with empty ratings on error
+    return {
+      ...game,
+      resolved_age_ratings: {
+        esrb_rating: null,
+        esrb_descriptors: [],
+        pegi_rating: null,
+        pegi_descriptors: [],
+        content_warnings: [],
+        is_mature: false,
+        is_nsfw: false,
+        has_violence: false,
+        has_sexual_content: false,
+        has_drug_use: false,
+        has_gambling: false,
+      },
+    };
+  }
+}
+
+/**
+ * Helper function to resolve age ratings for multiple games
+ * @param {Array} games - Array of raw IGDB game objects
+ * @returns {Array} - Array of games with resolved age ratings
+ */
+async function resolveGamesAgeRatings(games) {
+  return await Promise.all(games.map(resolveGameAgeRatings));
 }

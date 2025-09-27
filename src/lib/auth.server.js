@@ -1,5 +1,5 @@
 /**
- * Server-only authentication utilities
+ * Server-only authentication utilities with caching optimization
  * This file should never be imported by client-side code
  */
 
@@ -17,6 +17,12 @@ import { SignJWT, jwtVerify } from "jose";
 import { serialize, parse } from "cookie";
 import crypto from "crypto";
 import { env } from "$env/dynamic/private";
+import {
+  withCache,
+  cacheUserSession,
+  cacheUserPermissions,
+  cacheAuthCredentials,
+} from "./cache.js";
 
 // Use dynamic environment variables for runtime configuration
 const AUTHENTIK_CLIENT_ID =
@@ -208,7 +214,7 @@ export async function verifySessionToken(token) {
 }
 
 /**
- * Get session from cookie header
+ * Get session from cookie header with intelligent caching
  * @param {string} cookieHeader - Cookie header string
  * @returns {Promise<Object|null>} - User session or null
  */
@@ -221,39 +227,55 @@ export async function getSession(cookieHeader) {
   const sessionToken = cookies.session;
   const basicAuthToken = cookies.basic_auth_session;
 
-  // First try to verify as JWT (Authentik session)
-  if (sessionToken) {
-    const jwtUser = await verifySessionToken(sessionToken);
-    if (jwtUser) {
-      return jwtUser;
-    }
+  // Create cache key based on the token hash (for security)
+  const tokenToCache = sessionToken || basicAuthToken;
+  if (!tokenToCache) return null;
 
-    // If JWT fails, try basic auth token on session cookie
-    try {
-      const { verifyBasicAuthToken } = await import("./basicAuth.js");
-      const basicUser = verifyBasicAuthToken(sessionToken);
-      if (basicUser) {
-        return basicUser;
+  const tokenHash = crypto
+    .createHash("sha256")
+    .update(tokenToCache)
+    .digest("hex")
+    .substring(0, 16);
+
+  // Try to get cached session first
+  return await cacheUserSession(tokenHash, async () => {
+    // First try to verify as JWT (Authentik session)
+    if (sessionToken) {
+      const jwtUser = await verifySessionToken(sessionToken);
+      if (jwtUser) {
+        return jwtUser;
       }
-    } catch (error) {
-      console.error("Basic auth verification on session cookie failed:", error);
-    }
-  }
 
-  // Check for basic auth session cookie
-  if (basicAuthToken) {
-    try {
-      const { getBasicAuthUser } = await import("./basicAuth.js");
-      const basicUser = getBasicAuthUser(basicAuthToken);
-      if (basicUser) {
-        return basicUser;
+      // If JWT fails, try basic auth token on session cookie
+      try {
+        const { verifyBasicAuthToken } = await import("./basicAuth.js");
+        const basicUser = verifyBasicAuthToken(sessionToken);
+        if (basicUser) {
+          return basicUser;
+        }
+      } catch (error) {
+        console.error(
+          "Basic auth verification on session cookie failed:",
+          error,
+        );
       }
-    } catch (error) {
-      console.error("Basic auth session verification failed:", error);
     }
-  }
 
-  return null;
+    // Check for basic auth session cookie
+    if (basicAuthToken) {
+      try {
+        const { getBasicAuthUser } = await import("./basicAuth.js");
+        const basicUser = getBasicAuthUser(basicAuthToken);
+        if (basicUser) {
+          return basicUser;
+        }
+      } catch (error) {
+        console.error("Basic auth session verification failed:", error);
+      }
+    }
+
+    return null;
+  });
 }
 
 /**
@@ -267,7 +289,7 @@ export async function requireAuth(request) {
 }
 
 /**
- * Get authenticated user from request (handles multiple auth types)
+ * Get authenticated user from request (handles multiple auth types) with caching
  * @param {Object} cookies - Cookies object
  * @returns {Promise<Object|null>} - User object or null
  */
@@ -276,9 +298,13 @@ export async function getAuthenticatedUser(cookies) {
   const sessionCookie = cookies.get("session");
 
   if (sessionCookie) {
-    // Try to verify as JWT (Authentik/OIDC session)
+    // Try to verify as JWT (Authentik/OIDC session) with caching
     try {
-      const jwtUser = await verifySessionToken(sessionCookie);
+      const jwtUser = await withCache(
+        `auth-session-${sessionCookie.slice(-16)}`, // Use last 16 chars as cache key
+        () => verifySessionToken(sessionCookie),
+        5 * 60 * 1000, // 5 minute cache
+      );
       if (jwtUser) {
         return jwtUser;
       }
@@ -305,7 +331,11 @@ export async function getAuthenticatedUser(cookies) {
   if (basicAuthCookie) {
     try {
       const { getBasicAuthUser } = await import("./basicAuth.js");
-      const basicUser = getBasicAuthUser(basicAuthCookie);
+      const basicUser = await withCache(
+        `basic-auth-${basicAuthCookie.slice(-16)}`, // Use last 16 chars as cache key
+        () => Promise.resolve(getBasicAuthUser(basicAuthCookie)),
+        5 * 60 * 1000, // 5 minute cache
+      );
       if (basicUser) {
         basicUser.auth_type = "basic";
         return basicUser;
@@ -366,4 +396,123 @@ export function clearSessionCookie(sessionStatus) {
   if (sessionStatus?.basic_auth_session) {
     console.log("Clearing basic auth session");
   }
+}
+
+/**
+ * Get user roles with caching
+ * @param {Object} user - User object
+ * @returns {Promise<Array>} - Array of user roles
+ */
+export async function getUserRoles(user) {
+  if (!user) return [];
+
+  const cacheKey =
+    user.auth_type === "basic"
+      ? `user-roles-basic-${user.id}`
+      : `user-roles-authentik-${user.sub}`;
+
+  return withCache(
+    cacheKey,
+    async () => {
+      const { query } = await import("./database.js");
+
+      try {
+        if (user.auth_type === "basic") {
+          // For basic auth users, get roles from database
+          const userResult = await query(
+            "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
+            [user.id],
+          );
+          if (userResult.rows.length > 0) {
+            const rolesResult = await query(
+              `
+              SELECT r.name
+              FROM ggr_roles r
+              JOIN ggr_user_roles ur ON r.id = ur.role_id
+              WHERE ur.user_id = $1 AND ur.is_active = true AND r.is_active = true
+            `,
+              [user.id],
+            );
+            return rolesResult.rows.map((row) => row.name);
+          }
+        } else {
+          // For Authentik users, get roles from database
+          const userResult = await query(
+            "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+            [user.sub],
+          );
+          if (userResult.rows.length > 0) {
+            const rolesResult = await query(
+              `
+              SELECT r.name
+              FROM ggr_roles r
+              JOIN ggr_user_roles ur ON r.id = ur.role_id
+              WHERE ur.user_id = $1 AND ur.is_active = true AND r.is_active = true
+            `,
+              [userResult.rows[0].id],
+            );
+            return rolesResult.rows.map((row) => row.name);
+          }
+        }
+        return [];
+      } catch (error) {
+        console.warn("Failed to get user roles:", error);
+        return [];
+      }
+    },
+    5 * 60 * 1000, // 5 minute cache
+  );
+}
+
+/**
+ * Get user permissions with caching
+ * @param {Object} user - User object
+ * @returns {Promise<Object>} - User permissions object
+ */
+export async function getUserPermissions(user) {
+  if (!user) return { isAdmin: false };
+
+  const cacheKey =
+    user.auth_type === "basic"
+      ? `user-permissions-basic-${user.id}`
+      : `user-permissions-authentik-${user.sub}`;
+
+  return withCache(
+    cacheKey,
+    async () => {
+      const { query } = await import("./database.js");
+
+      try {
+        // For basic auth users, check permissions directly
+        if (user.auth_type === "basic") {
+          return { isAdmin: user.is_admin || false };
+        } else {
+          // For Authentik users, get user's local ID and check permissions
+          const userResult = await query(
+            "SELECT id, email, is_admin FROM ggr_users WHERE authentik_sub = $1",
+            [user.sub],
+          );
+
+          if (userResult.rows.length > 0) {
+            const dbUser = userResult.rows[0];
+
+            // Check if user has direct is_admin flag set
+            if (dbUser.is_admin) {
+              return { isAdmin: true };
+            } else {
+              // Check role-based permissions
+              const { userHasPermission } = await import("./userProfile.js");
+              const isAdmin = await userHasPermission(dbUser.id, "admin.panel");
+              return { isAdmin };
+            }
+          }
+        }
+        return { isAdmin: false };
+      } catch (error) {
+        console.warn("Failed to get user permissions:", error);
+        return { isAdmin: false };
+      }
+    },
+    5 * 60 * 1000, // 5 minute cache
+  );
 }

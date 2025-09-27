@@ -3,18 +3,54 @@
 -->
 
 <script>
+  // CRITICAL: Prevent any scroll behavior immediately
+  // This must happen before any component logic or rendering
+  import { browser } from '$app/environment';
+  if (browser) {
+    // Disable scroll restoration completely
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+
+    // Force scroll to top with multiple methods
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    // Prevent any scroll events during initial load
+    let scrollBlocked = true;
+    const preventScroll = (e) => {
+      if (scrollBlocked) {
+        e.preventDefault();
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }
+    };
+
+    window.addEventListener('scroll', preventScroll, { passive: false });
+    window.addEventListener('wheel', preventScroll, { passive: false });
+    window.addEventListener('touchmove', preventScroll, { passive: false });
+
+    // Unblock scrolling after component loads
+    setTimeout(() => {
+      scrollBlocked = false;
+      window.removeEventListener('scroll', preventScroll);
+      window.removeEventListener('wheel', preventScroll);
+      window.removeEventListener('touchmove', preventScroll);
+    }, 500);
+  }
+
   import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
-  import { browser } from '$app/environment';
   import PlatformIcons from '../../../components/PlatformIcons.svelte';
   import StatusBadge from '../../../components/StatusBadge.svelte';
   import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
+  import ESRBRating from '../../../components/ESRBRating.svelte';
   import { formatDate, truncateText } from '$lib/utils.js';
   import { watchlistService } from '$lib/clientServices.js';
   import { toasts } from '$lib/stores/toast.js';
   import { getWatchlistStatus, updateWatchlistStatus, clearWatchlistStatus, getCachedWatchlistStatus } from '$lib/watchlistStatus.js';
   import { onMount } from 'svelte';
-  
+
   let { data } = $props();
   
   let game = $derived(data?.game);
@@ -106,25 +142,77 @@
   
   let truncatedSummary = $derived(game?.summary ? truncateText(game.summary, 300) : '');
   let showExpandButton = $derived(game?.summary && game.summary.length > 300);
+  let esrbRating = $derived(game?.esrb_rating || null);
+
+  // Calculate rating color classes based on value (0-100 scale)
+  function getRatingClasses(rating) {
+    if (!rating) return 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200';
+    const value = Math.round(rating);
+    if (value >= 75) return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+    if (value >= 50) return 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200';
+    if (value >= 25) return 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200';
+    return 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200';
+  }
+
+  let ratingClasses = $derived(getRatingClasses(game?.rating));
+
+  // Calculate rating text color for large displays
+  function getRatingTextColor(rating) {
+    if (!rating) return 'text-gray-600 dark:text-gray-400';
+    const value = Math.round(rating);
+    if (value >= 75) return 'text-green-600 dark:text-green-400';
+    if (value >= 50) return 'text-yellow-600 dark:text-yellow-400';
+    if (value >= 25) return 'text-orange-600 dark:text-orange-400';
+    return 'text-red-600 dark:text-red-400';
+  }
+
   
   function handleBack() {
     if (browser) {
       // Check for referrer in URL params or session storage
-      const referrer = $page.url.searchParams.get('from') 
-        || sessionStorage.getItem('gameDetailReferrer') 
+      const referrer = $page.url.searchParams.get('from')
+        || sessionStorage.getItem('gameDetailReferrer')
         || '/search';
-      
+
+      console.log(`🔙 Game detail back button clicked, navigating to: ${referrer}`);
+
       // Clean up the referrer from session storage
       sessionStorage.removeItem('gameDetailReferrer');
-      
-      // Use SvelteKit's goto instead of window.history.back()
-      goto(referrer);
+
+      // Only use noScroll when going back to homepage (to preserve scroll position there)
+      // For other destinations like /search, scroll to top
+      if (referrer === '/' || referrer === '') {
+        goto(referrer, { noScroll: true, replaceState: true });
+      } else {
+        goto(referrer, { replaceState: true });
+      }
     } else {
       // Not in browser, fallback to search
       goto('/search');
     }
   }
   
+  async function refreshWatchlistData() {
+    if (browser) {
+      // Small delay to ensure database transaction completes
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await invalidateAll();
+
+      // Set flag to prioritize server data over stale client cache
+      justInvalidated = true;
+
+      // Clear stale client-side cache after invalidation
+      setTimeout(() => {
+        clearWatchlistStatus(game.igdb_id);
+
+        // Reset invalidation flag after cleanup
+        setTimeout(() => {
+          justInvalidated = false;
+        }, 100);
+      }, 200);
+    }
+  }
+
   async function toggleWatchlist() {
     if (!user) {
       goto('/api/auth/login');
@@ -150,25 +238,7 @@
         if (success) {
           isInWatchlist = false;
           updateWatchlistStatus(game.igdb_id, false);
-          // Force complete page refresh to clear cached watchlist data
-          if (browser) {
-            // Small delay to ensure database transaction completes
-            await new Promise(resolve => setTimeout(resolve, 100));
-            await invalidateAll();
-
-            // Set flag to prioritize server data over stale client cache
-            justInvalidated = true;
-
-            // Clear stale client-side cache after invalidation
-            setTimeout(() => {
-              clearWatchlistStatus(game.igdb_id);
-
-              // Reset invalidation flag after cleanup
-              setTimeout(() => {
-                justInvalidated = false;
-              }, 100);
-            }, 200);
-          }
+          await refreshWatchlistData();
           toasts.success('Removed from watchlist');
         } else {
           throw new Error('Failed to remove from watchlist');
@@ -178,25 +248,7 @@
         if (success) {
           isInWatchlist = true;
           updateWatchlistStatus(game.igdb_id, true);
-          // Force complete page refresh to clear cached watchlist data
-          if (browser) {
-            // Small delay to ensure database transaction completes
-            await new Promise(resolve => setTimeout(resolve, 100));
-            await invalidateAll();
-
-            // Set flag to prioritize server data over stale client cache
-            justInvalidated = true;
-
-            // Clear stale client-side cache after invalidation
-            setTimeout(() => {
-              clearWatchlistStatus(game.igdb_id);
-
-              // Reset invalidation flag after cleanup
-              setTimeout(() => {
-                justInvalidated = false;
-              }, 100);
-            }, 200);
-          }
+          await refreshWatchlistData();
           toasts.success('Added to watchlist');
         } else {
           throw new Error('Failed to add to watchlist');
@@ -270,10 +322,10 @@
     }
   }
   
-  // Immediately scroll to top when page loads to prevent inherited scroll position
+  // Additional scroll reset to catch any edge cases
   onMount(() => {
     if (browser) {
-      // Force immediate scroll to top without animation
+      // One final check to ensure we're at the top
       window.scrollTo(0, 0);
     }
   });
@@ -317,7 +369,7 @@
       <!-- Left Column - Game Images -->
       <div class="lg:col-span-1">
         <!-- Main Image -->
-        <div class="relative aspect-[3/4] bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-4">
+        <div class="relative aspect-[3/4] bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-4 max-w-sm mx-auto lg:max-w-none lg:mx-0">
           {#if images.length > 0}
             <button
               type="button"
@@ -412,7 +464,7 @@
                   <PlatformIcons platforms={game.platforms} {game} size="xl" maxVisible={8} />
                 </div>
               {/if}
-              
+
               <!-- Genres -->
               {#if game.genres && game.genres.length > 0}
                 <div class="flex flex-wrap gap-2 mb-3">
@@ -423,19 +475,14 @@
                   {/each}
                 </div>
               {/if}
+
             </div>
             
-            <!-- Status and Rating -->
+            <!-- Status -->
             <div class="ml-4 text-right">
               {#if game.status}
                 <div class="mb-2">
                   <StatusBadge status={game.status} />
-                </div>
-              {/if}
-              
-              {#if game.rating}
-                <div class="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-3 py-1 rounded-full text-sm font-medium hidden sm:block">
-                  {Math.round(game.rating)}/100
                 </div>
               {/if}
             </div>
@@ -461,15 +508,6 @@
               </div>
             {/if}
             
-            <!-- Mobile Rating -->
-            {#if game.rating}
-              <div class="sm:hidden">
-                <span class="font-medium">Rating:</span> 
-                <span class="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-0.5 rounded-full text-xs font-medium ml-1">
-                  {Math.round(game.rating)}/100
-                </span>
-              </div>
-            {/if}
           </div>
         </div>
         
@@ -646,8 +684,8 @@
           
           {#if game.rating}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
-              <div class="text-2xl font-bold text-green-600 dark:text-green-400">
-                {Math.round(game.rating)}
+              <div class="text-2xl font-bold {getRatingTextColor(game.rating)}">
+                {Math.round(game.rating)}/100
               </div>
               <div class="text-sm text-gray-500 dark:text-gray-400">
                 Rating
@@ -673,6 +711,18 @@
               </div>
               <div class="text-sm text-gray-500 dark:text-gray-400">
                 Genres
+              </div>
+            </div>
+          {/if}
+
+          <!-- ESRB Rating -->
+          {#if esrbRating}
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
+              <div class="flex justify-center mb-2">
+                <ESRBRating rating={esrbRating} size="md" />
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">
+                ESRB Rating
               </div>
             </div>
           {/if}
@@ -866,7 +916,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 50vh;
+    min-height: 70vh;
     height: 100%;
   }
   
@@ -901,8 +951,8 @@
   
   .modal-image {
     max-width: 100%;
-    max-height: 60vh;
-    min-height: 30vh;
+    max-height: 80vh;
+    min-height: 50vh;
     object-fit: contain;
     border-radius: 0.25rem;
   }

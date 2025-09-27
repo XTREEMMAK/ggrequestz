@@ -16,14 +16,16 @@ export async function load({ params, parent }) {
   try {
     const requestId = params.id;
 
-    // Get request details
+    // Get request details with game information
     const requestQuery = `
-      SELECT 
-        id, title, user_id, user_name, status, request_type, priority,
-        description, reason, platforms, admin_notes,
-        created_at, updated_at
-      FROM ggr_game_requests 
-      WHERE id = $1
+      SELECT
+        r.id, r.title, r.user_id, r.user_name, r.status, r.request_type, r.priority,
+        r.description, r.reason, r.platforms, r.admin_notes,
+        r.created_at, r.updated_at, r.igdb_id,
+        g.cover_url, g.title as game_title
+      FROM ggr_game_requests r
+      LEFT JOIN ggr_games_cache g ON r.igdb_id = g.igdb_id
+      WHERE r.id = $1
     `;
 
     const requestResult = await query(requestQuery, [requestId]);

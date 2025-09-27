@@ -240,6 +240,11 @@ export const gamesCache = {
         companies: JSON.stringify(gameData.companies || []),
         game_modes: JSON.stringify(gameData.game_modes || []),
         popularity_score: gameData.popularity_score || 0,
+        // Include ESRB rating fields
+        content_rating: gameData.content_rating,
+        esrb_rating: gameData.esrb_rating,
+        is_mature: gameData.is_mature,
+        is_nsfw: gameData.is_nsfw,
         last_updated: new Date().toISOString(),
         needs_refresh: false,
       };
@@ -249,9 +254,10 @@ export const gamesCache = {
         INSERT INTO ggr_games_cache (
           igdb_id, title, summary, cover_url, rating, release_date,
           platforms, genres, screenshots, videos, companies, game_modes,
-          popularity_score, last_updated, needs_refresh
+          popularity_score, content_rating, esrb_rating, is_mature, is_nsfw,
+          last_updated, needs_refresh
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
         )
         ON CONFLICT (igdb_id) DO UPDATE SET
           title = EXCLUDED.title,
@@ -266,6 +272,10 @@ export const gamesCache = {
           companies = EXCLUDED.companies,
           game_modes = EXCLUDED.game_modes,
           popularity_score = EXCLUDED.popularity_score,
+          content_rating = EXCLUDED.content_rating,
+          esrb_rating = EXCLUDED.esrb_rating,
+          is_mature = EXCLUDED.is_mature,
+          is_nsfw = EXCLUDED.is_nsfw,
           last_updated = EXCLUDED.last_updated,
           needs_refresh = EXCLUDED.needs_refresh
         RETURNING igdb_id`,
@@ -283,6 +293,10 @@ export const gamesCache = {
           upsertData.companies,
           upsertData.game_modes,
           upsertData.popularity_score,
+          upsertData.content_rating,
+          upsertData.esrb_rating,
+          upsertData.is_mature,
+          upsertData.is_nsfw,
           upsertData.last_updated,
           upsertData.needs_refresh,
         ],
@@ -676,6 +690,43 @@ export const watchlist = {
     } catch (error) {
       console.error("Failed to remove from watchlist:", error);
       return false;
+    }
+  },
+
+  /**
+   * Batch check if multiple games are in user's watchlist
+   * @param {string} userId - User ID
+   * @param {Array<string>} igdbIds - Array of IGDB game IDs
+   * @returns {Promise<Map<string, boolean>>} - Map of igdbId to boolean status
+   */
+  async batchContains(userId, igdbIds) {
+    try {
+      if (!Array.isArray(igdbIds) || igdbIds.length === 0) {
+        return new Map();
+      }
+
+      // Create placeholders for parameterized query
+      const placeholders = igdbIds.map((_, index) => `$${index + 2}`).join(",");
+
+      const result = await query(
+        `SELECT igdb_id FROM ggr_user_watchlist WHERE user_id = $1 AND igdb_id IN (${placeholders})`,
+        [userId, ...igdbIds],
+      );
+
+      // Create a map with all games initially set to false
+      const statusMap = new Map();
+      igdbIds.forEach((id) => statusMap.set(id, false));
+
+      // Set found games to true
+      result.rows.forEach((row) => {
+        statusMap.set(row.igdb_id, true);
+      });
+
+      return statusMap;
+    } catch (error) {
+      console.error("Failed to batch check watchlist:", error);
+      // Return empty map on error to fail gracefully
+      return new Map();
     }
   },
 };

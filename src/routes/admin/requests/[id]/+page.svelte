@@ -168,7 +168,65 @@
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
             Request Details
           </h2>
-          
+
+          <!-- Game Information -->
+          {#if request?.cover_url || request?.igdb_id}
+            <div class="relative flex bg-gray-50 dark:bg-gray-700 rounded-lg overflow-hidden min-h-[180px]">
+              <!-- Game Cover - breaks out and matches height -->
+              {#if request?.cover_url}
+                <div class="flex-shrink-0 w-24 md:w-28">
+                  <img
+                    src={request.cover_url}
+                    alt="{request.title} cover"
+                    class="w-full h-full object-cover"
+                    onerror={(e) => e.target.style.display = 'none'}
+                  />
+                </div>
+              {/if}
+
+              <!-- Game Details -->
+              <div class="flex-1 p-4 space-y-4 flex flex-col justify-center">
+                {#if request?.game_title && request.game_title !== request.title}
+                  <div>
+                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Game Title</span>
+                    <p class="text-base font-semibold text-gray-900 dark:text-white mt-1">
+                      {request.game_title}
+                    </p>
+                  </div>
+                {/if}
+
+                {#if request?.igdb_id}
+                  <div class="space-y-3">
+                    <div>
+                      <span class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">IGDB Database</span>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white mt-1">
+                        ID: {request.igdb_id}
+                      </p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                      <a
+                        href="/game/{request.igdb_id}"
+                        class="inline-flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                      >
+                        <Icon icon="heroicons:eye" class="w-5 h-5 mr-2" />
+                        View Game Details
+                      </a>
+                      <a
+                        href="https://www.igdb.com/games/{request.igdb_id}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        <Icon icon="heroicons:external-link" class="w-5 h-5 mr-2" />
+                        View on IGDB
+                      </a>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
           <div class="space-y-3">
             <div>
               <div class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

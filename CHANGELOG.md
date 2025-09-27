@@ -5,6 +5,163 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-09-27
+
+### Major Features
+
+- **Comprehensive Content Filtering System**
+  - Fixed content filtering for Popular Games API to respect all user ESRB preferences (not just Maximum E users)
+  - Implemented dual-layer filtering: official ESRB ratings + title-based keyword detection
+  - Enhanced custom content blocks with UI for entering custom words/phrases to filter
+  - Added comprehensive mature content keyword list for automatic title-based detection
+  - Fixed content filtering to work "across all of them completely" for all rating levels
+  - Content filtering now applies to Popular Games, Recent Games, and Search results
+
+- **Enhanced Genre Filtering**
+  - Fixed genre filtering bypass in New Releases load more functionality
+  - Corrected server-side IGDB API syntax for genre exclusions
+  - Genre filtering now works consistently across Popular Games and Recent Games sections
+  - Fixed incorrect syntax from `genres != [id1,id2]` to proper `(genres != id1 & genres != id2)`
+
+- **Custom Content Blocks UI**
+  - Added complete Custom Content Blocks section to user preferences page
+  - Users can now enter custom words or phrases to filter from game titles and content warnings
+  - Real-time add/remove functionality with visual feedback
+  - Enhanced filtering works against both IGDB content warnings and game titles
+  - Persistent storage of custom blocks in user preferences
+
+- **User Registration System**
+  - Implemented complete user registration system for basic auth
+  - New users can self-register with username/password authentication
+  - Registration form with password confirmation and validation
+  - Automatic user creation in database with proper role assignment
+  - Enhanced authentication flow to support both existing and new users
+
+### Enhanced User Interface
+
+- **Homepage Grid Layout Improvements**
+  - Fixed oversized game covers when only one game displays on homepage
+  - Improved CSS grid layout from `1fr` to fixed `200px` max width with centering
+  - Added responsive grid system with `repeat(auto-fit, minmax(180px, 200px))`
+  - Removed maximum width constraints from main game container for better flexibility
+  - Better visual balance for varying numbers of games displayed
+
+- **Sidebar Enhancements**
+  - Added darker background (`bg-gray-800`) behind username button for better visibility
+  - Enhanced sidebar visual hierarchy and contrast
+  - Applied background styling to both collapsed and expanded sidebar states
+
+- **Profile Page Custom Content Blocks**
+  - Interactive input field for adding new content blocks
+  - Visual list of current blocked terms with remove functionality
+  - Real-time updates with optimistic UI updates
+  - Keyboard shortcuts (Enter to add) for better UX
+
+### Fixed
+
+- **Content Filtering Issues**
+  - Fixed missing `user_id` parameter in Popular Games API calls preventing content filtering
+  - Fixed `ReferenceError: skipESRB is not defined` errors across multiple functions
+  - Fixed content filtering not being applied during client-side pagination
+  - Fixed Recent Games API missing user preferences parameter
+  - Fixed Popular Games load more not respecting user ESRB preferences
+
+- **API and Database Issues**
+  - Fixed watchlist batch API `TypeError: watchlistStatuses.forEach is not a function`
+  - Removed incorrect use of `cacheUserPermissions` wrapper causing Map iteration failures
+  - Fixed user ID extraction logic across different authentication methods
+  - Enhanced user ID resolution for both basic auth and JWT sessions
+
+- **Genre Filtering Bypass**
+  - Fixed server-side genre exclusion syntax in IGDB API queries
+  - Fixed client-side fallback filtering not being applied consistently
+  - Resolved genre filtering bypass in New Releases load more functionality
+
+### Code Quality & Performance
+
+- **Major Code Deduplication**
+  - Created new `$lib/api/apiUtils.js` module consolidating duplicate API patterns
+  - Reduced Popular Games API from 110 to 88 lines (20% reduction)
+  - Reduced Recent Games API from 49 to 38 lines (22% reduction)
+  - Eliminated duplicate pagination, user preferences, and error handling code
+  - Consolidated API response building into reusable utilities
+
+- **Enhanced API Utilities**
+  - `parsePaginationParams()` for consistent pagination handling
+  - `loadUserPreferences()` for user preference loading with filter checks
+  - `handleApiError()` for standardized error handling and logging
+  - `buildPaginatedResponse()` for consistent API response formatting
+
+- **Removed Code Duplication**
+  - Removed duplicate `resolveAgeRatings` function from `igdb.js`
+  - Consolidated content rating logic into `contentRating.js`
+  - Eliminated ~200+ lines of duplicate code across API endpoints
+  - Improved maintainability and consistency
+
+### Enhanced
+
+- **Authentication System**
+  - Enhanced user ID extraction logic for both basic auth and JWT tokens
+  - Improved session handling across different authentication methods
+  - Better error handling for authentication failures
+  - Consistent user context across all API endpoints
+
+- **Content Rating System**
+  - Enhanced mature content keyword detection with comprehensive term list
+  - Improved title-based filtering accuracy
+  - Better integration between ESRB ratings and custom content blocks
+  - More robust content filtering across all game discovery sections
+
+- **User Preferences System**
+  - Enhanced user preferences loading with filter-specific checks
+  - Improved preference persistence and validation
+  - Better integration between client-side UI and server-side filtering
+  - Consistent preference application across all API endpoints
+
+### Technical Changes
+
+- **API Improvements**
+  - Standardized user preference loading across all game API endpoints
+  - Enhanced error handling with consistent logging and user feedback
+  - Improved pagination handling with reusable utilities
+  - Better separation of concerns between client and server code
+
+- **Database Optimizations**
+  - Enhanced user ID resolution logic for different authentication types
+  - Improved query patterns for user preference loading
+  - Better error handling for database operations
+  - Consistent user context extraction across endpoints
+
+- **Client-Side Enhancements**
+  - Added `getUserId()` helper function for consistent user context
+  - Enhanced API call patterns with proper user parameter passing
+  - Improved error handling and user feedback in UI components
+  - Better state management for user preferences
+
+### Migration Notes
+
+When upgrading from v1.1.4 to v1.2.0:
+
+1. **Content Filtering**:
+   - Content filtering is now properly enabled for all users automatically
+   - Custom content blocks UI is now available in user profile preferences
+   - No manual configuration required - filtering works out of the box
+
+2. **User Registration**:
+   - New user registration system allows self-service account creation
+   - Existing users are unaffected and authentication remains the same
+   - Registration is available at `/register` for new basic auth users
+
+3. **API Changes**:
+   - All game API endpoints now properly respect user content filtering preferences
+   - No client-side changes required - filtering is applied server-side
+   - Custom content blocks are automatically applied to search results
+
+4. **Database**:
+   - No database migrations required
+   - Existing user preferences work with new filtering system
+   - Custom content blocks use existing user preferences table structure
+
 ## [1.1.4] - 2025-09-26
 
 ### Major Changes

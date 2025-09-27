@@ -12,7 +12,7 @@
   import SEOHead from '../components/SEOHead.svelte';
   import LoadMoreButton from '../components/LoadMoreButton.svelte';
   import SkeletonLoader from '../components/SkeletonLoader.svelte';
-  import { goto, invalidate, invalidateAll } from '$app/navigation';
+  import { goto, invalidate, invalidateAll, replaceState } from '$app/navigation';
   import { slide, fade, scale } from 'svelte/transition';
   import { quintOut, backOut } from 'svelte/easing';
   import { beforeNavigate, afterNavigate } from '$app/navigation';
@@ -23,8 +23,8 @@
   import { toasts } from '$lib/stores/toast.js';
   import { getGameByIdClient, warmGameCacheClient } from '$lib/gameCache.js';
   import { rommService, watchlistService } from '$lib/clientServices.js';
-  import { metrics, prefetcher } from '$lib/performance.js';
   import { batchGetWatchlistStatus, updateWatchlistStatus, getCachedWatchlistStatus } from '$lib/watchlistStatus.js';
+  import { sidebarCollapsed } from '$lib/stores/sidebar.js';
   
   let { data } = $props();
   
@@ -32,6 +32,21 @@
   let newInLibrary = $state(data?.newInLibrary || []);
   let newReleases = $state(data?.newReleases || []);
   let popularGames = $state(data?.popularGames || []);
+
+  // Helper function to get user ID for API calls
+  function getUserId() {
+    if (!user) return null;
+
+    // Direct ID from user object
+    if (user.id) return user.id;
+
+    // Extract from Basic Auth sub
+    if (user.sub?.startsWith("basic_auth_")) {
+      return user.sub.replace("basic_auth_", "");
+    }
+
+    return null;
+  }
   
   // Progressive loading states to prevent image overload
   let showNewInLibrary = $state(true); // Show ROMM first
@@ -52,7 +67,6 @@
   
   // Loading states for Load More functionality
   let loadingNewInLibrary = $state(false);
-  let loadingROMMs = $state(false);
   let loadingNewReleases = $state(false);
   let loadingPopular = $state(false);
 
@@ -111,7 +125,98 @@
   let newReleasesExpanded = $state(true);
 
   let popularExpanded = $state(true);
-  
+
+  // Initial load limits - dynamically calculated based on viewport
+  let rommsShowMore = $state(false);
+  let newReleasesShowMore = $state(false);
+  let popularShowMore = $state(false);
+
+  // Calculate how many cards fit in exactly 2 rows based on viewport width
+  function calculateDynamicLimit(width) {
+    // Keep the original breakpoint system - CSS grid handles sidebar collapse space automatically
+    // Fixed breakpoints to ensure exactly 2 rows and prevent overflow
+    // Based on actual testing and user feedback for specific widths
+
+    let limit;
+
+    if (width >= 2000) {
+      limit = 18; // 9 per row × 2 rows for ultra-wide screens
+    } else if (width >= 1900) {
+      limit = 16; // 8 per row × 2 rows for very wide screens
+    } else if (width >= 1700) {
+      limit = 14; // 7 per row × 2 rows for wide screens (1765px)
+    } else if (width >= 1600) {
+      limit = 10; // 5 per row × 2 rows for wide screens (1600px) - FIXED
+    } else if (width >= 1400) {
+      limit = 10; // 5 per row × 2 rows for xl screens (1395px)
+    } else if (width >= 1260) {
+      limit = 8;  // 4 per row × 2 rows for xl screens (1260-1379px)
+    } else if (width >= 975) {
+      limit = 10; // 5 per row × 2 rows for wide lg screens (975-1259px)
+    } else if (width >= 780) {
+      limit = 8;  // 4 per row × 2 rows for lg screens (780px+)
+    } else if (width >= 700) {
+      limit = 8;  // 4 per row × 2 rows for md-lg screens (700-779px)
+    } else {
+      limit = 6;  // 6 cards for small screens (≤699px) - CSS auto-fit with 150px minimum under 640px
+    }
+
+    return limit;
+  }
+
+  // Dynamic viewport-based display limits
+  let viewportWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
+  // Calculate initial dynamic limit immediately using current viewport
+  function getInitialLimit() {
+    if (typeof window !== 'undefined') {
+      const width = window.innerWidth;
+      const limit = calculateDynamicLimit(width);
+      // Initial limit calculated for viewport
+      return limit;
+    }
+    // Server-side fallback applied
+    return 10; // server-side fallback to show 2 rows
+  }
+
+  let dynamicDisplayLimit = $state(getInitialLimit());
+
+
+  // Update dynamic limit when viewport changes - use onMount for better reliability
+  onMount(() => {
+    if (browser) {
+      const updateLimit = () => {
+        viewportWidth = window.innerWidth;
+        const newLimit = calculateDynamicLimit(viewportWidth);
+        // Dynamic limit updated for viewport
+        dynamicDisplayLimit = newLimit;
+      };
+
+      // Force immediate calculation on mount
+      updateLimit();
+
+      window.addEventListener('resize', updateLimit);
+
+      return () => window.removeEventListener('resize', updateLimit);
+    }
+  });
+
+  // Derived arrays for display limiting with dynamic calculation
+  // Always ensure we don't exceed the dynamic limit for initial display
+  let displayedRomms = $derived(
+    (() => {
+      const limit = rommsShowMore ? newInLibrary.length : Math.min(dynamicDisplayLimit, newInLibrary.length);
+      // ROMM display limit calculated
+      return rommsShowMore ? newInLibrary : newInLibrary.slice(0, Math.min(dynamicDisplayLimit, newInLibrary.length));
+    })()
+  );
+  let displayedNewReleases = $derived(
+    newReleasesShowMore ? newReleases : newReleases.slice(0, Math.min(dynamicDisplayLimit, newReleases.length))
+  );
+  let displayedPopular = $derived(
+    popularShowMore ? popularGames : popularGames.slice(0, Math.min(dynamicDisplayLimit, popularGames.length))
+  );
+
   // Scroll to top button state
   let showScrollToTop = $state(false);
   
@@ -125,7 +230,10 @@
   
   // Navigation and scroll management
   let savedScrollPosition = $state(0);
-  
+  let isNavigatingAway = $state(false); // Guard to prevent saving during navigation
+  let lastSaveTime = 0; // Track last save to prevent rapid duplicates
+  let scrollPositionLocked = false; // Lock to prevent any saves after initial save
+
   // Modal state
   let modalOpen = $state(false);
   let modalGame = $state(null);
@@ -180,33 +288,138 @@
       rommsExpanded,
       newReleasesExpanded,
       popularExpanded,
+      // Add load more states
+      rommsShowMore,
+      newReleasesShowMore,
+      popularShowMore,
       timestamp: Date.now(), // Add timestamp for cache invalidation
       pageLoadTimestamp // Add page load timestamp to prevent cross-session restoration
     };
     
     
+    // Save homepage state silently
+
     // Save state with content and timestamp
     sessionStorage.setItem('homepage_content_state', JSON.stringify(state));
   }
   
   function saveScrollPosition() {
     if (!browser) return;
-    savedScrollPosition = window.scrollY;
+
+    // If scroll position is locked (already saved for navigation), don't save again
+    if (scrollPositionLocked) {
+      return;
+    }
+
+    const currentScroll = window.scrollY;
+    const now = Date.now();
+
+    // Prevent rapid duplicate saves (within 100ms)
+    if (now - lastSaveTime < 100) {
+      console.log(`⚠️ Skipping rapid duplicate save (${now - lastSaveTime}ms since last save)`);
+      return;
+    }
+
+
+    // Always save the current scroll position during navigation
+    const existingSaved = sessionStorage.getItem('homepage_scroll_position');
+
+    // Check if scroll position has changed significantly from last save
+    if (existingSaved && Math.abs(parseInt(existingSaved) - currentScroll) < 50 && isNavigatingAway) {
+      console.log(`⚠️ Scroll position hasn't changed much (${existingSaved}px → ${currentScroll}px), skipping save`);
+      return;
+    }
+
+    savedScrollPosition = currentScroll;
     sessionStorage.setItem('homepage_scroll_position', savedScrollPosition.toString());
+    lastSaveTime = now;
+
+    // Also save in history state for browser back button
+    if (browser) {
+      replaceState('', { scrollY: savedScrollPosition });
+    }
+
+    // Scroll position saved
   }
   
   function restoreScrollPosition() {
     if (!browser) return;
-    
-    const savedScroll = sessionStorage.getItem('homepage_scroll_position');
-    if (savedScroll) {
-      const scrollY = parseInt(savedScroll, 10);
-      // Use requestAnimationFrame to ensure DOM is ready
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: scrollY, behavior: 'instant' });
-        // Clear the saved scroll position after restoring
-        sessionStorage.removeItem('homepage_scroll_position');
-      });
+
+    // Try to get scroll position from multiple sources
+    let scrollY = null;
+
+    // First, try history state
+    if (window.history.state?.scrollY) {
+      scrollY = window.history.state.scrollY;
+      console.log(`📜 Found scroll in history state: ${scrollY}px`);
+    }
+
+    // Fallback to sessionStorage
+    if (!scrollY) {
+      const savedScroll = sessionStorage.getItem('homepage_scroll_position');
+      if (savedScroll) {
+        const parsedScroll = parseInt(savedScroll, 10);
+        // Only use non-zero values
+        if (parsedScroll > 0) {
+          scrollY = parsedScroll;
+          console.log(`💾 Found scroll in sessionStorage: ${scrollY}px`);
+        } else {
+          console.log(`⚠️ Ignoring zero scroll position from sessionStorage`);
+        }
+      }
+    }
+
+    if (scrollY && scrollY > 0) {
+      console.log(`🔄 Restoring scroll position to ${scrollY}px`);
+
+      // Enhanced approach: wait for content to be visible before scrolling
+      const attemptRestore = (attempt = 1, maxAttempts = 20) => {
+        // Check for multiple indicators that content is ready
+        const hasContent = document.querySelector('[data-section="romms"], [data-section="new-releases"]');
+        const hasCards = document.querySelectorAll('.poster-card').length > 0;
+        const bodyHeight = document.body.scrollHeight > window.innerHeight;
+
+        const isReady = (hasContent || hasCards) && bodyHeight;
+
+        if (isReady || attempt >= maxAttempts) {
+          // Wait for next frame to ensure layout is complete
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              // Force scroll with fallback methods
+              window.scrollTo(0, scrollY);
+
+              // Fallback: use scrollTop if scrollTo doesn't work
+              setTimeout(() => {
+                if (window.scrollY < scrollY - 50) {
+                  document.documentElement.scrollTop = scrollY;
+                  document.body.scrollTop = scrollY;
+                }
+
+                const actualScroll = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop;
+                // Scroll restored successfully
+
+                // Only clear if we successfully restored the position
+                if (Math.abs(actualScroll - scrollY) < 50) {
+                  sessionStorage.removeItem('homepage_scroll_position');
+                } else {
+                  console.log(`⚠️ Scroll position mismatch (target: ${scrollY}, actual: ${actualScroll}), retrying...`);
+                  // Try one more time after a delay
+                  setTimeout(() => {
+                    window.scrollTo(0, scrollY);
+                  }, 500);
+                }
+              }, 100);
+            });
+          });
+        } else {
+          console.log(`⏳ Content not ready (hasContent: ${!!hasContent}, hasCards: ${hasCards}, bodyHeight: ${bodyHeight}), attempt ${attempt}/${maxAttempts}`);
+          setTimeout(() => attemptRestore(attempt + 1, maxAttempts), 100);
+        }
+      };
+
+      attemptRestore();
+    } else {
+      console.log(`❌ No saved scroll position found`);
     }
   }
   
@@ -219,22 +432,22 @@
     try {
       const cachedData = JSON.parse(savedState);
       
-      // Check if cache is still valid (5 minutes) and from current page load session
+      // Check if cache is still valid (5 minutes)
       const cacheAge = Date.now() - (cachedData.timestamp || 0);
       const maxCacheAge = 5 * 60 * 1000; // 5 minutes
-      const isFromCurrentSession = cachedData.pageLoadTimestamp === pageLoadTimestamp;
-      
+
       if (cacheAge > maxCacheAge) {
         sessionStorage.removeItem('homepage_content_state');
         return;
       }
-      
-      // For refresh scenarios, be more lenient with session validation
-      // Only clear if the state is significantly old (from a much earlier session)
-      const sessionAge = pageLoadTimestamp - (cachedData.pageLoadTimestamp || 0);
-      const maxSessionAge = 10 * 60 * 1000; // 10 minutes
-      
-      if (!isFromCurrentSession && sessionAge > maxSessionAge) {
+
+      // Only clear if the state is from a much earlier browser session
+      // For navigation-based state restoration, be very lenient
+      const sessionAge = Math.abs(pageLoadTimestamp - (cachedData.pageLoadTimestamp || 0));
+      const maxSessionAge = 30 * 60 * 1000; // 30 minutes - very generous for browser tab sessions
+
+      if (sessionAge > maxSessionAge) {
+        console.log(`🗑️ Clearing very old homepage state (${Math.round(sessionAge / 60000)} minutes old)`);
         sessionStorage.removeItem('homepage_content_state');
         return;
       }
@@ -243,6 +456,7 @@
       // Set flags to skip animations and progressive loading during restoration
       skipAnimations = true;
       isNavigatingBack = true;
+      isRestoringState = true;
       
       // Restore games data if cached data has different content or pagination state
       if (cachedData.newInLibrary && (cachedData.newInLibrary.length > newInLibrary.length || cachedData.newInLibraryPage > 1)) {
@@ -263,12 +477,18 @@
       if (cachedData.rommsExpanded !== undefined) rommsExpanded = cachedData.rommsExpanded;
       if (cachedData.newReleasesExpanded !== undefined) newReleasesExpanded = cachedData.newReleasesExpanded;
       if (cachedData.popularExpanded !== undefined) popularExpanded = cachedData.popularExpanded;
+
+      // Restore load more states
+      if (cachedData.rommsShowMore !== undefined) rommsShowMore = cachedData.rommsShowMore;
+      if (cachedData.newReleasesShowMore !== undefined) newReleasesShowMore = cachedData.newReleasesShowMore;
+      if (cachedData.popularShowMore !== undefined) popularShowMore = cachedData.popularShowMore;
       
       // Sections are already shown immediately by onMount/afterNavigate hooks
       
       // Re-enable animations after a brief delay
       setTimeout(() => {
         skipAnimations = false;
+        isRestoringState = false;
         // Don't clear immediately - let afterNavigate handle it if needed
       }, 300);
       
@@ -429,65 +649,61 @@
   }
   
   function handleModalViewDetails({ detail }) {
+    // Save state before navigation
+    saveHomepageState();
+    saveScrollPosition();
+
     // Close modal and redirect to details page
     handleCloseModal();
     goto(`/game/${detail.game.igdb_id || detail.game.id}`);
   }
-  
-  async function loadMoreNewInLibrary() {
-    if (loadingNewInLibrary || !rommAvailable) return;
-    
-    loadingNewInLibrary = true;
-    try {
-      const response = await fetch(`/api/romm/recent?page=${newInLibraryPage + 1}&limit=${ITEMS_PER_PAGE}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.games && data.games.length > 0) {
-          // Add games one by one with staggered animation
-          await addGamesWithStagger(data.games, newInLibrary, (updatedGames) => {
-            newInLibrary = updatedGames;
-          });
-          newInLibraryPage += 1;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load more library games:', error);
-    } finally {
-      loadingNewInLibrary = false;
+
+  function handleGameCardClick(event) {
+    // Save homepage state and scroll position before navigation
+    const currentScroll = window.scrollY;
+    console.log(`🎮 GameCard clicked at scroll position ${currentScroll}px`);
+
+    // Set guard immediately to prevent any duplicate saves
+    isNavigatingAway = true;
+
+    // Save state and position
+    saveHomepageState();
+    saveScrollPosition();
+
+    // Lock scroll position to prevent any further saves during navigation
+    scrollPositionLocked = true;
+    // Lock scroll position to prevent duplicate saves
+
+    // Keep guard active until well after navigation completes
+    setTimeout(() => {
+      isNavigatingAway = false;
+      // Don't unlock here - let afterNavigate handle it when we return
+    }, 1000);
+
+    // Handle navigation for view-details events (from ROMM GameCards with preserveState)
+    if (event?.detail?.game) {
+      const game = event.detail.game;
+      const gameId = game.igdb_id || game.id;
+      goto(`/game/${gameId}`, { noScroll: false, replaceState: false });
     }
   }
   
-  async function loadMoreROMs() {
-    if (loadingROMMs || !rommAvailable) return;
-    
-    loadingROMMs = true;
-    try {
-      const response = await fetch(`/api/romm/recent?page=${rommsPage + 1}&limit=${ITEMS_PER_PAGE}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.games && data.games.length > 0) {
-          // Add games one by one with staggered animation
-          await addGamesWithStagger(data.games, newInLibrary, (updatedGames) => {
-            newInLibrary = updatedGames;
-          });
-          rommsPage += 1;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load more ROMs:', error);
-    } finally {
-      loadingROMMs = false;
-    }
-  }
-  
+  // Removed unused functions loadMoreNewInLibrary and loadMoreROMs
+
   async function loadMoreNewReleases() {
     if (loadingNewReleases) return;
-    
+
+    // First check if we have hidden content to show
+    if (!newReleasesShowMore && newReleases.length > dynamicDisplayLimit) {
+      newReleasesShowMore = true;
+      return;
+    }
+
     loadingNewReleases = true;
     try {
       // Performance timing for load more operation
       const startTime = performance.now();
-      
+
       // Try to use preloaded data first
       let data = newReleasesPreloader.getCached();
       
@@ -503,7 +719,7 @@
         // Prefetch images for new games
         data.games.forEach(game => {
           if (game.cover_url) {
-            prefetcher.prefetch(game.cover_url, 'image');
+            // Temporarily disabled: prefetcher.prefetch(game.cover_url, 'image');
           }
         });
         
@@ -514,9 +730,6 @@
         newReleasesPage += 1;
       }
       
-      // Log performance timing
-      const duration = performance.now() - startTime;
-      console.log(`⏱️ load-more-new-releases: ${duration.toFixed(2)}ms`);
     } catch (error) {
       console.error('Failed to load more new releases:', error);
     } finally {
@@ -526,12 +739,18 @@
   
   async function loadMorePopular() {
     if (loadingPopular) return;
-    
+
+    // First check if we have hidden content to show
+    if (!popularShowMore && popularGames.length > dynamicDisplayLimit) {
+      popularShowMore = true;
+      return;
+    }
+
     loadingPopular = true;
     try {
       // Performance timing for load more operation
       const startTime = performance.now();
-      
+
       // Clear any stale cached data for the current page
       const currentCacheKey = `popular-games-${popularPage + 1}`;
       
@@ -546,7 +765,9 @@
       
       if (!data) {
         // Fallback to manual fetch if no valid preloaded data
-        const response = await fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}`);
+        const userId = getUserId();
+        const userParam = userId ? `&user_id=${userId}` : '';
+        const response = await fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}${userParam}`);
         if (response.ok) {
           data = await response.json();
         }
@@ -556,7 +777,7 @@
         // Prefetch images for new games
         data.games.forEach(game => {
           if (game.cover_url) {
-            prefetcher.prefetch(game.cover_url, 'image');
+            // Temporarily disabled: prefetcher.prefetch(game.cover_url, 'image');
           }
         });
         
@@ -585,19 +806,61 @@
   // Simplified navigation hooks - reduce interference with browser history
   beforeNavigate((navigation) => {
     if (!browser) return;
-    
+
+    // Only log when going to game details
+    if (navigation.to?.url.pathname.startsWith('/game/')) {
+      console.log(`🚀 Navigating to game details`);
+    }
+
     // Only save state when leaving the homepage for a game detail page
     if (window.location.pathname === '/' && navigation.to?.url.pathname.startsWith('/game/')) {
-      saveHomepageState();
-      saveScrollPosition();
+      // Check if already saved by GameCard click handler
+      const existingSaved = sessionStorage.getItem('homepage_scroll_position');
+      const currentScroll = window.scrollY;
+
+      // Only save if not already saved or if scroll position has significantly changed
+      if (!existingSaved || Math.abs(parseInt(existingSaved) - currentScroll) > 100) {
+        console.log(`💾 Saving state in beforeNavigate (fallback for non-GameCard navigation)`);
+        isNavigatingAway = true; // Set guard before saving
+        saveHomepageState();
+        saveScrollPosition();
+        scrollPositionLocked = true; // Lock after save
+        // Lock scroll position to prevent duplicate saves
+      } else {
+        // State already saved, skipping
+        isNavigatingAway = true; // Still set guard to prevent other saves
+        scrollPositionLocked = true; // Lock to prevent any further saves
+      }
+
+      // Keep the guard active briefly to prevent duplicate saves
+      setTimeout(() => {
+        isNavigatingAway = false;
+        // Don't unlock here - let afterNavigate handle it when we return
+      }, 500);
     }
   });
   
   afterNavigate(async (navigation) => {
     if (!browser) return;
 
+    // Reset navigation guard and unlock when arriving at the page
+    isNavigatingAway = false;
+
+    // Unlock scroll position when returning to homepage
+    if (window.location.pathname === '/') {
+      scrollPositionLocked = false;
+      // Unlock scroll position on homepage
+    }
+
+    // Only log navigation from game details
+    if (navigation.from?.url.pathname.startsWith('/game/')) {
+      // Navigation from game detail detected
+    }
+
     // Only restore when returning from a game detail page
     if (window.location.pathname === '/' && navigation.from?.url.pathname.startsWith('/game/')) {
+      // Detected back navigation from game details
+
       // Set flag that we're navigating back
       isNavigatingBack = true;
 
@@ -609,16 +872,16 @@
       // Attempt to restore state if we have any
       const hasSavedState = sessionStorage.getItem('homepage_content_state');
       if (hasSavedState) {
+        // Restoring homepage state
         restoreHomepageState();
-        // Clear state after restoration attempt to prevent reuse
-        setTimeout(() => {
-          sessionStorage.removeItem('homepage_content_state');
-        }, 500);
+        // Don't clear state immediately - keep it for multiple navigations
+        // It will be cleared when we navigate away again or after a longer timeout
       }
 
+      // Restore scroll position with built-in content detection
       setTimeout(() => {
         restoreScrollPosition();
-      }, 50); // Reduced timeout
+      }, 150);
     }
   });
   
@@ -630,26 +893,63 @@
   });
   
   onMount(() => {
+    // Unlock scroll position on mount (for page refreshes or direct navigation)
+    scrollPositionLocked = false;
+
+    // Disable browser's automatic scroll restoration so we can handle it manually
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+      // Set scroll restoration to manual
+    }
+
+    // Handle browser back button navigation
+    const handlePopState = (event) => {
+      console.log(`🔄 Browser back button detected`, event.state);
+      // Small delay to let SvelteKit handle the navigation first
+      setTimeout(() => {
+        if (window.location.pathname === '/') {
+          // Returned to homepage via browser back button
+          // Check if we have scroll position in state or storage
+          if (event.state?.scrollY || sessionStorage.getItem('homepage_scroll_position')) {
+            // Detected saved scroll position, restoring
+            restoreScrollPosition();
+          }
+        }
+      }, 100);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
     // Restore state when coming back to homepage
     const performance = window.performance?.getEntriesByType('navigation')[0];
     const isPageRefresh = performance?.type === 'reload';
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
+
     // Check if we're coming back from navigation (has saved state)
     const hasSavedState = sessionStorage.getItem('homepage_content_state');
-    
-    
+    const hasSavedScroll = sessionStorage.getItem('homepage_scroll_position');
+
+    // If we have saved scroll position, we're likely returning from somewhere
+    if (hasSavedScroll && !isPageRefresh) {
+      // Found saved scroll position, attempting restore
+      // Wait for initial content to load
+      setTimeout(() => {
+        restoreScrollPosition();
+      }, 300);
+    }
+
+
     if (isPageRefresh) {
       // On page refresh, don't aggressively clear state - let restoreHomepageState handle validation
       isNavigatingBack = false;
     } else if (hasSavedState) {
       // We have saved state (either from navigation or from current session after refresh)
-      
+
       // Show all sections immediately when we might restore state
       showNewInLibrary = true;
-      showNewReleases = true; 
+      showNewReleases = true;
       showPopularGames = true;
-      
+
       // Try to restore state
       if (isMobile) {
         setTimeout(() => {
@@ -662,6 +962,15 @@
       // Fresh load - ensure navigation flag is false for progressive loading
       isNavigatingBack = false;
     }
+
+    // Cleanup event listener on component destroy
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      // Restore browser's default scroll behavior
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'auto';
+      }
+    };
   });
   
   // Handle scroll to top button visibility and save scroll position periodically
@@ -818,7 +1127,7 @@
               // Prefetch critical images for viewport games
               const img = card.querySelector('img[data-src]');
               if (img?.dataset.src) {
-                prefetcher.prefetch(img.dataset.src, 'image', true);
+                // Temporarily disabled: prefetcher.prefetch(img.dataset.src, 'image', true);
               }
             }
           }
@@ -843,7 +1152,7 @@
       try {
         // Start with popular games (most likely to be viewed)
         if (popularGames.length > 0) {
-          console.log('🎮 Enhancing popular games with ROMM data...');
+          // Enhancing popular games with ROMM data
           const enhancedPopular = await rommService.crossReference(popularGames);
           popularGames = enhancedPopular;
         }
@@ -881,24 +1190,28 @@
   ));
   
   const popularGamesPreloader = $derived(createHoverPreloader(
-    () => fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}`).then(r => r.json()),
+    () => {
+      const userId = getUserId();
+      const userParam = userId ? `&user_id=${userId}` : '';
+      return fetch(`/api/games/popular?page=${popularPage + 1}&limit=${ITEMS_PER_PAGE}${userParam}`).then(r => r.json());
+    },
     { delay: 200, cacheKey: `popular-games-${popularPage + 1}` }
   ));
 </script>
 
 <SEOHead 
-  title="Discover - GG Requestz"
+  title="Discover - G.G Requestz"
   description="Discover new games, search our extensive library, and request your favorites. Your ultimate gaming companion."
-  ogTitle="GG Requestz - Discover Amazing Games"
+  ogTitle="G.G Requestz - Discover Amazing Games"
   ogDescription="Explore our extensive game library with powerful search and filtering. Request your favorite games and build your personal watchlist."
 />
 
-<div class="px-8 py-6">
+<div class="px-8 py-6 max-w-full">
   
   <!-- Mobile Logo Section -->
   <div class="lg:hidden text-center mb-8">
     <h1 class="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-      GG Requestz
+      G.G Requestz
     </h1>
     <p class="text-gray-400 mt-2 text-lg">Discover & Request Amazing Games</p>
   </div>
@@ -917,7 +1230,7 @@
     
     <!-- New in Library from ROMM -->
 {#if rommAvailable && showNewInLibrary}
-  <section class="mb-10">
+  <section class="mb-10" data-section="romms">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
       <div class="flex items-center gap-3">
         <h2 class="text-4xl font-bold text-white">New in Library</h2>
@@ -952,44 +1265,66 @@
 
     {#if newInLibrary.length > 0}
       {#if rommsExpanded}
-        <!-- Expanded vertical grid layout -->
-        <div 
-          class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4 transition-all duration-500 ease-out"
+        <!-- Expanded vertical grid layout with dynamic columns -->
+        <div
+          class="responsive-grid gap-3 sm:gap-4 xl:gap-6 transition-all duration-500 ease-out {$sidebarCollapsed ? 'sidebar-collapsed' : ''}"
           in:slide={{ duration: 500, easing: quintOut, axis: 'y' }}
         >
-          {#each newInLibrary as game, index}
-            <div 
+          {#each displayedRomms as game, index}
+            <div
               in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
             >
-              <GameCard 
-                {game} 
+              <GameCard
+                {game}
                 {user}
                 isInWatchlist={isGameInWatchlist(game)}
+                preserveState={true}
                 enablePreloading={true}
                 on:request={handleGameRequest}
                 on:watchlist={handleWatchlist}
                 on:show-modal={handleShowModal}
+                on:click={handleGameCardClick}
+                on:view-details={handleGameCardClick}
               />
             </div>
           {/each}
         </div>
+
+        <!-- Load More Button for ROMM section -->
+        {#if !rommsShowMore && newInLibrary.length > dynamicDisplayLimit}
+          <div class="text-center mt-6">
+            <button
+              type="button"
+              onclick={() => rommsShowMore = true}
+              class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 mx-auto"
+            >
+              Load More ({newInLibrary.length - dynamicDisplayLimit} remaining)
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+          </div>
+        {/if}
       {:else}
         <!-- Default horizontal scroll layout -->
-        <div 
-          class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[420px]" 
+        <div
+          class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[420px]"
           bind:this={rommsScroll}
           in:slide={{ duration: 300, easing: quintOut }}
         >
           {#each newInLibrary as game, index}
             <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
-              <GameCard 
-                {game} 
+              <GameCard
+                {game}
                 {user}
                 isInWatchlist={isGameInWatchlist(game)}
+                preserveState={true}
                 enablePreloading={true}
                 on:request={handleGameRequest}
                 on:watchlist={handleWatchlist}
                 on:show-modal={handleShowModal}
+                on:click={handleGameCardClick}
+                on:view-details={handleGameCardClick}
               />
             </div>
           {/each}
@@ -997,8 +1332,8 @@
       {/if}
     {:else}
       <!-- Loading skeleton when no games yet -->
-      <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
-        {#each Array(8) as _, i}
+      <div class="responsive-grid gap-3 sm:gap-4 xl:gap-6 {$sidebarCollapsed ? 'sidebar-collapsed' : ''}">
+        {#each Array(10) as _, i}
           <SkeletonLoader variant="card" rounded="lg" />
         {/each}
       </div>
@@ -1010,7 +1345,7 @@
 
     <!-- New Releases from IGDB -->
     {#if showNewReleases}
-    <section class="mb-10">
+    <section class="mb-10" data-section="new-releases">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-4xl font-bold text-white">New Releases</h2>
         <!-- Desktop scroll arrows - hidden when expanded -->
@@ -1040,12 +1375,12 @@
       
       {#if newReleases.length > 0}
         {#if newReleasesExpanded}
-          <!-- Expanded vertical grid layout with smaller cards -->
-          <div 
-            class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4 transition-all duration-500 ease-out"
+          <!-- Expanded vertical grid layout with dynamic responsive columns -->
+          <div
+            class="responsive-grid gap-3 sm:gap-4 xl:gap-6 transition-all duration-500 ease-out {$sidebarCollapsed ? 'sidebar-collapsed' : ''}"
             in:slide={{ duration: 500, easing: quintOut, axis: 'y' }}
           >
-            {#each newReleases as game, index}
+            {#each displayedNewReleases as game, index}
               <div 
                 in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
               >
@@ -1061,10 +1396,11 @@
               </div>
             {/each}
           </div>
+
         {:else}
           <!-- Default horizontal scrolling layout -->
-          <div 
-            class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[400px]" 
+          <div
+            class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[400px]"
             bind:this={newReleasesScroll}
             in:slide={{ duration: 300, easing: quintOut }}
           >
@@ -1133,12 +1469,12 @@
       
       {#if popularGames.length > 0}
         {#if popularExpanded}
-          <!-- Expanded vertical grid layout with smaller cards -->
-          <div 
-            class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4 transition-all duration-500 ease-out"
+          <!-- Expanded vertical grid layout with dynamic responsive columns -->
+          <div
+            class="responsive-grid gap-3 sm:gap-4 xl:gap-6 transition-all duration-500 ease-out {$sidebarCollapsed ? 'sidebar-collapsed' : ''}"
             in:slide={{ duration: 500, easing: quintOut, axis: 'y' }}
           >
-            {#each popularGames as game, index}
+            {#each displayedPopular as game, index}
               <div 
                 in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
               >
@@ -1156,12 +1492,12 @@
           </div>
         {:else}
           <!-- Default horizontal scrolling layout -->
-          <div 
-            class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[420px]" 
+          <div
+            class="flex overflow-x-auto scrollbar-hide gap-6 pb-8 px-1 pt-2 transition-all duration-300 ease-out min-h-[420px]"
             bind:this={popularScroll}
             in:slide={{ duration: 300, easing: quintOut }}
           >
-            {#each popularGames as game, index}
+            {#each displayedPopular as game, index}
               <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
                 <GameCard 
                   {game} 
@@ -1177,15 +1513,17 @@
           </div>
         {/if}
         
-        <!-- Load More Button -->
-        <div class="flex justify-center mt-6">
-          <LoadMoreButton
-            loading={loadingPopular}
-            disabled={loadingPopular}
-            preloader={popularGamesPreloader}
-            on:load={loadMorePopular}
-          />
-        </div>
+        <!-- Load More Button (only show if there are more items or in expanded mode) -->
+        {#if popularExpanded}
+          <div class="flex justify-center mt-6">
+            <LoadMoreButton
+              loading={loadingPopular}
+              disabled={loadingPopular}
+              preloader={popularGamesPreloader}
+              on:load={loadMorePopular}
+            />
+          </div>
+        {/if}
       {:else}
         <div class="text-center py-8 text-gray-400">
           <p>No popular games available</p>
@@ -1198,7 +1536,7 @@
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-4xl font-bold text-white">Popular Games</h2>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+      <div class="responsive-grid gap-3 sm:gap-4 xl:gap-6 {$sidebarCollapsed ? 'sidebar-collapsed' : ''}">
         {#each Array(8) as _, i}
           <SkeletonLoader variant="card" rounded="lg" />
         {/each}
@@ -1369,10 +1707,96 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  
+
   /* Hide scrollbar for IE, Edge and Firefox */
   .scrollbar-hide {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+  }
+
+  /* Responsive grid with dynamic columns - much smaller max to prevent oversized covers */
+  .responsive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 200px));
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Responsive breakpoints with much smaller max widths */
+  @media (max-width: 640px) {
+    .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 170px));
+    }
+  }
+
+  @media (min-width: 640px) and (max-width: 768px) {
+    .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(140px, 180px));
+    }
+  }
+
+  @media (min-width: 768px) and (max-width: 1024px) {
+    .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 190px));
+    }
+  }
+
+  @media (min-width: 1024px) and (max-width: 1536px) {
+    .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 200px));
+    }
+  }
+
+  @media (min-width: 1536px) and (max-width: 2048px) {
+    .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 220px));
+    }
+  }
+
+  @media (min-width: 2048px) {
+    .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 240px));
+    }
+  }
+
+  /* Sidebar collapsed optimizations - very compact max widths */
+  .sidebar-collapsed .responsive-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 180px));
+  }
+
+  .sidebar-collapsed .responsive-grid {
+    @media (max-width: 640px) {
+      grid-template-columns: repeat(auto-fit, minmax(140px, 160px));
+    }
+  }
+
+  .sidebar-collapsed .responsive-grid {
+    @media (min-width: 640px) and (max-width: 768px) {
+      grid-template-columns: repeat(auto-fit, minmax(130px, 170px));
+    }
+  }
+
+  .sidebar-collapsed .responsive-grid {
+    @media (min-width: 768px) and (max-width: 1024px) {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 180px));
+    }
+  }
+
+  .sidebar-collapsed .responsive-grid {
+    @media (min-width: 1024px) and (max-width: 1536px) {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 180px));
+    }
+  }
+
+  .sidebar-collapsed .responsive-grid {
+    @media (min-width: 1536px) and (max-width: 2048px) {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 200px));
+    }
+  }
+
+  .sidebar-collapsed .responsive-grid {
+    @media (min-width: 2048px) {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 220px));
+    }
   }
 </style>

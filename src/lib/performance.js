@@ -6,9 +6,16 @@
 // Import lightweight lazy loader immediately
 export { lazyLoader } from "./performance/lazyLoader.js";
 
-// Export actual classes for testing
-export { ResourcePrefetcher } from "./performance/prefetcher.js";
-export { PerformanceMetrics } from "./performance/metrics.js";
+// Export actual classes for testing - using dynamic imports to avoid bundling issues
+export async function getResourcePrefetcher() {
+  const module = await import("./performance/prefetcher.js");
+  return module.ResourcePrefetcher;
+}
+
+export async function getPerformanceMetrics() {
+  const module = await import("./performance/metrics.js");
+  return module.PerformanceMetrics;
+}
 
 // Lazy load heavy utilities only when needed
 let _prefetcher = null;

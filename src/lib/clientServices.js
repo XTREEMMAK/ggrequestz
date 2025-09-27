@@ -215,9 +215,6 @@ export class WatchlistService {
         if (response.status === 400) {
           const errorData = await response.json().catch(() => null);
           if (errorData?.error === "Game is already in your watchlist") {
-            console.log(
-              "🔍 WATCHLIST SERVICE - Game already in watchlist, treating as success",
-            );
             // Clear cache to force fresh data and treat as success
             this.clearCache();
             return true;

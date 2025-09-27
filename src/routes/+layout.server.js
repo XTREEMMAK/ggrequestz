@@ -2,7 +2,11 @@
  * Layout data loader - handles authentication and global data
  */
 
-import { getSession } from "$lib/auth.server.js";
+import {
+  getSession,
+  getUserRoles,
+  getUserPermissions,
+} from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { isRommAvailable } from "$lib/romm.server.js";
 import { query, customNavigation } from "$lib/database.js";
@@ -11,9 +15,10 @@ import {
   isBasicAuthEnabled,
   getBasicAuthUser,
 } from "$lib/basicAuth.js";
+import { withCache } from "$lib/cache.js";
 
 /**
- * Filter navigation items based on user roles and visibility settings
+ * Filter navigation items based on user roles and visibility settings (with caching)
  * @param {Array} navItems - Array of navigation items
  * @param {Object} user - User object with roles
  * @returns {Promise<Array>} - Filtered navigation items
@@ -23,50 +28,8 @@ async function filterNavigationByRole(navItems, user) {
 
   const filteredItems = [];
 
-  // Get user's roles for role-based filtering
-  let userRoles = [];
-  try {
-    if (user.auth_type === "basic") {
-      // For basic auth users, get roles from database
-      const userResult = await query(
-        "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [user.id],
-      );
-      if (userResult.rows.length > 0) {
-        const rolesResult = await query(
-          `
-          SELECT r.name 
-          FROM ggr_roles r
-          JOIN ggr_user_roles ur ON r.id = ur.role_id
-          WHERE ur.user_id = $1 AND ur.is_active = true AND r.is_active = true
-        `,
-          [user.id],
-        );
-        userRoles = rolesResult.rows.map((row) => row.name);
-      }
-    } else {
-      // For Authentik users, get roles from database
-      const userResult = await query(
-        "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub],
-      );
-      if (userResult.rows.length > 0) {
-        const rolesResult = await query(
-          `
-          SELECT r.name 
-          FROM ggr_roles r
-          JOIN ggr_user_roles ur ON r.id = ur.role_id
-          WHERE ur.user_id = $1 AND ur.is_active = true AND r.is_active = true
-        `,
-          [userResult.rows[0].id],
-        );
-        userRoles = rolesResult.rows.map((row) => row.name);
-      }
-    }
-  } catch (error) {
-    console.warn("Failed to get user roles for navigation filtering:", error);
-    userRoles = [];
-  }
+  // Get user's roles using cached function
+  const userRoles = await getUserRoles(user);
 
   // Role hierarchy (highest to lowest)
   const roleHierarchy = ["admin", "manager", "moderator", "user", "viewer"];
@@ -185,55 +148,22 @@ export async function load({ request, cookies }) {
     // Get additional data if user is authenticated
     if (user) {
       try {
-        // For basic auth users, check permissions directly
-        if (user.auth_type === "basic") {
-          userPermissions.isAdmin = user.is_admin || false;
-        } else {
-          // For Authentik users, get user's local ID and check permissions
-          try {
-            const userResult = await query(
-              "SELECT id, email, is_admin FROM ggr_users WHERE authentik_sub = $1",
-              [user.sub],
-            );
-
-            if (userResult.rows.length > 0) {
-              const localUserId = userResult.rows[0].id;
-              const dbUser = userResult.rows[0];
-
-              // Check if user has direct is_admin flag set
-              if (dbUser.is_admin) {
-                userPermissions.isAdmin = true;
-              } else {
-                // Check role-based permissions
-                userPermissions.isAdmin = await userHasPermission(
-                  localUserId,
-                  "admin.panel",
-                );
-              }
-            } else {
-            }
-          } catch (dbError) {
-            console.error(
-              `❌ AUTH DEBUG: Database error for Authentik user:`,
-              dbError.message,
-            );
-            console.error(
-              `❌ AUTH DEBUG: Database error stack:`,
-              dbError.stack,
-            );
-            // Don't fail authentication, just set basic permissions
-            userPermissions.isAdmin = false;
-          }
-        }
+        // Use cached permission lookup
+        userPermissions = await getUserPermissions(user);
       } catch (permError) {
         console.warn("Failed to get user permissions:", permError);
+        userPermissions = { isAdmin: false };
       }
     }
 
-    // Check ROMM availability and get server URL
+    // Check ROMM availability and get server URL (with caching)
     let rommServerUrl = null;
     try {
-      rommAvailable = await isRommAvailable(cookieHeader);
+      rommAvailable = await withCache(
+        `romm-availability-${cookieHeader ? "authenticated" : "anonymous"}`,
+        () => isRommAvailable(cookieHeader),
+        5 * 60 * 1000, // 5 minute cache
+      );
       if (rommAvailable) {
         // Get ROMM server URL from environment
         const { ROMM_SERVER_URL } = process.env;
@@ -243,13 +173,22 @@ export async function load({ request, cookies }) {
       console.warn("Failed to check ROMM availability:", rommError);
     }
 
-    // Get active custom navigation items (skip if database isn't working)
+    // Get active custom navigation items with caching
     let customNavItems = [];
     try {
-      const allNavItems = await customNavigation.getActive();
+      const cacheKey = user
+        ? `nav-items-${user.auth_type}-${user.id || user.sub}`
+        : "nav-items-anonymous";
 
-      // Filter navigation items based on user roles and visibility settings
-      customNavItems = await filterNavigationByRole(allNavItems, user);
+      customNavItems = await withCache(
+        cacheKey,
+        async () => {
+          const allNavItems = await customNavigation.getActive();
+          // Filter navigation items based on user roles and visibility settings
+          return await filterNavigationByRole(allNavItems, user);
+        },
+        5 * 60 * 1000, // 5 minute cache
+      );
     } catch (navError) {
       console.warn("Failed to load custom navigation:", navError);
       customNavItems = []; // Fallback to empty array

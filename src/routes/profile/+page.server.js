@@ -5,6 +5,8 @@
 import { redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getUserWatchlist, getUserRequests } from "$lib/userProfile.js";
+import { getUserPreferences } from "$lib/userPreferences.js";
+import { getAvailableGenres } from "$lib/genreFiltering.js";
 
 export async function load({ parent, depends }) {
   // Add dependency for watchlist data invalidation
@@ -43,21 +45,33 @@ export async function load({ parent, depends }) {
 
     localUserId = userResult.rows[0].id;
 
-    // Fetch user's watchlist and requests in parallel
-    const [userWatchlist, userRequests] = await Promise.all([
-      getUserWatchlist(localUserId).catch((err) => {
-        console.error("Profile load: Failed to get watchlist:", err);
-        return [];
-      }),
-      getUserRequests(localUserId).catch((err) => {
-        console.error("Profile load: Failed to get requests:", err);
-        return [];
-      }),
-    ]);
+    // Fetch user's watchlist, requests, preferences, and available genres in parallel
+    const [userWatchlist, userRequests, userPreferences, availableGenres] =
+      await Promise.all([
+        getUserWatchlist(localUserId).catch((err) => {
+          console.error("Profile load: Failed to get watchlist:", err);
+          return [];
+        }),
+        getUserRequests(localUserId).catch((err) => {
+          console.error("Profile load: Failed to get requests:", err);
+          return [];
+        }),
+        getUserPreferences(localUserId).catch((err) => {
+          console.error("Profile load: Failed to get user preferences:", err);
+          return null;
+        }),
+        getAvailableGenres().catch((err) => {
+          console.error("Profile load: Failed to get available genres:", err);
+          return [];
+        }),
+      ]);
 
     return {
       userWatchlist,
       userRequests,
+      userPreferences,
+      availableGenres,
+      localUserId, // Pass this for API calls
     };
   } catch (error) {
     console.error("Profile load error:", error);
@@ -69,6 +83,9 @@ export async function load({ parent, depends }) {
     return {
       userWatchlist: [],
       userRequests: [],
+      userPreferences: null,
+      availableGenres: [],
+      localUserId: null,
     };
   }
 }

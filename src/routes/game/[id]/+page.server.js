@@ -8,7 +8,7 @@ import { watchlist } from "$lib/database.js";
 import { crossReferenceWithROMM } from "$lib/romm.server.js";
 import { cacheGameDetails, withCache } from "$lib/cache.js";
 
-export async function load({ params, parent, request }) {
+export async function load({ params, parent, request, url }) {
   const { user } = await parent();
 
   // Redirect unauthenticated users to login page
@@ -25,10 +25,13 @@ export async function load({ params, parent, request }) {
   try {
     // Get game details with comprehensive caching
     const cookieHeader = request.headers.get("cookie");
+    const forceRefresh = url.searchParams.get("refresh") === "true";
 
-    const game = await cacheGameDetails(gameId, async () => {
-      // Get base game details
-      let gameData = await getGameById(gameId);
+    let game;
+
+    if (forceRefresh) {
+      // Skip cache entirely when forcing refresh
+      let gameData = await getGameById(gameId, forceRefresh);
 
       if (!gameData) {
         throw error(404, "Game not found");
@@ -40,12 +43,31 @@ export async function load({ params, parent, request }) {
           [gameData],
           cookieHeader,
         );
-        return enrichedGame || gameData;
+        game = enrichedGame || gameData;
       } catch (rommError) {
         console.warn("Failed to cross-reference with ROMM:", rommError);
-        return gameData;
+        game = gameData;
       }
-    });
+    } else {
+      // Get base game details directly (temporarily bypass cacheGameDetails)
+      let gameData = await getGameById(gameId, forceRefresh);
+
+      if (!gameData) {
+        throw error(404, "Game not found");
+      }
+
+      // Cross-reference with ROMM to check if game is available in library
+      try {
+        const [enrichedGame] = await crossReferenceWithROMM(
+          [gameData],
+          cookieHeader,
+        );
+        game = enrichedGame || gameData;
+      } catch (rommError) {
+        console.warn("Failed to cross-reference with ROMM:", rommError);
+        game = gameData;
+      }
+    }
 
     // Check if game is in user's watchlist
     let isInWatchlist = false;
