@@ -5,6 +5,31 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Bug Fixes
+
+- **Mobile Admin Sidebar**
+  - Fixed mobile admin sidebar not closing when navigation items are clicked
+  - Added proper onclick handlers to navigation links for better mobile UX
+  - Mobile menu now automatically closes after selecting a navigation item
+
+- **Content Security Policy**
+  - Fixed CSP violation for confetti library web workers
+  - Added `worker-src` directive allowing blob URLs for web worker creation
+  - Confetti animations now work properly without CSP errors
+
+- **Development Server Issues**
+  - Fixed Vite dependency cache issues causing 504 errors
+  - Resolved outdated optimize dependency errors for canvas-confetti
+  - Improved development server stability and module loading
+
+### Technical Improvements
+
+- Enhanced CSP configuration in `svelte.config.js` with proper worker-src directive
+- Improved mobile navigation UX with automatic sidebar closing
+- Better error handling for development environment dependency issues
+
 ## [1.2.1] - 2025-09-27
 
 ### Bug Fixes

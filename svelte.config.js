@@ -30,6 +30,7 @@ const config = {
         ],
         "object-src": ["none"],
         "base-uri": ["self"],
+        "worker-src": ["self", "blob:"],
       },
     },
   },

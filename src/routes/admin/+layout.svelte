@@ -9,13 +9,17 @@
   import { browser } from '$app/environment';
   import Icon from '@iconify/svelte';
   import { sidebarCollapsed as sidebarCollapsedStore } from '$lib/stores/sidebar.js';
-  
+  import { slide } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+
   let { data, children } = $props();
   let user = $derived(data?.user);
   let userPermissions = $derived(data?.userPermissions || []);
   let currentPath = $derived($page.url.pathname);
   let appVersion = $state(null);
   let sidebarCollapsed = $state($sidebarCollapsedStore);
+  let userMenuOpen = $state(false);
+  let mobileSidebarOpen = $state(false);
 
   // Sync with store
   $effect(() => {
@@ -110,6 +114,25 @@
   function toggleSidebarCollapse() {
     sidebarCollapsed = !sidebarCollapsed;
   }
+
+  function toggleUserMenu() {
+    userMenuOpen = !userMenuOpen;
+  }
+
+  function toggleMobileSidebar() {
+    mobileSidebarOpen = !mobileSidebarOpen;
+  }
+
+  function closeMobileSidebar() {
+    mobileSidebarOpen = false;
+  }
+
+  // Close menus when clicking outside
+  function handleClickOutside(event) {
+    if (userMenuOpen && !event.target.closest('.user-menu-container')) {
+      userMenuOpen = false;
+    }
+  }
   
 </script>
 
@@ -119,17 +142,20 @@
 </svelte:head>
 
 {#if hasAdminAccess}
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 relative z-[100]" onclick={handleClickOutside}>
     <!-- Mobile sidebar backdrop -->
-    <div class="fixed inset-0 z-40 lg:hidden" id="mobile-sidebar-backdrop" style="display: none;">
-      <div class="absolute inset-0 bg-gray-600 opacity-75"></div>
-    </div>
+    {#if mobileSidebarOpen}
+      <div
+        class="fixed inset-0 z-[5] lg:hidden bg-gray-600 opacity-75"
+        onclick={closeMobileSidebar}
+      ></div>
+    {/if}
     
     <!-- Sidebar -->
-    <div class="fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 shadow-lg transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out {sidebarCollapsed ? 'w-16' : 'w-64'}" id="sidebar">
+    <div class="fixed inset-y-0 left-0 z-10 bg-white dark:bg-gray-800 shadow-lg transform transition-all duration-300 ease-in-out {mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 {sidebarCollapsed ? 'w-16' : 'w-64'}" id="sidebar">
       <div class="flex flex-col h-full">
         <!-- Logo/Header -->
-        <div class="flex items-center justify-between h-16 px-6 bg-blue-600 dark:bg-blue-700">
+        <div class="flex items-center justify-between h-16 bg-blue-600 dark:bg-blue-700 {sidebarCollapsed ? 'px-2' : 'px-6'}">
           {#if !sidebarCollapsed}
             <a href="/admin" class="flex-1 flex items-center justify-center space-x-3">
               <img
@@ -140,11 +166,20 @@
               <span class="text-white font-semibold text-lg">Admin</span>
             </a>
           {:else}
-            <a href="/admin" class="flex-1 flex items-center justify-center">
-              <div class="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                <span class="text-blue-600 font-bold text-sm">GG</span>
+            <button
+              type="button"
+              onclick={toggleSidebarCollapse}
+              class="w-full flex items-center justify-center hover:bg-blue-700 transition-colors rounded p-2 group gap-1"
+              aria-label="Expand sidebar"
+            >
+              <div class="w-7 h-7 bg-white rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+                <span class="text-blue-600 font-bold text-xs">GG</span>
               </div>
-            </a>
+              <!-- Expand indicator -->
+              <svg class="w-3 h-3 text-white opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
           {/if}
 
           <!-- Desktop collapse button -->
@@ -152,7 +187,7 @@
             <button
               type="button"
               class="hidden lg:block text-white hover:text-gray-200 ml-2"
-              on:click={toggleSidebarCollapse}
+              onclick={toggleSidebarCollapse}
               aria-label="Collapse sidebar"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,18 +200,19 @@
           <button
             type="button"
             class="lg:hidden text-white hover:text-gray-200"
-            on:click={() => document.getElementById('sidebar').classList.add('-translate-x-full')}
+            onclick={closeMobileSidebar}
           >
             <Icon icon="heroicons:x-mark" class="w-6 h-6" />
           </button>
         </div>
         
         <!-- Navigation -->
-        <nav class="flex-1 overflow-y-auto py-6">
+        <nav class="flex-1 overflow-y-auto overflow-x-hidden py-6">
           <div class="px-3 space-y-1">
             {#each navItems as item}
               <a
                 href={item.href}
+                onclick={closeMobileSidebar}
                 class="flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors {sidebarCollapsed ? 'justify-center relative group' : ''}"
                 class:bg-blue-100={isCurrentPath(item.href)}
                 class:text-blue-700={isCurrentPath(item.href)}
@@ -187,10 +223,17 @@
                 class:dark:text-gray-300={!isCurrentPath(item.href)}
                 class:dark:hover:bg-gray-700={!isCurrentPath(item.href)}
               >
-                <div class="flex items-center space-x-3 {sidebarCollapsed ? 'space-x-0' : ''}">
+                <div class="flex items-center space-x-3 {sidebarCollapsed ? 'space-x-0 relative' : ''}">
                   <Icon icon={item.icon} class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" />
                   {#if !sidebarCollapsed}
                     <span>{item.label}</span>
+                  {/if}
+
+                  {#if sidebarCollapsed && item.badge && item.badge > 0}
+                    <!-- Badge overlay for collapsed sidebar -->
+                    <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center min-w-0 z-10">
+                      {item.badge > 99 ? '99+' : item.badge}
+                    </span>
                   {/if}
                 </div>
 
@@ -214,68 +257,122 @@
           </div>
         </nav>
         
-        <!-- User info -->
+        <!-- User section with submenu -->
         <div class="border-t border-gray-200 dark:border-gray-700 p-4">
-          <div class="flex items-center space-x-3 mb-2">
-            <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-              <span class="text-white text-sm font-medium">
-                {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'A'}
-              </span>
+          {#if sidebarCollapsed}
+            <!-- Collapsed sidebar: Profile button with submenu -->
+            <div class="relative user-menu-container">
+              <button
+                onclick={toggleUserMenu}
+                class="w-full flex flex-col items-center space-y-2 p-2 rounded-lg"
+                aria-label="User menu"
+              >
+                <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span class="text-white text-sm font-medium">
+                    {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'A'}
+                  </span>
+                </div>
+              </button>
+
+              <!-- Submenu for collapsed sidebar -->
+              {#if userMenuOpen}
+                <div
+                  class="absolute bottom-full left-0 mb-2 bg-gray-800 border border-gray-700 rounded-lg shadow-lg w-48 z-50"
+                  transition:slide={{ duration: 200, easing: cubicOut }}
+                >
+                  <div class="p-2">
+                    <div class="px-3 py-2 border-b border-gray-700 mb-2">
+                      <p class="text-sm font-medium text-white truncate">
+                        {user?.name || user?.preferred_username || 'Admin'}
+                      </p>
+                      <p class="text-xs text-gray-400 truncate">{user?.email}</p>
+                      {#if appVersion}
+                        <p class="text-xs text-gray-500 mt-1">v{appVersion}</p>
+                      {/if}
+                    </div>
+                    <a
+                      href="/profile"
+                      class="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded transition-colors"
+                    >
+                      Profile
+                    </a>
+                    <a
+                      href="/"
+                      class="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded transition-colors"
+                    >
+                      Main Site
+                    </a>
+                    <a
+                      href="/api/auth/logout"
+                      class="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded transition-colors"
+                    >
+                      Logout
+                    </a>
+                  </div>
+                </div>
+              {/if}
             </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                {user?.name || user?.preferred_username || 'Admin'}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {user?.email}
-              </p>
-            </div>
-          </div>
-          
-          <!-- App Version -->
-          {#if appVersion}
-            <div class="mb-3 text-center">
-              <p class="text-xs text-gray-500 dark:text-gray-400">v{appVersion}</p>
+          {:else}
+            <!-- Expanded sidebar: Profile button with submenu -->
+            <div class="relative user-menu-container">
+              <button
+                onclick={toggleUserMenu}
+                class="w-full flex items-center space-x-3 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors mb-2"
+                aria-label="User menu"
+              >
+                <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span class="text-white text-sm font-medium">
+                    {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'A'}
+                  </span>
+                </div>
+                <div class="flex-1 min-w-0 text-left">
+                  <p class="text-sm font-medium text-white truncate">
+                    {user?.name || user?.preferred_username || 'Admin'}
+                  </p>
+                  <p class="text-xs text-gray-400 truncate">{user?.email}</p>
+                </div>
+                <svg class="w-4 h-4 text-gray-400 transition-transform duration-200 {userMenuOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                </svg>
+              </button>
+
+              <!-- Submenu for expanded sidebar -->
+              {#if userMenuOpen}
+                <div
+                  class="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden mb-2"
+                  transition:slide={{ duration: 200, easing: cubicOut }}
+                >
+                  {#if appVersion}
+                    <div class="px-3 py-2 border-b border-gray-700 text-center">
+                      <p class="text-xs text-gray-500">v{appVersion}</p>
+                    </div>
+                  {/if}
+                  <a
+                    href="/profile"
+                    class="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                  >
+                    Profile
+                  </a>
+                  <a
+                    href="/"
+                    class="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                  >
+                    Main Site
+                  </a>
+                  <a
+                    href="/api/auth/logout"
+                    class="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                  >
+                    Logout
+                  </a>
+                </div>
+              {/if}
             </div>
           {/if}
-          
-          <div class="space-y-1">
-            <a
-              href="/profile"
-              class="block w-full text-left px-3 py-1 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            >
-              Profile
-            </a>
-            <a
-              href="/"
-              class="block w-full text-left px-3 py-1 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            >
-              Main Site
-            </a>
-            <a
-              href="/api/auth/logout"
-              class="block w-full text-left px-3 py-1 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            >
-              Logout
-            </a>
-          </div>
         </div>
       </div>
     </div>
     
-    <!-- Floating expand button for collapsed sidebar -->
-    {#if sidebarCollapsed}
-      <button
-        type="button"
-        class="hidden lg:block fixed top-4 left-20 z-50 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg shadow-lg transition-all duration-200"
-        on:click={toggleSidebarCollapse}
-        aria-label="Expand sidebar"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
-        </svg>
-      </button>
-    {/if}
 
     <!-- Main content -->
     <div class="{sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'} transition-all duration-300">
@@ -286,7 +383,7 @@
           <button
             type="button"
             class="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
-            on:click={() => document.getElementById('sidebar').classList.remove('-translate-x-full')}
+            onclick={toggleMobileSidebar}
           >
             <Icon icon="heroicons:bars-3" class="w-6 h-6" />
           </button>
@@ -347,7 +444,7 @@
       
       <!-- Page content -->
       <main class="flex-1 w-full max-w-none pt-16 lg:pt-0">
-        <div class="p-6 w-full max-w-none">
+        <div class="p-3 sm:p-4 md:p-6 w-full max-w-none min-w-0 overflow-x-auto">
           {@render children()}
         </div>
       </main>
