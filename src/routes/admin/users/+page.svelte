@@ -387,14 +387,14 @@
   <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
       <!-- Status filters -->
-      <div class="flex flex-wrap gap-2">
-        <div class="flex items-center space-x-1">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
+        <div class="flex flex-wrap gap-1">
           {#each statusFilters as filter}
             <button
               type="button"
               onclick={() => handleStatusFilterChange(filter.value)}
-              class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+              class="px-2 sm:px-3 py-1 sm:py-1.5 text-sm font-medium rounded-lg transition-colors"
               class:bg-blue-600={currentStatus === filter.value}
               class:text-white={currentStatus === filter.value}
               class:bg-gray-100={currentStatus !== filter.value}
@@ -409,14 +409,14 @@
       </div>
       
       <!-- Role filters -->
-      <div class="flex flex-wrap gap-2">
-        <div class="flex items-center space-x-1">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Role:</span>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Role:</span>
+        <div class="flex flex-wrap gap-1">
           {#each roleFilters as filter}
             <button
               type="button"
               onclick={() => handleRoleFilterChange(filter.value)}
-              class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+              class="px-2 sm:px-3 py-1 sm:py-1.5 text-sm font-medium rounded-lg transition-colors"
               class:bg-blue-600={currentRole === filter.value}
               class:text-white={currentRole === filter.value}
               class:bg-gray-100={currentRole !== filter.value}

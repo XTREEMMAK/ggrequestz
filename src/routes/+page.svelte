@@ -5,14 +5,15 @@
 <script>
   import GameCard from '../components/GameCard.svelte';
   // Lazy load GameModal only when needed
-  let GameModal = null;
+  let GameModal = $state(null);
   // Lazy load LoadingSpinner only when needed
-  let LoadingSpinner = null;
+  let LoadingSpinner = $state(null);
   import StatusBadge from '../components/StatusBadge.svelte';
   import SEOHead from '../components/SEOHead.svelte';
   import LoadMoreButton from '../components/LoadMoreButton.svelte';
   import SkeletonLoader from '../components/SkeletonLoader.svelte';
   import { goto, invalidate, invalidateAll, replaceState } from '$app/navigation';
+  import { page } from '$app/stores';
   import { slide, fade, scale } from 'svelte/transition';
   import { quintOut, backOut } from 'svelte/easing';
   import { beforeNavigate, afterNavigate } from '$app/navigation';
@@ -25,10 +26,12 @@
   import { rommService, watchlistService } from '$lib/clientServices.js';
   import { batchGetWatchlistStatus, updateWatchlistStatus, getCachedWatchlistStatus } from '$lib/watchlistStatus.js';
   import { sidebarCollapsed } from '$lib/stores/sidebar.js';
+  import Icon from '@iconify/svelte';
   
   let { data } = $props();
-  
+
   let user = $derived(data?.user);
+  let currentPath = $derived($page.url.pathname);
   let newInLibrary = $state(data?.newInLibrary || []);
   let newReleases = $state(data?.newReleases || []);
   let popularGames = $state(data?.popularGames || []);
@@ -226,13 +229,98 @@
     popularShowMore ? popularGames : popularGames.slice(0, Math.min(dynamicDisplayLimit, popularGames.length))
   );
 
-  // Scroll to top button state
-  let showScrollToTop = $state(false);
-  
+
   // State restoration flag to skip animations
   let isRestoringState = $state(false);
   let skipAnimations = $state(false);
   let isNavigatingBack = $state(false);
+
+  // Card size control
+  let cardSize = $state('medium'); // small, medium, large
+  let showStickyNav = $state(false);
+  let showFloatingToggle = $state(false);
+  let floatingPanelOpen = $state(false);
+
+  // Card size sliders (0-100 for continuous sizing) - separate for mobile and desktop
+  let cardSizeSliderMobile = $state(50); // Default to medium
+  let cardSizeSliderDesktop = $state(50); // Default to medium
+
+  // Device detection - 768px is Tailwind's md breakpoint
+  let isMobile = $state(false);
+
+  // Load saved card size preferences
+  onMount(() => {
+    if (browser) {
+      // Load mobile setting
+      const savedMobileCardSize = localStorage.getItem('cardSizeSlider-mobile');
+      if (savedMobileCardSize) {
+        cardSizeSliderMobile = parseInt(savedMobileCardSize, 10);
+      }
+
+      // Load desktop setting
+      const savedDesktopCardSize = localStorage.getItem('cardSizeSlider-desktop');
+      if (savedDesktopCardSize) {
+        cardSizeSliderDesktop = parseInt(savedDesktopCardSize, 10);
+      }
+
+      // Set initial device detection
+      isMobile = window.innerWidth < 768;
+
+      // Add resize listener for device detection
+      const handleDeviceResize = () => {
+        isMobile = window.innerWidth < 768;
+      };
+      window.addEventListener('resize', handleDeviceResize);
+
+      return () => window.removeEventListener('resize', handleDeviceResize);
+    }
+  });
+
+  // Get current card size slider value based on device
+  let currentCardSizeSlider = $derived(isMobile ? cardSizeSliderMobile : cardSizeSliderDesktop);
+
+  // Calculate dynamic card size based on current slider value (0-100)
+  let dynamicCardSize = $derived.by(() => {
+    // Map slider value (0-100) to card sizes (120px-300px for min, 140px-320px for max)
+    const minSize = 120 + (currentCardSizeSlider * 1.8); // 120px to 300px
+    const maxSize = 140 + (currentCardSizeSlider * 1.8); // 140px to 320px
+    return { min: Math.round(minSize), max: Math.round(maxSize) };
+  });
+
+  // Update cardSize based on current slider value and save to preferences
+  $effect(() => {
+    // Calculate card size category for display based on current device slider
+    if (currentCardSizeSlider <= 33) {
+      cardSize = 'small';
+    } else if (currentCardSizeSlider <= 66) {
+      cardSize = 'medium';
+    } else {
+      cardSize = 'large';
+    }
+  });
+
+  // Save mobile slider changes
+  $effect(() => {
+    if (browser) {
+      localStorage.setItem('cardSizeSlider-mobile', cardSizeSliderMobile.toString());
+    }
+  });
+
+  // Save desktop slider changes
+  $effect(() => {
+    if (browser) {
+      localStorage.setItem('cardSizeSlider-desktop', cardSizeSliderDesktop.toString());
+    }
+  });
+
+  // Functions for floating panel
+  function toggleFloatingPanel() {
+    floatingPanelOpen = !floatingPanelOpen;
+  }
+
+  function closeFloatingPanel() {
+    floatingPanelOpen = false;
+  }
   
   // Page load timestamp to ensure we only restore state from current session
   let pageLoadTimestamp = $state(Date.now());
@@ -984,12 +1072,16 @@
     };
   });
   
-  // Handle scroll to top button visibility and save scroll position periodically
+  // Handle floating toggle visibility and save scroll position periodically
   onMount(() => {
     if (browser) {
       const handleScroll = () => {
-        // Show scroll to top button after scrolling down 300px
-        showScrollToTop = window.scrollY > 300;
+        // Show floating toggle after scrolling down 100px
+        const newToggleState = window.scrollY > 100;
+        if (newToggleState !== showFloatingToggle) {
+          console.log(`Floating toggle ${newToggleState ? 'show' : 'hide'} at scroll: ${window.scrollY}px`);
+        }
+        showFloatingToggle = newToggleState;
       };
       window.addEventListener('scroll', handleScroll, { passive: true });
       
@@ -1185,13 +1277,25 @@
       const duration = performance.now() - startTime;
       console.log(`⏱️ romm-data-enhancement: ${duration.toFixed(2)}ms`);
   }
-  
-  // Scroll to top function with slow easing
-  function scrollToTop() {
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
+
+
+  // Scroll to section function
+  function scrollToSection(sectionId) {
+    const element = document.querySelector(`[data-section="${sectionId}"]`);
+    if (element) {
+      const yOffset = -80; // Account for sticky nav height
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  }
+
+  // Get section visibility and availability
+  function getSections() {
+    return [
+      { id: 'romms', name: 'New in Library', visible: rommAvailable && showNewInLibrary, count: newInLibrary.length },
+      { id: 'new-releases', name: 'New Releases', visible: showNewReleases, count: newReleases.length },
+      { id: 'popular-games', name: 'Popular Games', visible: showPopularGames, count: popularGames.length }
+    ].filter(section => section.visible && section.count > 0);
   }
   
   // Create hover preloaders for Load More buttons
@@ -1221,7 +1325,7 @@
   ogDescription="Explore our extensive game library with powerful search and filtering. Request your favorite games and build your personal watchlist."
 />
 
-<div class="px-8 py-6 max-w-full">
+<div class="px-8 py-6 max-w-full dynamic-card-size {$sidebarCollapsed ? 'sidebar-collapsed' : ''}" style="--card-min-size: {dynamicCardSize.min}px; --card-max-size: {dynamicCardSize.max}px; --card-min-size-mobile: {Math.max(100, dynamicCardSize.min - 20)}px; --card-max-size-mobile: {Math.max(120, dynamicCardSize.max - 20)}px;">
   
   <!-- Mobile Logo Section -->
   <div class="lg:hidden text-center mb-8">
@@ -1230,6 +1334,113 @@
     </h1>
     <p class="text-gray-400 mt-2 text-lg">Discover & Request Amazing Games</p>
   </div>
+
+  <!-- Floating Toggle Button - Always visible on right edge -->
+  <button
+    type="button"
+    onclick={toggleFloatingPanel}
+    class="fixed top-1/2 right-0 transform -translate-y-1/2 z-50 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-l-lg shadow-lg transition-all duration-300 ease-out hover:scale-105 hover:right-1"
+    aria-label="Toggle navigation panel"
+  >
+    <Icon icon="line-md:menu-fold-left" class="w-5 h-5" />
+  </button>
+
+  <!-- Floating Panel -->
+  {#if floatingPanelOpen}
+    <!-- Mobile backdrop -->
+    <div
+      class="fixed inset-0 bg-black/50 z-40 lg:hidden"
+      onclick={closeFloatingPanel}
+      in:fade={{ duration: 200 }}
+      out:fade={{ duration: 200 }}
+    ></div>
+
+    <!-- Panel -->
+    <div
+      class="fixed top-1/2 right-16 transform -translate-y-1/2 z-50 bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-xl shadow-xl w-80 max-w-[calc(100vw-5rem)] lg:right-20"
+      in:scale={{ duration: 300, start: 0.8, easing: quintOut }}
+      out:scale={{ duration: 200, start: 0.8 }}
+    >
+      <div class="p-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-white">Quick Navigation</h3>
+          <button
+            type="button"
+            onclick={closeFloatingPanel}
+            class="text-gray-400 hover:text-white transition-colors"
+            aria-label="Close panel"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Section Quick Links -->
+        <div class="mb-6">
+          <h4 class="text-sm font-medium text-gray-400 mb-3">Jump to Section:</h4>
+          <div class="space-y-2">
+            {#each getSections() as section}
+              <button
+                type="button"
+                onclick={() => {
+                  scrollToSection(section.id);
+                  closeFloatingPanel();
+                }}
+                class="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg transition-colors duration-200 flex items-center justify-between"
+              >
+                <span>{section.name}</span>
+                <span class="text-gray-500 text-sm">({section.count})</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Card Size Slider -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-sm font-medium text-gray-400">Card Size:</h4>
+            <span class="text-xs px-2 py-1 rounded-full {isMobile ? 'bg-orange-600 text-orange-100' : 'bg-blue-600 text-blue-100'}">
+              {isMobile ? 'Mobile' : 'Desktop'}
+            </span>
+          </div>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between text-xs text-gray-500">
+              <span>Small</span>
+              <span>Medium</span>
+              <span>Large</span>
+            </div>
+            {#if isMobile}
+              <input
+                type="range"
+                min="0"
+                max="100"
+                bind:value={cardSizeSliderMobile}
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none slider"
+              />
+            {:else}
+              <input
+                type="range"
+                min="0"
+                max="100"
+                bind:value={cardSizeSliderDesktop}
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none slider"
+              />
+            {/if}
+            <div class="text-center">
+              <span class="text-sm text-gray-300 font-medium">
+                Current: {cardSize.charAt(0).toUpperCase() + cardSize.slice(1)}
+              </span>
+              <div class="text-xs text-gray-500 mt-1">
+                Separate settings for mobile and desktop
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
   
   <!-- Loading State -->
   {#if loading}
@@ -1454,7 +1665,7 @@
     
     <!-- Popular Games -->
     {#if showPopularGames}
-    <section class="mb-10">
+    <section class="mb-10" data-section="popular-games">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-4xl font-bold text-white">Popular Games</h2>
         <!-- Desktop scroll arrows - hidden when expanded -->
@@ -1689,20 +1900,6 @@
   {/if}
 </div>
 
-<!-- Scroll to Top Button -->
-{#if showScrollToTop}
-  <button
-    onclick={scrollToTop}
-    class="fixed bottom-8 right-8 z-50 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-all duration-300 ease-out hover:scale-105"
-    in:scale={{ duration: 200, start: 0.8 }}
-    out:scale={{ duration: 200, start: 0.8 }}
-    aria-label="Scroll to top"
-  >
-    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-    </svg>
-  </button>
-{/if}
 
 <!-- Game Modal - Lazy Loaded -->
 {#if GameModal && modalOpen}
@@ -1820,5 +2017,78 @@
     @media (min-width: 2048px) {
       grid-template-columns: repeat(auto-fit, minmax(200px, 220px));
     }
+  }
+
+  /* Dynamic card size using CSS custom properties - high specificity to override other rules */
+  .dynamic-card-size .responsive-grid {
+    grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size), var(--card-max-size))) !important;
+  }
+
+  /* Responsive adjustments for dynamic card sizes */
+  @media (max-width: 640px) {
+    .dynamic-card-size .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size-mobile), var(--card-max-size-mobile))) !important;
+    }
+  }
+
+  /* Override sidebar collapsed styles when using dynamic sizing */
+  .dynamic-card-size.sidebar-collapsed .responsive-grid {
+    grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size), var(--card-max-size))) !important;
+  }
+
+  @media (max-width: 640px) {
+    .dynamic-card-size.sidebar-collapsed .responsive-grid {
+      grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size-mobile), var(--card-max-size-mobile))) !important;
+    }
+  }
+
+  /* Custom range slider styles */
+  .slider {
+    cursor: pointer;
+  }
+
+  .slider::-webkit-slider-thumb {
+    appearance: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+  }
+
+  .slider::-webkit-slider-thumb:hover {
+    background: #2563eb;
+    transform: scale(1.1);
+  }
+
+  .slider::-webkit-slider-track {
+    background: #374151;
+    border-radius: 5px;
+    height: 8px;
+  }
+
+  .slider::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+  }
+
+  .slider::-moz-range-thumb:hover {
+    background: #2563eb;
+    transform: scale(1.1);
+  }
+
+  .slider::-moz-range-track {
+    background: #374151;
+    border-radius: 5px;
+    height: 8px;
+    border: none;
   }
 </style>

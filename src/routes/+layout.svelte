@@ -50,6 +50,13 @@
 
 			window.addEventListener('resize', handleResize);
 
+			// Handle scroll to top button visibility (exclude home page)
+			const handleScroll = () => {
+				const isHomePage = currentPath === '/';
+				showScrollToTop = !isHomePage && window.scrollY > 300;
+			};
+			window.addEventListener('scroll', handleScroll, { passive: true });
+
 			// Fetch app version
 			fetch('/api/version')
 				.then(response => response.json())
@@ -63,6 +70,7 @@
 			// Cleanup function
 			return () => {
 				window.removeEventListener('resize', handleResize);
+				window.removeEventListener('scroll', handleScroll);
 			};
 		}
 	});
@@ -144,6 +152,9 @@
 	});
 	
 	let currentPath = $derived($page.url.pathname);
+
+	// Scroll to top button state
+	let showScrollToTop = $state(false);
 	
 	// Hide mobile search bar on search and request pages
 	let shouldShowMobileSearchBar = $derived(
@@ -158,11 +169,12 @@
 		!currentPath.startsWith('/register')
 	);
 
-	// Hide sidebar navigation on login pages, setup pages, and register pages
+	// Hide sidebar navigation on login pages, setup pages, register pages, and admin pages
 	let shouldShowSidebar = $derived(
 		!currentPath.startsWith('/login') &&
 		!currentPath.startsWith('/setup') &&
-		!currentPath.startsWith('/register')
+		!currentPath.startsWith('/register') &&
+		!currentPath.startsWith('/admin')
 	);
 	
 	function isActivePath(path) {
@@ -202,26 +214,34 @@
 			appDetailsOpen = false;
 		}
 	}
+
+	// Scroll to top function
+	function scrollToTop() {
+		window.scrollTo({
+			top: 0,
+			behavior: 'smooth'
+		});
+	}
 </script>
 
-<div class="min-h-screen" style="background-color: var(--bg-primary);" on:click={handleClickOutside}>
-	<!-- Mobile sidebar overlay (hidden on login pages) -->
+<div class="min-h-screen" style="background-color: var(--bg-primary);" onclick={handleClickOutside}>
+	<!-- Mobile sidebar overlay (hidden on login, setup, register, and admin pages) -->
 	{#if shouldShowSidebar}
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<div 
-		class="fixed inset-0 z-40 lg:hidden cursor-pointer {sidebarOpen ? 'block' : 'hidden'}"
+	<div
+		class="fixed inset-0 z-40 lg:hidden cursor-pointer {sidebarOpen ? 'block' : 'hidden'} {currentPath.startsWith('/admin') ? 'hidden' : ''}"
 		style="background-color: var(--overlay);"
-		on:click={toggleSidebar}
+		onclick={toggleSidebar}
 		aria-label="Close sidebar"
 		role="button"
 		tabindex="0"
-		on:keydown={(e) => e.key === 'Enter' || e.key === ' ' ? toggleSidebar() : null}
+		onkeydown={(e) => e.key === 'Enter' || e.key === ' ' ? toggleSidebar() : null}
 	></div>
 	{/if}
 
-	<!-- Sidebar (hidden on login pages) -->
+	<!-- Sidebar (hidden on login, setup, register, and admin pages) -->
 	{#if shouldShowSidebar}
-	<div class="fixed inset-y-0 left-0 z-50 sidebar transform transition-all duration-200 ease-in-out lg:translate-x-0 {sidebarOpen ? 'translate-x-0' : '-translate-x-full'} {sidebarCollapsed ? 'w-16' : 'w-64'}">
+	<div class="fixed inset-y-0 left-0 z-50 sidebar transform transition-all duration-200 ease-in-out lg:translate-x-0 {sidebarOpen ? 'translate-x-0' : '-translate-x-full'} {sidebarCollapsed ? 'w-16' : 'w-64'} {currentPath.startsWith('/admin') ? 'hidden !important' : ''}">
 		<!-- Logo/Header -->
 		<div class="flex items-center justify-between h-26 px-4" style="border-bottom: 1px solid var(--border-color);">
 			{#if !sidebarCollapsed}
@@ -242,7 +262,7 @@
 
 			<!-- Desktop collapse button -->
 			{#if !sidebarCollapsed}
-				<button class="hidden lg:block text-gray-400 hover:text-white ml-2" on:click={toggleSidebarCollapse} aria-label="Collapse sidebar">
+				<button class="hidden lg:block text-gray-400 hover:text-white ml-2" onclick={toggleSidebarCollapse} aria-label="Collapse sidebar">
 					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
 					</svg>
@@ -250,7 +270,7 @@
 			{/if}
 
 			<!-- Mobile close button -->
-			<button class="lg:hidden text-gray-400 hover:text-white" on:click={toggleSidebar} aria-label="Close sidebar">
+			<button class="lg:hidden text-gray-400 hover:text-white" onclick={toggleSidebar} aria-label="Close sidebar">
 				<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
 				</svg>
@@ -270,40 +290,40 @@
 					>
 						<!-- Icons -->
 						{#if item.icon === 'home'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
 							</svg>
 						{:else if item.icon === 'plus'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
 							</svg>
 						{:else if item.icon === 'search'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
 							</svg>
 						{:else if item.icon === 'user'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
 							</svg>
 						{:else if item.icon === 'library'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"/>
 							</svg>
 						{:else if item.icon === 'settings'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
 							</svg>
 						{:else if item.icon === 'admin'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
 							</svg>
 						{:else if item.icon}
 							<!-- Custom icon from iconify -->
-							<Icon icon={item.icon} class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" />
+							<Icon icon={item.icon} class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" />
 						{:else}
 							<!-- Default icon for unrecognized icons -->
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
 							</svg>
 						{/if}
@@ -320,46 +340,46 @@
 					<!-- Internal links use goto() for faster navigation -->
 					<button
 						type="button"
-						on:click={() => { goto(item.href); sidebarOpen = false; }}
+						onclick={() => { goto(item.href); sidebarOpen = false; }}
 						class="sidebar-item mb-1 rounded-lg {isActivePath(item.href) ? 'active' : ''} w-full {sidebarCollapsed ? 'justify-center relative group' : 'text-left'}"
 						aria-label="Navigate to {item.name}"
 					>
 						<!-- Icons -->
 						{#if item.icon === 'home'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
 							</svg>
 						{:else if item.icon === 'plus'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
 							</svg>
 						{:else if item.icon === 'search'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
 							</svg>
 						{:else if item.icon === 'user'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
 							</svg>
 						{:else if item.icon === 'library'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"/>
 							</svg>
 						{:else if item.icon === 'settings'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
 							</svg>
 						{:else if item.icon === 'admin'}
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
 							</svg>
 						{:else if item.icon}
 							<!-- Custom icon from iconify -->
-							<Icon icon={item.icon} class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" />
+							<Icon icon={item.icon} class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" />
 						{:else}
 							<!-- Default icon for unrecognized icons -->
-							<svg class="{sidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="{sidebarCollapsed ? 'w-6 h-6 block' : 'w-5 h-5'}" style="{sidebarCollapsed ? 'margin-left: auto; margin-right: auto;' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
 							</svg>
 						{/if}
@@ -383,7 +403,7 @@
 					<!-- Collapsed sidebar: Profile button with submenu -->
 					<div class="relative user-menu-container">
 						<button
-							on:click={toggleUserMenu}
+							onclick={toggleUserMenu}
 							class="w-full flex flex-col items-center space-y-2 p-2 rounded-lg hover:bg-gray-700 transition-colors group"
 							aria-label="User menu"
 						>
@@ -412,7 +432,7 @@
 										{/if}
 									</div>
 									<button
-										on:click={navigateToProfile}
+										onclick={navigateToProfile}
 										class="w-full flex items-center space-x-3 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors text-left"
 									>
 										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -435,7 +455,7 @@
 					<!-- Expanded sidebar: Profile button with submenu -->
 					<div class="relative user-menu-container">
 						<button
-						on:click={toggleUserMenu}
+						onclick={toggleUserMenu}
 						class="w-full flex items-center space-x-3 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors mb-2"
 						aria-label="User menu"
 					>
@@ -462,7 +482,7 @@
 							transition:slide={{ duration: 200, easing: cubicOut }}
 						>
 							<button
-								on:click={navigateToProfile}
+								onclick={navigateToProfile}
 								class="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 transition-colors text-left"
 							>
 								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -486,7 +506,7 @@
 				{#if appVersion && !sidebarCollapsed}
 					<div class="text-center app-details-container">
 						<button
-							on:click={toggleAppDetails}
+							onclick={toggleAppDetails}
 							class="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer px-2 py-1 rounded hover:bg-gray-700"
 							title="App Details"
 						>
@@ -518,8 +538,8 @@
 	<!-- Floating expand button for collapsed sidebar -->
 	{#if sidebarCollapsed && shouldShowSidebar}
 		<button
-			class="hidden lg:block fixed top-4 left-20 z-50 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-2 rounded-lg shadow-lg transition-all duration-200"
-			on:click={toggleSidebarCollapse}
+			class="hidden lg:block fixed top-4 left-20 z-50 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-2 rounded-lg shadow-lg transition-all duration-200 {currentPath.startsWith('/admin') ? 'hidden !important' : ''}"
+			onclick={toggleSidebarCollapse}
 			aria-label="Expand sidebar"
 		>
 			<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -534,7 +554,7 @@
 	<div class="lg:hidden fixed top-0 left-0 right-0 z-30 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800">
 		<div class="flex items-center justify-between p-4">
 			<button
-				on:click={toggleSidebar}
+				onclick={toggleSidebar}
 				class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
 				aria-label="Open sidebar"
 			>
@@ -559,7 +579,7 @@
 							type="text"
 							placeholder="Search games..."
 							class="block w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-							on:keydown={(e) => {
+							onkeydown={(e) => {
 								if (e.key === 'Enter' && e.target.value.trim()) {
 									window.location.href = `/search?q=${encodeURIComponent(e.target.value.trim())}`;
 								}
@@ -577,7 +597,7 @@
 				{#if user}
 					<button
 						type="button"
-						on:click={() => goto('/profile')}
+						onclick={() => goto('/profile')}
 						class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
 						aria-label="Navigate to Profile"
 					>
@@ -610,6 +630,21 @@
 	<main class="{shouldShowSidebar ? (sidebarCollapsed ? 'lg:pl-16 lg:pt-16' : 'lg:pl-64 lg:pt-0') : ''} {shouldShowMobileHeader ? 'pt-24' : (shouldShowSidebar && !sidebarCollapsed ? 'pt-0' : '')} transition-all duration-200">
 		{@render children()}
 	</main>
+
+	<!-- Scroll to Top Button (hidden on home page) -->
+	{#if showScrollToTop}
+		<button
+			onclick={scrollToTop}
+			class="fixed bottom-8 right-8 z-50 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-all duration-300 ease-out hover:scale-105"
+			in:scale={{ duration: 200, start: 0.8 }}
+			out:scale={{ duration: 200, start: 0.8 }}
+			aria-label="Scroll to top"
+		>
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+			</svg>
+		</button>
+	{/if}
 </div>
 
 <!-- App Details Fullscreen Modal -->
@@ -624,7 +659,7 @@
 		>
 			<!-- Close button positioned absolutely -->
 			<button
-				on:click={toggleAppDetails}
+				onclick={toggleAppDetails}
 				class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 z-10"
 				aria-label="Close modal"
 			>
