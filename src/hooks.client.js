@@ -3,6 +3,4 @@ if (typeof window !== "undefined" && "scrollRestoration" in history) {
   history.scrollRestoration = "manual";
 }
 
-export const handleError = ({ error, event }) => {
-  console.error("Client error:", error);
-};
+export const handleError = ({ error, event }) => {};

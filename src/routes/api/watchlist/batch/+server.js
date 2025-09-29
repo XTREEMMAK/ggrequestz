@@ -62,12 +62,17 @@ export async function POST({ request, cookies }) {
 
     // Get user's database ID - enhanced extraction logic
     let userId;
-    console.log("🔍 User object:", {
-      sub: user.sub,
-      localUserId: user.localUserId,
-      id: user.id,
-      user_id: user.user_id,
-    });
+    if (
+      process.env.NODE_ENV === "development" &&
+      process.env.DEBUG_USER_AUTH === "true"
+    ) {
+      console.log("🔍 User object:", {
+        sub: user.sub,
+        localUserId: user.localUserId,
+        id: user.id,
+        user_id: user.user_id,
+      });
+    }
 
     if (user.sub?.startsWith("basic_auth_")) {
       userId = user.sub.replace("basic_auth_", "");

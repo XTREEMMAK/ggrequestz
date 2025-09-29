@@ -50,9 +50,7 @@ export class ResourcePrefetcher {
       try {
         await this.executePrefetch(url, type);
         this.prefetchedUrls.add(url);
-      } catch (error) {
-        console.warn(`Prefetch failed for ${url}:`, error);
-      }
+      } catch (error) {}
     }
 
     this.isProcessing = false;
@@ -107,7 +105,6 @@ export class ResourcePrefetcher {
       });
       return response.ok;
     } catch (error) {
-      console.warn(`Data prefetch failed for ${url}:`, error);
       return false;
     }
   }

@@ -158,6 +158,58 @@ PGID=1000
 4. **Restrict database access** - Don't expose PostgreSQL port publicly
 5. **Keep images updated** - Regularly pull latest Docker images
 
+## Debug Environment Variables
+
+### Development Debugging
+
+The application supports several DEBUG environment variables for development debugging:
+
+#### Core Debug Flags
+
+- `DEBUG_AGE_RATINGS=true` - Enable detailed logging for age rating processing from IGDB API
+- `DEBUG_IGDB_QUERIES=true` - Enable logging for all IGDB API queries and responses
+- `DEBUG_USER_AUTH=true` - Enable detailed user authentication debugging and session validation
+
+#### Performance Debug Flags
+
+- `VITE_DEBUG_VIEWPORT_CACHING=true` - Enable verbose logging for viewport-based preloading and mobile cache optimization (client-side)
+
+#### Usage Examples
+
+```bash
+# Enable all debug logging
+DEBUG_AGE_RATINGS=true DEBUG_IGDB_QUERIES=true DEBUG_USER_AUTH=true VITE_DEBUG_VIEWPORT_CACHING=true npm run dev
+
+# Enable only viewport caching debug (useful for mobile optimization)
+VITE_DEBUG_VIEWPORT_CACHING=true npm run dev
+
+# Enable only authentication debug
+DEBUG_USER_AUTH=true npm run dev
+```
+
+## Mobile Caching Strategy
+
+The application includes enhanced mobile caching with the following features:
+
+### Viewport Observer
+
+- **Mobile Detection**: Automatically detects mobile devices and applies aggressive caching
+- **Intersection Observer**: Uses browser API to detect when game cards enter viewport
+- **Preloading**: Automatically caches game details, images, and screenshots for mobile users
+
+### Configuration
+
+- **Desktop**: Standard hover-based preloading with 50px/100px margins
+- **Mobile**: Aggressive preloading with 100px/200px margins and automatic background caching
+- **Debug**: Use `VITE_DEBUG_VIEWPORT_CACHING=true` to monitor cache performance
+
+### Cache Behavior
+
+- **Images**: Lazy loaded with skeleton states
+- **Game Data**: Pre-cached via `/api/games/{id}` when cards enter viewport
+- **Screenshots**: First 2-3 screenshots pre-cached for mobile users
+- **Batching**: Mobile requests are batched to avoid overwhelming slower networks
+
 ## Troubleshooting
 
 ### Environment Variables Not Loading

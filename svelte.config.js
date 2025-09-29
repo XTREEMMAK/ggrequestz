@@ -19,14 +19,14 @@ const config = {
       checkOrigin: false,
     },
     csp: {
-      mode: process.env.NODE_ENV === "development" ? "nonce" : "hash",
+      mode: process.env.NODE_ENV === "development" ? "auto" : "hash",
       directives: {
         "script-src": [
           "self",
           "https://cdnjs.cloudflare.com",
           "https://cdn.jsdelivr.net",
           "unsafe-hashes",
-          ...(process.env.NODE_ENV === "development" ? ["unsafe-inline"] : []),
+          "unsafe-inline", // Allow inline scripts for debugging
         ],
         "object-src": ["none"],
         "base-uri": ["self"],

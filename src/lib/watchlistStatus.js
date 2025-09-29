@@ -156,14 +156,6 @@ export async function batchGetWatchlistStatus(gameIds) {
       } else {
         // Log the error details for debugging
         const errorText = await response.text();
-        console.warn("Batch watchlist API failed:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText,
-        });
-        console.warn(
-          "Batch watchlist API failed, falling back to individual requests",
-        );
 
         // Fallback to individual requests if batch fails
         const promises = validIds.map(async (gameId) => {
@@ -179,7 +171,6 @@ export async function batchGetWatchlistStatus(gameIds) {
       }
     } catch (error) {
       // Fallback to individual requests on error
-      console.warn("Batch watchlist request failed, using fallback:", error);
       const promises = uncachedIds.map(async (gameId) => {
         const status = await fetchWatchlistStatus(gameId);
         if (status !== null) {

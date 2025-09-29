@@ -148,21 +148,26 @@ export async function load({ request, cookies }) {
     // Get additional data if user is authenticated
     if (user) {
       try {
-        // Use cached permission lookup
-        userPermissions = await getUserPermissions(user);
+        // Use cached permission lookup with extended cache for better navigation performance
+        const permissionsCacheKey = `user-permissions-${user.auth_type}-${user.id || user.sub}`;
+        userPermissions = await withCache(
+          permissionsCacheKey,
+          () => getUserPermissions(user),
+          10 * 60 * 1000, // 10 minute cache for permissions
+        );
       } catch (permError) {
         console.warn("Failed to get user permissions:", permError);
         userPermissions = { isAdmin: false };
       }
     }
 
-    // Check ROMM availability and get server URL (with caching)
+    // Check ROMM availability and get server URL (with extended caching for performance)
     let rommServerUrl = null;
     try {
       rommAvailable = await withCache(
         `romm-availability-${cookieHeader ? "authenticated" : "anonymous"}`,
         () => isRommAvailable(cookieHeader),
-        5 * 60 * 1000, // 5 minute cache
+        15 * 60 * 1000, // Extended to 15 minute cache for better navigation performance
       );
       if (rommAvailable) {
         // Get ROMM server URL from environment
@@ -187,7 +192,7 @@ export async function load({ request, cookies }) {
           // Filter navigation items based on user roles and visibility settings
           return await filterNavigationByRole(allNavItems, user);
         },
-        5 * 60 * 1000, // 5 minute cache
+        15 * 60 * 1000, // Extended to 15 minute cache for better navigation performance
       );
     } catch (navError) {
       console.warn("Failed to load custom navigation:", navError);

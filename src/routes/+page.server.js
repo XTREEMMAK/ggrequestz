@@ -57,23 +57,30 @@ export async function load({ parent, cookies, url, depends }) {
       ? `session=${cookies.get("session")}`
       : null;
 
-    // Get user ID for preferences
+    // Get user ID for preferences with caching to avoid repeated database lookups
     let userId = user.id;
     if (!userId) {
       if (user.sub?.startsWith("basic_auth_")) {
         // For Basic Auth users, extract actual user ID from sub
         userId = user.sub.replace("basic_auth_", "");
       } else {
-        // For Authentik users, look up database ID by authentik_sub
-        const { query } = await import("$lib/database.js");
-        const userResult = await query(
-          "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [user.sub],
+        // For Authentik users, look up database ID by authentik_sub with caching
+        const userLookupCacheKey = `user-lookup-${user.sub}`;
+        userId = await withCache(
+          userLookupCacheKey,
+          async () => {
+            const { query } = await import("$lib/database.js");
+            const userResult = await query(
+              "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+              [user.sub],
+            );
+            if (userResult.rows.length === 0) {
+              throw new Error("User not found in database");
+            }
+            return userResult.rows[0].id;
+          },
+          10 * 60 * 1000, // 10 minute cache for user lookups
         );
-        if (userResult.rows.length === 0) {
-          throw new Error("User not found in database");
-        }
-        userId = userResult.rows[0].id;
       }
     }
 
@@ -117,9 +124,9 @@ export async function load({ parent, cookies, url, depends }) {
       },
     );
 
-    // Prioritize critical data first - load games without ROMM cross-reference for speed
+    // Prioritize critical data first - load games with enhanced caching
     const criticalDataPromise = Promise.all([
-      // Get new releases from IGDB (optimized - fetch only what we need initially)
+      // Get new releases from IGDB (restored to 24 games with enhanced caching)
       safeAsync(
         async () => {
           // Fetch more games for dynamic display limits (up to 24 for wide screens)
@@ -147,7 +154,7 @@ export async function load({ parent, cookies, url, depends }) {
         },
       ),
 
-      // Get popular games from IGDB (fetch more for dynamic display limits)
+      // Get popular games from IGDB (restored to 24 games with enhanced caching)
       safeAsync(
         async () => {
           if (
@@ -199,15 +206,15 @@ export async function load({ parent, cookies, url, depends }) {
       ),
     ]);
 
-    // Secondary data - ROMM integration (optimized)
+    // Secondary data - ROMM integration (optimized with enhanced caching)
     const secondaryDataPromise = rommAvailable
       ? Promise.all([
-          // Get newest ROMs from ROMM library (increased for dynamic display limits)
+          // Get newest ROMs from ROMM library (20 initial for new simplified loading strategy)
           safeAsync(
             () =>
               cacheRommGames(
-                () => getRecentlyAddedROMs(24, 0, cookieHeader),
-                0,
+                () => getRecentlyAddedROMs(20, 0, cookieHeader),
+                "0-v20", // Changed cache key to force fresh fetch with 20 games
               ),
             {
               timeout: 4000 * timeoutMultiplier,
@@ -246,6 +253,8 @@ export async function load({ parent, cookies, url, depends }) {
         rommAvailable && (newReleases.length > 0 || popularGames.length > 0),
       cookieHeader, // Pass for client-side ROMM operations
       resolvedUserId: userId, // Pass the resolved database user ID for client-side API calls
+      // PERFORMANCE OPTIMIZATION: Enhanced caching and navigation optimizations applied
+      hasUserPreferences: !!userPreferences, // Whether user has filtering preferences
     };
   } catch (error) {
     console.error("Homepage load error:", error);

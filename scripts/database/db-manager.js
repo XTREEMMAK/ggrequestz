@@ -330,11 +330,179 @@ async function runMigrations() {
     } else {
       console.log(`🎉 Executed ${executedCount} migrations successfully!`);
     }
+
+    // Verify critical columns exist after migrations
+    await verifySchemaIntegrity(client);
   } catch (error) {
     console.error("❌ Migration failed:", error.message);
     throw error;
   } finally {
     await client.end();
+  }
+}
+
+/**
+ * Verify that database schema matches what migrations should have created
+ */
+async function verifySchemaIntegrity(client) {
+  console.log("🔍 Verifying database schema integrity...");
+
+  try {
+    // Get list of executed migrations
+    const executedMigrations = await client.query(
+      `SELECT migration_name, executed_at FROM ${CONFIG.migrationTable} ORDER BY migration_name`,
+    );
+
+    // Dynamically check for columns based on migration files that should have run
+    const migrationFiles = existsSync(CONFIG.migrationsDir)
+      ? readdirSync(CONFIG.migrationsDir)
+          .filter((file) => file.endsWith(".sql"))
+          .sort()
+      : [];
+
+    let schemaIssues = [];
+
+    // For each migration file, check if it was executed
+    for (const migrationFile of migrationFiles) {
+      const wasExecuted = executedMigrations.rows.some(
+        (row) => row.migration_name === migrationFile,
+      );
+
+      if (!wasExecuted) {
+        console.log(`⚠️  Migration ${migrationFile} has not been executed yet`);
+
+        // Read the migration to understand what it should create
+        try {
+          const migrationPath = join(CONFIG.migrationsDir, migrationFile);
+          const migrationContent = readFileSync(migrationPath, "utf8");
+
+          // Extract ADD COLUMN statements to know what columns should exist
+          const addColumnRegex =
+            /ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s+(\w+)/gi;
+          let match;
+          while ((match = addColumnRegex.exec(migrationContent)) !== null) {
+            const columnName = match[1];
+            console.log(`   - This migration should add column: ${columnName}`);
+          }
+        } catch (err) {
+          console.warn(`   Could not analyze migration file: ${err.message}`);
+        }
+      } else {
+        console.log(`✅ Migration ${migrationFile} was executed`);
+      }
+    }
+
+    // Check for specific known issues that cause problems
+    const knownProblematicColumns = [
+      {
+        table: "ggr_games_cache",
+        columns: ["content_rating", "esrb_rating", "is_mature", "is_nsfw"],
+        description: "ESRB rating columns needed for content filtering",
+      },
+    ];
+
+    for (const { table, columns, description } of knownProblematicColumns) {
+      const columnCheck = await client.query(
+        `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = $1
+        AND column_name = ANY($2::text[])
+      `,
+        [table, columns],
+      );
+
+      const foundColumns = columnCheck.rows.map((row) => row.column_name);
+      const missingColumns = columns.filter(
+        (col) => !foundColumns.includes(col),
+      );
+
+      if (missingColumns.length > 0) {
+        schemaIssues.push({
+          table,
+          missingColumns,
+          description,
+          severity: "error",
+        });
+        console.log(
+          `❌ Missing columns in ${table}: ${missingColumns.join(", ")}`,
+        );
+        console.log(`   ${description}`);
+      }
+    }
+
+    // Check for problematic foreign key constraints
+    const foreignKeyCheck = await client.query(`
+      SELECT
+        tc.constraint_name,
+        tc.table_name,
+        kcu.column_name,
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name
+      FROM information_schema.table_constraints AS tc
+      JOIN information_schema.key_column_usage AS kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage AS ccu
+        ON ccu.constraint_name = tc.constraint_name
+        AND ccu.table_schema = tc.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_name = 'ggr_game_requests'
+        AND kcu.column_name = 'igdb_id'
+    `);
+
+    if (foreignKeyCheck.rows.length > 0) {
+      schemaIssues.push({
+        type: "foreign_key",
+        constraints: foreignKeyCheck.rows,
+        description:
+          "Foreign key constraints that prevent creating requests for non-cached games",
+        severity: "warning",
+      });
+      console.log(
+        `⚠️  Found ${foreignKeyCheck.rows.length} foreign key constraint(s) on ggr_game_requests.igdb_id`,
+      );
+      console.log(
+        "   These may prevent creating requests for games not yet in cache",
+      );
+    }
+
+    // Report results
+    if (schemaIssues.length > 0) {
+      const errors = schemaIssues.filter((issue) => issue.severity === "error");
+      const warnings = schemaIssues.filter(
+        (issue) => issue.severity === "warning",
+      );
+
+      if (errors.length > 0) {
+        console.log(`\n❌ Schema verification found ${errors.length} error(s)`);
+        console.log("   The application may not function correctly");
+        console.log(
+          "   Run 'node scripts/database/db-manager.js migrate' to fix",
+        );
+
+        // Don't throw an error, but log the issues
+        // This allows the app to start even with schema issues
+        // throw new Error(`Schema verification failed with ${errors.length} errors`);
+      }
+
+      if (warnings.length > 0) {
+        console.log(
+          `\n⚠️  Schema verification found ${warnings.length} warning(s)`,
+        );
+        console.log("   Some features may be limited");
+      }
+    } else {
+      console.log("✅ Database schema integrity verified successfully");
+    }
+
+    return schemaIssues;
+  } catch (error) {
+    console.error("❌ Schema verification error:", error.message);
+    // Don't throw - allow app to start
+    return [
+      { type: "verification_error", error: error.message, severity: "warning" },
+    ];
   }
 }
 

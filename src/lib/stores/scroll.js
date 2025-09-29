@@ -57,16 +57,6 @@ class ScrollManager {
       );
       const targetScroll = Math.min(data.scrollY, maxScroll);
 
-      console.log("📊 Scroll restore attempt:", {
-        path,
-        targetScrollY: data.scrollY,
-        currentMaxScroll: maxScroll,
-        adjustedTarget: targetScroll,
-        isMobile,
-        documentHeight: document.documentElement.scrollHeight,
-        windowHeight: window.innerHeight,
-      });
-
       // For mobile, be more lenient with the scroll position check
       const threshold = isMobile ? 0.8 : 0.9;
       const canReachTarget = targetScroll >= data.scrollY * threshold;
@@ -84,16 +74,6 @@ class ScrollManager {
           window.scrollTo({ top: targetScroll, behavior: "instant" });
         }
 
-        console.log("📍 Restored scroll position for", path, ":");
-        console.log(
-          "✅ Restored scroll position to",
-          targetScroll,
-          "(mobile:",
-          isMobile,
-          ", attempts:",
-          retryCount + 1,
-          ")",
-        );
         if (onComplete) onComplete(targetScroll);
         return true;
       }
@@ -148,9 +128,7 @@ class ScrollManager {
         const data = JSON.parse(stored);
         this.positions = new Map(Object.entries(data));
       }
-    } catch (error) {
-      console.warn("Failed to load scroll positions from storage:", error);
-    }
+    } catch (error) {}
   }
 }
 

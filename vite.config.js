@@ -40,15 +40,17 @@ export default defineConfig({
     // Reduce chunk size warning threshold to catch large bundles
     chunkSizeWarningLimit: 600,
     // Enable source maps for better debugging (remove in production)
-    sourcemap: false,
-    // Enable minification for smaller bundle sizes
-    minify: "terser",
-    terserOptions: {
-      compress: {
-        drop_console: true, // Remove console.log in production
-        drop_debugger: true,
+    sourcemap: process.env.NODE_ENV === "development",
+    // Enable minification for smaller bundle sizes (only in production)
+    minify: process.env.NODE_ENV === "production" ? "terser" : false,
+    ...(process.env.NODE_ENV === "production" && {
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
       },
-    },
+    }),
   },
   // Optimize dependencies
   optimizeDeps: {

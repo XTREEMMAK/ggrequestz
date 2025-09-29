@@ -103,12 +103,9 @@ export class PerformanceMetrics {
       if (isSlowOperation || isImportantMetric) {
         const emoji = this.getMetricEmoji(metric);
         console.log(
-          `${emoji} ${metric.name}: ${metric.duration?.toFixed(2)}ms`,
-          {
-            category: metric.category,
-            ...(isSlowOperation && { warning: "Slow operation detected" }),
-            ...(metric.url && { url: metric.url.substring(0, 50) + "..." }),
-          },
+          `${emoji} Performance metric:`,
+          metric.name,
+          `${metric.duration}ms`,
         );
       }
     }
@@ -148,7 +145,6 @@ export class PerformanceMetrics {
     try {
       const result = await fn();
       const duration = this.endTiming(name);
-      console.log(`⏱️ ${name}: ${duration.toFixed(2)}ms`);
       return result;
     } catch (error) {
       this.endTiming(name);
@@ -396,11 +392,6 @@ export class PerformanceMetrics {
 
 // Create singleton instance
 export const metrics = new PerformanceMetrics();
-
-// Initialize comprehensive performance monitoring
-if (browser && import.meta.env.DEV) {
-  console.log("🔍 Performance monitoring enabled");
-}
 
 // Cleanup on page unload
 if (browser) {

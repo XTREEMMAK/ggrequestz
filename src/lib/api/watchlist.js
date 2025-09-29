@@ -27,7 +27,6 @@ class WatchlistClient {
       this.lastFetch = now;
       return watchlist;
     } catch (error) {
-      console.warn("Failed to fetch watchlist:", error);
       return this.cache || [];
     }
   }
@@ -58,7 +57,6 @@ class WatchlistClient {
         return true;
       }
 
-      console.warn("Failed to add to watchlist:", error);
       return false;
     }
   }
@@ -87,7 +85,6 @@ class WatchlistClient {
         return true;
       }
 
-      console.warn("Failed to remove from watchlist:", error);
       return false;
     }
   }
@@ -102,7 +99,6 @@ class WatchlistClient {
       const watchlist = await this.getUserWatchlist();
       return watchlist.some((item) => (item.igdb_id || item.id) === gameId);
     } catch (error) {
-      console.warn("Failed to check watchlist status:", error);
       return false;
     }
   }

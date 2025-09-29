@@ -169,6 +169,11 @@ async function runMigrations() {
     try {
       await runCommand("node", ["scripts/database/db-manager.js", "init"]);
       console.log("✅ Database initialization completed successfully");
+
+      // Run migrations after initialization for fresh installs
+      console.log("🚀 Running migrations after initialization...");
+      await runCommand("node", ["scripts/database/db-manager.js", "migrate"]);
+      console.log("✅ Database migrations completed successfully");
       return;
     } catch (error) {
       console.error("❌ Database initialization failed:", error.message);

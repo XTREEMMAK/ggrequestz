@@ -1,7 +1,7 @@
 {
   "name": "gg-requestz",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development DOTENV_CONFIG_PATH=.env.dev vite dev",

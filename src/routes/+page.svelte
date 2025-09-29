@@ -3,6 +3,7 @@
 -->
 
 <script>
+  // Homepage script executing
   import GameCard from '../components/GameCard.svelte';
   // Lazy load GameModal only when needed
   let GameModal = $state(null);
@@ -32,9 +33,36 @@
 
   let user = $derived(data?.user);
   let currentPath = $derived($page.url.pathname);
-  let newInLibrary = $state(data?.newInLibrary || []);
-  let newReleases = $state(data?.newReleases || []);
-  let popularGames = $state(data?.popularGames || []);
+
+  // Initialize state with potential restoration from navigation
+  function initializeStateWithRestoration(serverData, fallback) {
+    if (!browser) return serverData !== undefined ? serverData : fallback.default;
+
+    // Check if we have saved state that should take precedence
+    const savedState = sessionStorage.getItem('homepage_content_state');
+    if (savedState) {
+      try {
+        const cachedData = JSON.parse(savedState);
+        // Check if cache is still valid (5 minutes)
+        const cacheAge = Date.now() - (cachedData.timestamp || 0);
+        if (cacheAge <= 5 * 60 * 1000) {
+          // If cached value exists for this field, use it regardless of whether it's truthy or falsy
+          if (cachedData.hasOwnProperty(fallback.name)) {
+            return cachedData[fallback.name];
+          }
+        }
+      } catch (error) {
+        // Invalid cache, use server data
+      }
+    }
+
+    // Return server data if provided (even if it's false), otherwise use default
+    return serverData !== undefined ? serverData : fallback.default;
+  }
+
+  let newInLibrary = $state(initializeStateWithRestoration(data?.newInLibrary, { name: 'newInLibrary', default: [] }));
+  let newReleases = $state(initializeStateWithRestoration(data?.newReleases, { name: 'newReleases', default: [] }));
+  let popularGames = $state(initializeStateWithRestoration(data?.popularGames, { name: 'popularGames', default: [] }));
 
   // Helper function to get user ID for API calls
   function getUserId() {
@@ -125,55 +153,75 @@
   }
 
   
-  // Pagination tracking
-  let newInLibraryPage = $state(1);
-  let rommsPage = $state(1);
-  let newReleasesPage = $state(1);
-  let popularPage = $state(1);
+  // Pagination tracking - start from 1 since server loads page 1 (20 games) initially with state restoration
+  let newInLibraryPage = $state(initializeStateWithRestoration(1, { name: 'newInLibraryPage', default: 1 }));
+  let newInLibraryAutoPage = $state(1); // Separate tracking for auto-loaded pages - no restoration needed
+  let autoLoadingInProgress = $state(false); // Prevent simultaneous auto-loads - no restoration needed
+  let rommsPage = $state(initializeStateWithRestoration(1, { name: 'rommsPage', default: 1 }));
+  let newReleasesPage = $state(initializeStateWithRestoration(1, { name: 'newReleasesPage', default: 1 }));
+  let popularPage = $state(initializeStateWithRestoration(1, { name: 'popularPage', default: 1 }));
   
-  // Section expansion states - start in vertical grid view
-  let newInLibraryExpanded = $state(true);
-  let rommsExpanded = $state(true);
-  let newReleasesExpanded = $state(true);
+  // Section expansion states - start in vertical grid view with state restoration
+  let newInLibraryExpanded = $state(initializeStateWithRestoration(true, { name: 'newInLibraryExpanded', default: true }));
+  let rommsExpanded = $state(initializeStateWithRestoration(true, { name: 'rommsExpanded', default: true }));
+  let newReleasesExpanded = $state(initializeStateWithRestoration(true, { name: 'newReleasesExpanded', default: true }));
+  let popularExpanded = $state(initializeStateWithRestoration(true, { name: 'popularExpanded', default: true }));
 
-  let popularExpanded = $state(true);
+  // Initial load limits - dynamically calculated based on viewport with state restoration
+  let rommsShowMore = $state(initializeStateWithRestoration(false, { name: 'rommsShowMore', default: false }));
+  let newReleasesShowMore = $state(initializeStateWithRestoration(false, { name: 'newReleasesShowMore', default: false }));
+  let popularShowMore = $state(initializeStateWithRestoration(false, { name: 'popularShowMore', default: false }));
 
-  // Initial load limits - dynamically calculated based on viewport
-  let rommsShowMore = $state(false);
-  let newReleasesShowMore = $state(false);
-  let popularShowMore = $state(false);
+  // SIMPLIFIED APPROACH: Always load 20 cards, let CSS handle overflow hiding
+  function getInitialCardCount() {
+    return 20; // Always load 20 cards regardless of device/resolution
+  }
 
-  // Calculate how many cards fit in exactly 2 rows based on viewport width
-  function calculateDynamicLimit(width) {
-    // Keep the original breakpoint system - CSS grid handles sidebar collapse space automatically
-    // Fixed breakpoints to ensure exactly 2 rows and prevent overflow
-    // Based on actual testing and user feedback for specific widths
+  // For skeleton loaders: always show 20 skeleton cards (same as initial load)
+  function getSkeletonCount() {
+    return 20;
+  }
 
-    let limit;
+  // SIMPLE APPROACH: Count visible cards that fit in 2 rows
+  function getVisibleCardLimit() {
+    if (!browser) return 20; // Server-side: show all
+    if (typeof window === 'undefined') return 20;
 
-    if (width >= 2000) {
-      limit = 18; // 9 per row × 2 rows for ultra-wide screens
-    } else if (width >= 1900) {
-      limit = 16; // 8 per row × 2 rows for very wide screens
-    } else if (width >= 1700) {
-      limit = 14; // 7 per row × 2 rows for wide screens (1765px)
-    } else if (width >= 1600) {
-      limit = 10; // 5 per row × 2 rows for wide screens (1600px) - FIXED
-    } else if (width >= 1400) {
-      limit = 10; // 5 per row × 2 rows for xl screens (1395px)
-    } else if (width >= 1260) {
-      limit = 8;  // 4 per row × 2 rows for xl screens (1260-1379px)
-    } else if (width >= 975) {
-      limit = 10; // 5 per row × 2 rows for wide lg screens (975-1259px)
-    } else if (width >= 780) {
-      limit = 8;  // 4 per row × 2 rows for lg screens (780px+)
-    } else if (width >= 700) {
-      limit = 8;  // 4 per row × 2 rows for md-lg screens (700-779px)
-    } else {
-      limit = 6;  // 6 cards for small screens (≤699px) - CSS auto-fit with 150px minimum under 640px
+    // On mobile, show all 20 cards
+    if (window.innerWidth < 1024) {
+      return 20;
     }
 
-    return limit;
+    // On desktop, use a simple heuristic based on viewport and card size
+    // LESS AGGRESSIVE scaling to ensure we don't underestimate
+    const viewportWidth = window.innerWidth;
+    const cardSizeMultiplier = currentCardSizeSlider / 100; // 0.0 to 1.0
+
+    // More generous base estimates
+    let maxCardsPerRow;
+    if (viewportWidth >= 1920) {
+      maxCardsPerRow = 12; // Extra large screens can fit many small cards
+    } else if (viewportWidth >= 1536) {
+      maxCardsPerRow = 10; // Large screens
+    } else if (viewportWidth >= 1280) {
+      maxCardsPerRow = 8; // Medium screens
+    } else {
+      maxCardsPerRow = 6; // Small desktop screens
+    }
+
+    // Less aggressive scaling: only reduce by 50% max (not 75%)
+    // At slider=0 (smallest): use maxCardsPerRow (100%)
+    // At slider=100 (largest): use 50% of maxCardsPerRow
+    const scaleFactor = 1.0 - (cardSizeMultiplier * 0.5); // Range: 1.0 to 0.5
+    const estimatedCardsPerRow = Math.max(3, Math.round(maxCardsPerRow * scaleFactor));
+
+    // 2 rows worth, capped at 20 (our total loaded)
+    return Math.min(20, estimatedCardsPerRow * 2);
+  }
+
+  // Legacy function for backward compatibility - now calls simplified calculation
+  function calculateDynamicLimit(width) {
+    return getInitialCardCount();
   }
 
   // Dynamic viewport-based display limits
@@ -193,6 +241,8 @@
 
   let dynamicDisplayLimit = $state(getInitialLimit());
 
+  // Debounce timer for auto-loading
+  let autoLoadDebounceTimer;
 
   // Update dynamic limit when viewport changes - use onMount for better reliability
   onMount(() => {
@@ -200,33 +250,143 @@
       const updateLimit = () => {
         viewportWidth = window.innerWidth;
         const newLimit = calculateDynamicLimit(viewportWidth);
-        // Dynamic limit updated for viewport
-        dynamicDisplayLimit = newLimit;
+
+        // Only trigger auto-loading if the limit actually changed
+        if (newLimit !== dynamicDisplayLimit) {
+          dynamicDisplayLimit = newLimit;
+
+          // Debounce auto-loading to prevent rapid-fire requests during window resizing
+          if (autoLoadDebounceTimer) {
+            clearTimeout(autoLoadDebounceTimer);
+          }
+          autoLoadDebounceTimer = setTimeout(() => {
+            checkAndFillRommRows();
+          }, 500); // Wait 500ms after last resize before auto-loading
+        }
       };
 
       // Force immediate calculation on mount
       updateLimit();
 
+      // Trigger initial auto-loading check after a delay to ensure everything is rendered
+      setTimeout(() => {
+        if (rommAvailable && newInLibrary.length > 0) {
+          checkAndFillRommRows();
+        }
+      }, 1000);
+
       window.addEventListener('resize', updateLimit);
 
-      return () => window.removeEventListener('resize', updateLimit);
+      return () => {
+        window.removeEventListener('resize', updateLimit);
+        if (autoLoadDebounceTimer) {
+          clearTimeout(autoLoadDebounceTimer);
+        }
+      };
     }
   });
 
+  // Auto-load more ROMM games to fill incomplete rows
+  async function checkAndFillRommRows() {
+    // DISABLED: Auto-fill conflicts with new simplified loading strategy
+    // We now load a generous amount (20 cards) upfront and hide overflow,
+    // so auto-fill is no longer needed
+    return;
+
+    // Enhanced guards to prevent duplicate/simultaneous loading
+    if (!rommAvailable || loadingNewInLibrary || autoLoadingInProgress) {
+      return;
+    }
+
+    // Only auto-load if we have fewer games than needed AND user hasn't manually loaded more
+    if (newInLibrary.length < dynamicDisplayLimit && newInLibrary.length > 0 && !rommsShowMore) {
+      const gamesNeeded = dynamicDisplayLimit - newInLibrary.length;
+
+      // Don't auto-load if we only need 1 game (might be a very minor viewport change)
+      if (gamesNeeded < 2) {
+        return;
+      }
+
+
+      // Set both flags to prevent any concurrent loading
+      loadingNewInLibrary = true;
+      autoLoadingInProgress = true;
+
+      try {
+        const gamesPerPage = 6;
+        let gamesAdded = 0;
+        const existingGameIds = new Set(newInLibrary.map(game => game.id || game.rom_id || game.igdb_id).filter(Boolean));
+
+        // Keep fetching until we have enough games or run out of pages
+        while (gamesAdded < gamesNeeded) {
+          const currentPage = newInLibraryAutoPage + 1;
+
+          const response = await fetch(`/api/romm/recent?page=${currentPage}&limit=${gamesPerPage}&user_id=${getUserId()}`, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.games && data.games.length > 0) {
+              // Filter out any games we already have (duplicate detection)
+              const newGames = data.games.filter(game => {
+                const gameId = game.id || game.rom_id || game.igdb_id;
+                return gameId && !existingGameIds.has(gameId);
+              });
+
+              if (newGames.length === 0) {
+                newInLibraryAutoPage = currentPage;
+                continue;
+              }
+
+              // Only add the exact number we need
+              const remainingNeeded = gamesNeeded - gamesAdded;
+              const gamesToAdd = newGames.slice(0, remainingNeeded);
+
+              // Add new games to existing list and update tracking
+              newInLibrary = [...newInLibrary, ...gamesToAdd];
+              newInLibraryAutoPage = currentPage;
+              gamesAdded += gamesToAdd.length;
+
+              // Update our duplicate detection set
+              gamesToAdd.forEach(game => {
+                const gameId = game.id || game.rom_id || game.igdb_id;
+                if (gameId) existingGameIds.add(gameId);
+              });
+
+
+              // If we fetched fewer games than the page size, we've reached the end
+              if (data.games.length < gamesPerPage) {
+                break;
+              }
+            } else {
+              break;
+            }
+          } else {
+            break;
+          }
+        }
+
+      } catch (error) {
+      } finally {
+        loadingNewInLibrary = false;
+        autoLoadingInProgress = false;
+      }
+    } else {
+    }
+  }
+
   // Derived arrays for display limiting with dynamic calculation
-  // Always ensure we don't exceed the dynamic limit for initial display
   let displayedRomms = $derived(
-    (() => {
-      const limit = rommsShowMore ? newInLibrary.length : Math.min(dynamicDisplayLimit, newInLibrary.length);
-      // ROMM display limit calculated
-      return rommsShowMore ? newInLibrary : newInLibrary.slice(0, Math.min(dynamicDisplayLimit, newInLibrary.length));
-    })()
+    rommsShowMore ? newInLibrary : newInLibrary.slice(0, Math.min(getVisibleCardLimit(), newInLibrary.length))
   );
   let displayedNewReleases = $derived(
-    newReleasesShowMore ? newReleases : newReleases.slice(0, Math.min(dynamicDisplayLimit, newReleases.length))
+    newReleasesShowMore ? newReleases : newReleases.slice(0, Math.min(getVisibleCardLimit(), newReleases.length))
   );
   let displayedPopular = $derived(
-    popularShowMore ? popularGames : popularGames.slice(0, Math.min(dynamicDisplayLimit, popularGames.length))
+    popularShowMore ? popularGames : popularGames.slice(0, Math.min(getVisibleCardLimit(), popularGames.length))
   );
 
 
@@ -281,15 +441,20 @@
 
   // Calculate dynamic card size based on current slider value (0-100)
   let dynamicCardSize = $derived.by(() => {
-    // Map slider value (0-100) to card sizes (120px-300px for min, 140px-320px for max)
-    const minSize = 120 + (currentCardSizeSlider * 1.8); // 120px to 300px
-    const maxSize = 140 + (currentCardSizeSlider * 1.8); // 140px to 320px
-    return { min: Math.round(minSize), max: Math.round(maxSize) };
+    // Map slider value (0-100) with 0.1 step precision to card sizes
+    const sliderRatio = currentCardSizeSlider / 100; // Convert 0-100 to 0-1
+    const minSize = 120 + (sliderRatio * 180); // 120px to 300px
+    const maxSize = 140 + (sliderRatio * 180); // 140px to 320px
+    // Use high precision for smooth scaling
+    return {
+      min: Math.round(minSize * 10) / 10, // Round to 1 decimal place
+      max: Math.round(maxSize * 10) / 10
+    };
   });
 
   // Update cardSize based on current slider value and save to preferences
   $effect(() => {
-    // Calculate card size category for display based on current device slider
+    // Calculate card size category for display based on current device slider (0-100 range)
     if (currentCardSizeSlider <= 33) {
       cardSize = 'small';
     } else if (currentCardSizeSlider <= 66) {
@@ -310,6 +475,28 @@
   $effect(() => {
     if (browser) {
       localStorage.setItem('cardSizeSlider-desktop', cardSizeSliderDesktop.toString());
+    }
+  });
+
+  // Update display limit when card size changes (mobile/desktop aware)
+  $effect(() => {
+    if (browser && dynamicCardSize) {
+      // Debounce recalculation to avoid excessive updates during slider dragging
+      if (autoLoadDebounceTimer) {
+        clearTimeout(autoLoadDebounceTimer);
+      }
+
+      autoLoadDebounceTimer = setTimeout(() => {
+        const newLimit = getInitialCardCount();
+        if (newLimit !== dynamicDisplayLimit) {
+          dynamicDisplayLimit = newLimit;
+
+          // Auto-fill if needed after card size change
+          if (rommAvailable && newInLibrary.length > 0) {
+            checkAndFillRommRows();
+          }
+        }
+      }, 300); // Wait 300ms after last slider change
     }
   });
 
@@ -345,24 +532,32 @@
         const module = await import('../components/LoadingSpinner.svelte');
         LoadingSpinner = module.default;
       } catch (error) {
-        console.error('Failed to load LoadingSpinner:', error);
       }
     }
   });
 
 
-  // Helper function for staggered card loading animation
+  // Helper function for staggered card loading animation with duplicate prevention
   async function addGamesWithStagger(games, existingGames, updateFunction) {
     const STAGGER_DELAY = 150; // ms between each card
     let currentGames = [...existingGames];
-    
-    for (let i = 0; i < games.length; i++) {
+
+    // Filter out duplicates before adding - compare by igdb_id or id
+    const existingIds = new Set(existingGames.map(game => game.igdb_id || game.id));
+    const uniqueGames = games.filter(game => !existingIds.has(game.igdb_id || game.id));
+
+    if (uniqueGames.length === 0) {
+      // No new unique games to add
+      return;
+    }
+
+    for (let i = 0; i < uniqueGames.length; i++) {
       // Add one new game at a time to the existing array
-      currentGames = [...currentGames, games[i]];
+      currentGames = [...currentGames, uniqueGames[i]];
       updateFunction(currentGames);
-      
+
       // Wait before adding next card (except for the last one)
-      if (i < games.length - 1) {
+      if (i < uniqueGames.length - 1) {
         await new Promise(resolve => setTimeout(resolve, STAGGER_DELAY));
       }
     }
@@ -413,7 +608,6 @@
 
     // Prevent rapid duplicate saves (within 100ms)
     if (now - lastSaveTime < 100) {
-      console.log(`⚠️ Skipping rapid duplicate save (${now - lastSaveTime}ms since last save)`);
       return;
     }
 
@@ -423,7 +617,6 @@
 
     // Check if scroll position has changed significantly from last save
     if (existingSaved && Math.abs(parseInt(existingSaved) - currentScroll) < 50 && isNavigatingAway) {
-      console.log(`⚠️ Scroll position hasn't changed much (${existingSaved}px → ${currentScroll}px), skipping save`);
       return;
     }
 
@@ -448,7 +641,6 @@
     // First, try history state
     if (window.history.state?.scrollY) {
       scrollY = window.history.state.scrollY;
-      console.log(`📜 Found scroll in history state: ${scrollY}px`);
     }
 
     // Fallback to sessionStorage
@@ -459,15 +651,12 @@
         // Only use non-zero values
         if (parsedScroll > 0) {
           scrollY = parsedScroll;
-          console.log(`💾 Found scroll in sessionStorage: ${scrollY}px`);
         } else {
-          console.log(`⚠️ Ignoring zero scroll position from sessionStorage`);
         }
       }
     }
 
     if (scrollY && scrollY > 0) {
-      console.log(`🔄 Restoring scroll position to ${scrollY}px`);
 
       // Enhanced approach: wait for content to be visible before scrolling
       const attemptRestore = (attempt = 1, maxAttempts = 20) => {
@@ -499,7 +688,6 @@
                 if (Math.abs(actualScroll - scrollY) < 50) {
                   sessionStorage.removeItem('homepage_scroll_position');
                 } else {
-                  console.log(`⚠️ Scroll position mismatch (target: ${scrollY}, actual: ${actualScroll}), retrying...`);
                   // Try one more time after a delay
                   setTimeout(() => {
                     window.scrollTo(0, scrollY);
@@ -509,14 +697,12 @@
             });
           });
         } else {
-          console.log(`⏳ Content not ready (hasContent: ${!!hasContent}, hasCards: ${hasCards}, bodyHeight: ${bodyHeight}), attempt ${attempt}/${maxAttempts}`);
           setTimeout(() => attemptRestore(attempt + 1, maxAttempts), 100);
         }
       };
 
       attemptRestore();
     } else {
-      console.log(`❌ No saved scroll position found`);
     }
   }
   
@@ -544,7 +730,6 @@
       const maxSessionAge = 30 * 60 * 1000; // 30 minutes - very generous for browser tab sessions
 
       if (sessionAge > maxSessionAge) {
-        console.log(`🗑️ Clearing very old homepage state (${Math.round(sessionAge / 60000)} minutes old)`);
         sessionStorage.removeItem('homepage_content_state');
         return;
       }
@@ -568,17 +753,23 @@
         popularGames = cachedData.popularGames;
         popularPage = cachedData.popularPage || 1;
       }
-      
-      // Restore expansion states
+
+      // Also restore the showMore and expanded states explicitly
+      // Even though they're initialized with restoration, this function runs after init
+      if (cachedData.rommsShowMore !== undefined) {
+        rommsShowMore = cachedData.rommsShowMore;
+      }
+      if (cachedData.newReleasesShowMore !== undefined) {
+        newReleasesShowMore = cachedData.newReleasesShowMore;
+      }
+      if (cachedData.popularShowMore !== undefined) {
+        popularShowMore = cachedData.popularShowMore;
+      }
+
       if (cachedData.newInLibraryExpanded !== undefined) newInLibraryExpanded = cachedData.newInLibraryExpanded;
       if (cachedData.rommsExpanded !== undefined) rommsExpanded = cachedData.rommsExpanded;
       if (cachedData.newReleasesExpanded !== undefined) newReleasesExpanded = cachedData.newReleasesExpanded;
       if (cachedData.popularExpanded !== undefined) popularExpanded = cachedData.popularExpanded;
-
-      // Restore load more states
-      if (cachedData.rommsShowMore !== undefined) rommsShowMore = cachedData.rommsShowMore;
-      if (cachedData.newReleasesShowMore !== undefined) newReleasesShowMore = cachedData.newReleasesShowMore;
-      if (cachedData.popularShowMore !== undefined) popularShowMore = cachedData.popularShowMore;
       
       // Sections are already shown immediately by onMount/afterNavigate hooks
       
@@ -590,7 +781,6 @@
       }, 300);
       
     } catch (error) {
-      console.error('Failed to restore homepage state:', error);
       sessionStorage.removeItem('homepage_content_state');
     }
   }
@@ -706,7 +896,6 @@
         }
       }
     } catch (error) {
-      console.error('Watchlist error:', error);
       toasts.error('Failed to update watchlist. Please try again.');
     }
   }
@@ -719,7 +908,6 @@
         const module = await import('../components/GameModal.svelte');
         GameModal = module.default;
       } catch (error) {
-        console.error('Failed to load GameModal:', error);
         return;
       }
     }
@@ -758,7 +946,6 @@
   function handleGameCardClick(event) {
     // Save homepage state and scroll position before navigation
     const currentScroll = window.scrollY;
-    console.log(`🎮 GameCard clicked at scroll position ${currentScroll}px`);
 
     // Set guard immediately to prevent any duplicate saves
     isNavigatingAway = true;
@@ -785,13 +972,120 @@
     }
   }
   
-  // Removed unused functions loadMoreNewInLibrary and loadMoreROMs
+  // Load more ROMM library games with balanced overflow + new content strategy
+  async function loadMoreNewInLibrary() {
+    if (loadingNewInLibrary) return;
+
+    const BATCH_SIZE = 20; // Target number of new cards to show per Load More click
+    const currentVisible = getVisibleCardLimit();
+    const totalLoaded = newInLibrary.length;
+    const hiddenCount = rommsShowMore ? 0 : Math.max(0, totalLoaded - currentVisible);
+
+    // Strategy: Always try to provide BATCH_SIZE worth of new content
+    // by combining hidden overflow cards + new API requests
+
+    let cardsFromHidden = 0;
+    let cardsNeededFromAPI = BATCH_SIZE;
+
+    if (!rommsShowMore && hiddenCount > 0) {
+      // We have hidden cards available
+      cardsFromHidden = Math.min(hiddenCount, BATCH_SIZE);
+      cardsNeededFromAPI = BATCH_SIZE - cardsFromHidden;
+      rommsShowMore = true; // Show hidden cards
+    } else {
+      // No hidden cards, or already showing all - need full batch from API
+      rommsShowMore = true;
+      cardsNeededFromAPI = BATCH_SIZE;
+    }
+
+    // If we need cards from API, fetch them
+    if (cardsNeededFromAPI > 0) {
+      loadingNewInLibrary = true;
+      try {
+        // Use the higher of the two page counters to avoid duplicates
+        const nextPage = Math.max(newInLibraryPage, newInLibraryAutoPage) + 1;
+
+        const response = await fetch(`/api/romm/recent?page=${nextPage}&limit=${cardsNeededFromAPI}&user_id=${getUserId()}`, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.games && data.games.length > 0) {
+            // Filter out duplicates before adding
+            const existingGameIds = new Set(newInLibrary.map(game => game.id || game.rom_id || game.igdb_id).filter(Boolean));
+            const newGames = data.games.filter(game => {
+              const gameId = game.id || game.rom_id || game.igdb_id;
+              return gameId && !existingGameIds.has(gameId);
+            });
+
+            if (newGames.length > 0) {
+              newInLibrary = [...newInLibrary, ...newGames];
+            }
+
+            // Update both page counters to keep them in sync
+            newInLibraryPage = nextPage;
+            newInLibraryAutoPage = nextPage;
+          }
+        } else {
+          throw new Error(`Failed to load more ROMM games: ${response.status}`);
+        }
+      } catch (error) {
+        toasts.add('Failed to load more games from library', 'error');
+      } finally {
+        loadingNewInLibrary = false;
+      }
+    }
+  }
+
+  // Global timer to track debounced effect
+  let twoRowDebounceTimer = null;
+
+  // Effect to maintain two-row rule when card size changes
+  $effect(() => {
+    // Skip this effect when restoring state or navigating back
+    if (!browser || !currentCardSizeSlider || isRestoringState || isNavigatingBack) {
+      // Clear any pending timeout when we skip
+      if (twoRowDebounceTimer) {
+        clearTimeout(twoRowDebounceTimer);
+        twoRowDebounceTimer = null;
+      }
+      return;
+    }
+
+
+    // Clear existing timer
+    if (twoRowDebounceTimer) clearTimeout(twoRowDebounceTimer);
+
+    twoRowDebounceTimer = setTimeout(() => {
+      // Double-check guards inside timeout too
+      if (isRestoringState || isNavigatingBack) {
+        return;
+      }
+
+      const newVisibleLimit = getVisibleCardLimit();
+
+      // If currently showing more cards than the new limit allows due to card scaling up,
+      // reset to non-expanded state to maintain two-row rule
+      if (rommsShowMore && newInLibrary.length > newVisibleLimit) {
+        const currentlyVisible = rommsShowMore ? newInLibrary.length : Math.min(newInLibrary.length, newVisibleLimit);
+
+        // Only hide if we're showing significantly more than the new limit
+        if (currentlyVisible > newVisibleLimit + 2) { // +2 tolerance to avoid frequent toggling
+          rommsShowMore = false;
+        }
+      }
+    }, 200); // Short delay to avoid excessive updates
+  });
 
   async function loadMoreNewReleases() {
     if (loadingNewReleases) return;
 
-    // First check if we have hidden content to show
-    if (!newReleasesShowMore && newReleases.length > dynamicDisplayLimit) {
+    // First check if we have hidden content to show (using new limit function)
+    const currentVisible = getVisibleCardLimit();
+    if (!newReleasesShowMore && newReleases.length > currentVisible) {
       newReleasesShowMore = true;
       return;
     }
@@ -830,7 +1124,6 @@
       }
       
     } catch (error) {
-      console.error('Failed to load more new releases:', error);
     } finally {
       loadingNewReleases = false;
     }
@@ -839,8 +1132,9 @@
   async function loadMorePopular() {
     if (loadingPopular) return;
 
-    // First check if we have hidden content to show
-    if (!popularShowMore && popularGames.length > dynamicDisplayLimit) {
+    // First check if we have hidden content to show (using new limit function)
+    const currentVisible = getVisibleCardLimit();
+    if (!popularShowMore && popularGames.length > currentVisible) {
       popularShowMore = true;
       return;
     }
@@ -894,9 +1188,7 @@
       
       // Log performance timing
       const duration = performance.now() - startTime;
-      console.log(`⏱️ load-more-popular-games: ${duration.toFixed(2)}ms`);
     } catch (error) {
-      console.error('Failed to load more popular games:', error);
     } finally {
       loadingPopular = false;
     }
@@ -908,7 +1200,6 @@
 
     // Only log when going to game details
     if (navigation.to?.url.pathname.startsWith('/game/')) {
-      console.log(`🚀 Navigating to game details`);
     }
 
     // Only save state when leaving the homepage for a game detail page
@@ -919,7 +1210,6 @@
 
       // Only save if not already saved or if scroll position has significantly changed
       if (!existingSaved || Math.abs(parseInt(existingSaved) - currentScroll) > 100) {
-        console.log(`💾 Saving state in beforeNavigate (fallback for non-GameCard navigation)`);
         isNavigatingAway = true; // Set guard before saving
         saveHomepageState();
         saveScrollPosition();
@@ -1003,7 +1293,6 @@
 
     // Handle browser back button navigation
     const handlePopState = (event) => {
-      console.log(`🔄 Browser back button detected`, event.state);
       // Small delay to let SvelteKit handle the navigation first
       setTimeout(() => {
         if (window.location.pathname === '/') {
@@ -1079,7 +1368,6 @@
         // Show floating toggle after scrolling down 100px
         const newToggleState = window.scrollY > 100;
         if (newToggleState !== showFloatingToggle) {
-          console.log(`Floating toggle ${newToggleState ? 'show' : 'hide'} at scroll: ${window.scrollY}px`);
         }
         showFloatingToggle = newToggleState;
       };
@@ -1121,14 +1409,19 @@
           showPopularGames = true;
           progressiveLoadingComplete = true;
         }
+
+        // Auto-fill ROMM rows after progressive loading completes
+        // Removed automatic call - let viewport handling manage this
       };
-      
-      progressiveLoad().catch(console.error);
+
     } else if (isNavigatingBack) {
       // When navigating back, show all sections immediately
       showNewReleases = true;
       showPopularGames = true;
       progressiveLoadingComplete = true;
+
+      // Auto-fill ROMM rows when navigating back
+      // Removed automatic call - let viewport handling manage this
     }
   });
 
@@ -1237,16 +1530,13 @@
         });
         
         if (gamesToWarm.length > 0) {
-          console.log(`🔥 Warming cache for ${gamesToWarm.length} games in initial viewport`);
           await warmGameCacheClient(gamesToWarm);
         }
       } catch (error) {
-        console.warn('Failed to warm initial viewport games:', error);
       }
       
       // Log performance timing
       const duration = performance.now() - startTime;
-      console.log(`⏱️ viewport-cache-warming: ${duration.toFixed(2)}ms`);
   }
   
   // Enhance games with ROMM data progressively with performance monitoring
@@ -1262,20 +1552,16 @@
         
         // Then enhance new releases
         if (newReleases.length > 0) {
-          console.log('🆕 Enhancing new releases with ROMM data...');
           const enhancedReleases = await rommService.crossReference(newReleases);
           newReleases = enhancedReleases;
         }
         
-        console.log('✨ ROMM enhancement complete');
       } catch (error) {
-        console.warn('ROMM enhancement failed:', error);
         throw error;
       }
       
       // Log performance timing
       const duration = performance.now() - startTime;
-      console.log(`⏱️ romm-data-enhancement: ${duration.toFixed(2)}ms`);
   }
 
 
@@ -1316,6 +1602,15 @@
     },
     { delay: 200, cacheKey: `popular-games-${popularPage + 1}` }
   ));
+
+  const newInLibraryPreloader = $derived(createHoverPreloader(
+    () => {
+      const userId = getUserId();
+      const userParam = userId ? `&user_id=${userId}` : '';
+      return fetch(`/api/romm/recent?page=${newInLibraryPage + 1}&limit=6${userParam}`).then(r => r.json());
+    },
+    { delay: 200, cacheKey: `new-in-library-${newInLibraryPage + 1}` }
+  ));
 </script>
 
 <SEOHead 
@@ -1325,7 +1620,7 @@
   ogDescription="Explore our extensive game library with powerful search and filtering. Request your favorite games and build your personal watchlist."
 />
 
-<div class="px-8 py-6 max-w-full dynamic-card-size {$sidebarCollapsed ? 'sidebar-collapsed' : ''}" style="--card-min-size: {dynamicCardSize.min}px; --card-max-size: {dynamicCardSize.max}px; --card-min-size-mobile: {Math.max(100, dynamicCardSize.min - 20)}px; --card-max-size-mobile: {Math.max(120, dynamicCardSize.max - 20)}px;">
+<div class="px-8 py-6 max-w-full dynamic-card-size {$sidebarCollapsed ? 'sidebar-collapsed' : ''}" style="--card-min-size: {dynamicCardSize?.min || 180}; --card-min-size-mobile: {Math.max(100, (dynamicCardSize?.min || 180) - 20)}; --cards-per-row: {Math.max(3, Math.min(12, Math.floor(1200 / (dynamicCardSize?.min || 180))))}; --card-scale: {0.8 + (currentCardSizeSlider / 100) * 0.4};">
   
   <!-- Mobile Logo Section -->
   <div class="lg:hidden text-center mb-8">
@@ -1407,15 +1702,16 @@
           </div>
           <div class="space-y-3">
             <div class="flex items-center justify-between text-xs text-gray-500">
-              <span>Small</span>
-              <span>Medium</span>
-              <span>Large</span>
+              <span>0</span>
+              <span>50</span>
+              <span>100</span>
             </div>
             {#if isMobile}
               <input
                 type="range"
                 min="0"
                 max="100"
+                step="0.1"
                 bind:value={cardSizeSliderMobile}
                 class="w-full h-2 bg-gray-700 rounded-lg appearance-none slider"
               />
@@ -1424,13 +1720,14 @@
                 type="range"
                 min="0"
                 max="100"
+                step="0.1"
                 bind:value={cardSizeSliderDesktop}
                 class="w-full h-2 bg-gray-700 rounded-lg appearance-none slider"
               />
             {/if}
             <div class="text-center">
               <span class="text-sm text-gray-300 font-medium">
-                Current: {cardSize.charAt(0).toUpperCase() + cardSize.slice(1)}
+                Current: {currentCardSizeSlider}
               </span>
               <div class="text-xs text-gray-500 mt-1">
                 Separate settings for mobile and desktop
@@ -1517,20 +1814,14 @@
         </div>
 
         <!-- Load More Button for ROMM section -->
-        {#if !rommsShowMore && newInLibrary.length > dynamicDisplayLimit}
-          <div class="text-center mt-6">
-            <button
-              type="button"
-              onclick={() => rommsShowMore = true}
-              class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 mx-auto"
-            >
-              Load More ({newInLibrary.length - dynamicDisplayLimit} remaining)
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-          </div>
-        {/if}
+        <div class="flex justify-center mt-6">
+          <LoadMoreButton
+            loading={loadingNewInLibrary}
+            disabled={loadingNewInLibrary}
+            preloader={newInLibraryPreloader}
+            on:load={loadMoreNewInLibrary}
+          />
+        </div>
       {:else}
         <!-- Default horizontal scroll layout -->
         <div
@@ -1538,7 +1829,7 @@
           bind:this={rommsScroll}
           in:slide={{ duration: 300, easing: quintOut }}
         >
-          {#each newInLibrary as game, index}
+          {#each displayedRomms as game, index}
             <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
               <GameCard
                 {game}
@@ -1559,7 +1850,7 @@
     {:else}
       <!-- Loading skeleton when no games yet -->
       <div class="responsive-grid gap-3 sm:gap-4 xl:gap-6 {$sidebarCollapsed ? 'sidebar-collapsed' : ''}">
-        {#each Array(10) as _, i}
+        {#each Array(getSkeletonCount()) as _, i}
           <SkeletonLoader variant="card" rounded="lg" />
         {/each}
       </div>
@@ -1763,7 +2054,7 @@
         <h2 class="text-4xl font-bold text-white">Popular Games</h2>
       </div>
       <div class="responsive-grid gap-3 sm:gap-4 xl:gap-6 {$sidebarCollapsed ? 'sidebar-collapsed' : ''}">
-        {#each Array(8) as _, i}
+        {#each Array(getInitialCardCount()) as _, i}
           <SkeletonLoader variant="card" rounded="lg" />
         {/each}
       </div>
@@ -1934,86 +2225,86 @@
     justify-content: center;
   }
 
-  /* Responsive breakpoints with much smaller max widths */
+  /* Responsive breakpoints with much smaller max widths - ONLY apply when NOT using dynamic card sizing */
   /* Very small mobile devices */
   @media (max-width: 416px) {
-    .responsive-grid {
+    .responsive-grid:not(.dynamic-card-size .responsive-grid) {
       grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     }
   }
 
   @media (min-width: 417px) and (max-width: 640px) {
-    .responsive-grid {
+    .responsive-grid:not(.dynamic-card-size .responsive-grid) {
       grid-template-columns: repeat(auto-fit, minmax(150px, 170px));
     }
   }
 
   @media (min-width: 640px) and (max-width: 768px) {
-    .responsive-grid {
+    .responsive-grid:not(.dynamic-card-size .responsive-grid) {
       grid-template-columns: repeat(auto-fit, minmax(140px, 180px));
     }
   }
 
   @media (min-width: 768px) and (max-width: 1024px) {
-    .responsive-grid {
+    .responsive-grid:not(.dynamic-card-size .responsive-grid) {
       grid-template-columns: repeat(auto-fit, minmax(160px, 190px));
     }
   }
 
   @media (min-width: 1024px) and (max-width: 1536px) {
-    .responsive-grid {
+    .responsive-grid:not(.dynamic-card-size .responsive-grid) {
       grid-template-columns: repeat(auto-fit, minmax(180px, 200px));
     }
   }
 
   @media (min-width: 1536px) and (max-width: 2048px) {
-    .responsive-grid {
+    .responsive-grid:not(.dynamic-card-size .responsive-grid) {
       grid-template-columns: repeat(auto-fit, minmax(200px, 220px));
     }
   }
 
   @media (min-width: 2048px) {
-    .responsive-grid {
+    .responsive-grid:not(.dynamic-card-size .responsive-grid) {
       grid-template-columns: repeat(auto-fit, minmax(220px, 240px));
     }
   }
 
-  /* Sidebar collapsed optimizations - very compact max widths */
-  .sidebar-collapsed .responsive-grid {
+  /* Sidebar collapsed optimizations - very compact max widths - ONLY apply when NOT using dynamic card sizing */
+  .sidebar-collapsed .responsive-grid:not(.dynamic-card-size .responsive-grid) {
     grid-template-columns: repeat(auto-fit, minmax(160px, 180px));
   }
 
-  .sidebar-collapsed .responsive-grid {
+  .sidebar-collapsed .responsive-grid:not(.dynamic-card-size .responsive-grid) {
     @media (max-width: 640px) {
       grid-template-columns: repeat(auto-fit, minmax(140px, 160px));
     }
   }
 
-  .sidebar-collapsed .responsive-grid {
+  .sidebar-collapsed .responsive-grid:not(.dynamic-card-size .responsive-grid) {
     @media (min-width: 640px) and (max-width: 768px) {
       grid-template-columns: repeat(auto-fit, minmax(130px, 170px));
     }
   }
 
-  .sidebar-collapsed .responsive-grid {
+  .sidebar-collapsed .responsive-grid:not(.dynamic-card-size .responsive-grid) {
     @media (min-width: 768px) and (max-width: 1024px) {
       grid-template-columns: repeat(auto-fit, minmax(150px, 180px));
     }
   }
 
-  .sidebar-collapsed .responsive-grid {
+  .sidebar-collapsed .responsive-grid:not(.dynamic-card-size .responsive-grid) {
     @media (min-width: 1024px) and (max-width: 1536px) {
       grid-template-columns: repeat(auto-fit, minmax(160px, 180px));
     }
   }
 
-  .sidebar-collapsed .responsive-grid {
+  .sidebar-collapsed .responsive-grid:not(.dynamic-card-size .responsive-grid) {
     @media (min-width: 1536px) and (max-width: 2048px) {
       grid-template-columns: repeat(auto-fit, minmax(180px, 200px));
     }
   }
 
-  .sidebar-collapsed .responsive-grid {
+  .sidebar-collapsed .responsive-grid:not(.dynamic-card-size .responsive-grid) {
     @media (min-width: 2048px) {
       grid-template-columns: repeat(auto-fit, minmax(200px, 220px));
     }
@@ -2021,24 +2312,48 @@
 
   /* Dynamic card size using CSS custom properties - high specificity to override other rules */
   .dynamic-card-size .responsive-grid {
-    grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size), var(--card-max-size))) !important;
+    grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size, 180px), 1fr)) !important;
+  }
+
+  /* Ultra-smooth scaling using container-based approach */
+  .dynamic-card-size .responsive-grid {
+    /* Use flexbox with dynamic sizing instead of grid minmax() */
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  /* Dynamic card sizing using CSS variables with smooth transitions */
+  .dynamic-card-size .responsive-grid > * {
+    /* Use CSS clamp for smooth scaling without discrete breakpoints */
+    width: clamp(
+      calc(var(--card-min-size) * 1px),
+      calc((100% - 2rem) / var(--cards-per-row, 6)),
+      calc(var(--card-min-size) * 1.2px)
+    );
+    flex: 0 0 auto;
+    transition: width 0.1s ease-out;
   }
 
   /* Responsive adjustments for dynamic card sizes */
   @media (max-width: 640px) {
     .dynamic-card-size .responsive-grid {
-      grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size-mobile), var(--card-max-size-mobile))) !important;
+      grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size-mobile, 160px), 1fr)) !important;
+      transition: grid-template-columns 0.2s ease-out;
     }
   }
 
   /* Override sidebar collapsed styles when using dynamic sizing */
   .dynamic-card-size.sidebar-collapsed .responsive-grid {
-    grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size), var(--card-max-size))) !important;
+    grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size, 180px), 1fr)) !important;
+    transition: grid-template-columns 0.2s ease-out;
   }
 
   @media (max-width: 640px) {
     .dynamic-card-size.sidebar-collapsed .responsive-grid {
-      grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size-mobile), var(--card-max-size-mobile))) !important;
+      grid-template-columns: repeat(auto-fit, minmax(var(--card-min-size-mobile, 160px), 1fr)) !important;
+      transition: grid-template-columns 0.2s ease-out;
     }
   }
 
@@ -2090,5 +2405,20 @@
     border-radius: 5px;
     height: 8px;
     border: none;
+  }
+
+  /* Overflow card hiding with smooth transitions */
+  .overflow-card {
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  }
+
+  .overflow-card.hidden {
+    display: none;
+  }
+
+  /* Show overflow cards with animation when rommsShowMore is true */
+  .overflow-card:not(.hidden) {
+    opacity: 1;
+    transform: scale(1);
   }
 </style>

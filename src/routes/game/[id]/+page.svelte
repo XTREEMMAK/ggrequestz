@@ -174,7 +174,6 @@
         || sessionStorage.getItem('gameDetailReferrer')
         || '/search';
 
-      console.log(`🔙 Game detail back button clicked, navigating to: ${referrer}`);
 
       // Clean up the referrer from session storage
       sessionStorage.removeItem('gameDetailReferrer');
@@ -255,7 +254,6 @@
         }
       }
     } catch (error) {
-      console.error('Watchlist error:', error);
       toasts.error('Failed to update watchlist. Please try again.');
     } finally {
       loading = false;

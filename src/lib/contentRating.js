@@ -53,14 +53,22 @@ export const NSFW_CONTENT_DESCRIPTORS = [
  * @returns {Object} Processed content rating data
  */
 export function processIGDBAgeRatings(ageRatings) {
-  // Debug logging
-  console.log(
-    "[processIGDBAgeRatings] Raw input:",
-    JSON.stringify(ageRatings, null, 2),
-  );
+  // Only log if explicitly enabled for debugging
+  const debugLogging =
+    process.env.NODE_ENV === "development" &&
+    process.env.DEBUG_AGE_RATINGS === "true";
+
+  if (debugLogging) {
+    console.log(
+      "[processIGDBAgeRatings] Raw input:",
+      JSON.stringify(ageRatings, null, 2),
+    );
+  }
 
   if (!ageRatings || !Array.isArray(ageRatings)) {
-    console.log("[processIGDBAgeRatings] No age ratings or invalid format");
+    if (debugLogging) {
+      console.log("[processIGDBAgeRatings] No age ratings or invalid format");
+    }
     return {
       esrb_rating: null,
       esrb_descriptors: [],
@@ -86,21 +94,25 @@ export function processIGDBAgeRatings(ageRatings) {
   for (const rating of ageRatings) {
     if (!rating) continue;
 
-    console.log("[processIGDBAgeRatings] Processing rating:", rating);
+    if (debugLogging) {
+      console.log("[processIGDBAgeRatings] Processing rating:", rating);
+    }
 
     // ESRB ratings (organization 1)
     // Only use current non-deprecated fields
     if (rating.organization === 1) {
       const ratingValue = rating.rating_category;
       esrb_rating = mapESRBRating(ratingValue);
-      console.log(
-        "[processIGDBAgeRatings] Found ESRB rating, organization:",
-        rating.organization,
-        "rating_category:",
-        ratingValue,
-        "mapped to:",
-        esrb_rating,
-      );
+      if (debugLogging) {
+        console.log(
+          "[processIGDBAgeRatings] Found ESRB rating, organization:",
+          rating.organization,
+          "rating_category:",
+          ratingValue,
+          "mapped to:",
+          esrb_rating,
+        );
+      }
 
       if (rating.rating_content_descriptions) {
         esrb_descriptors = rating.rating_content_descriptions.map((desc) =>
@@ -114,14 +126,16 @@ export function processIGDBAgeRatings(ageRatings) {
     if (rating.organization === 2) {
       const ratingValue = rating.rating_category;
       pegi_rating = mapPEGIRating(ratingValue);
-      console.log(
-        "[processIGDBAgeRatings] Found PEGI rating, organization:",
-        rating.organization,
-        "rating_category:",
-        ratingValue,
-        "mapped to:",
-        pegi_rating,
-      );
+      if (debugLogging) {
+        console.log(
+          "[processIGDBAgeRatings] Found PEGI rating, organization:",
+          rating.organization,
+          "rating_category:",
+          ratingValue,
+          "mapped to:",
+          pegi_rating,
+        );
+      }
 
       if (rating.rating_content_descriptions) {
         pegi_descriptors = rating.rating_content_descriptions.map((desc) =>
@@ -164,7 +178,9 @@ export function processIGDBAgeRatings(ageRatings) {
     has_gambling,
   };
 
-  console.log("[processIGDBAgeRatings] Returning result:", result);
+  if (debugLogging) {
+    console.log("[processIGDBAgeRatings] Returning result:", result);
+  }
   return result;
 }
 

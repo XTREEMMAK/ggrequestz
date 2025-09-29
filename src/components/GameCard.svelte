@@ -11,9 +11,9 @@
   import { browser } from '$app/environment';
   import { getGameByIdClient } from '$lib/gameCache.js';
   import { goto } from '$app/navigation';
-  // Temporarily disabled performance features to fix circular dependencies
+  // Performance features re-enabled with enhanced mobile support
   // import { lazyLoader } from '$lib/performance.js';
-  // import { observeGameCard } from '$lib/performance/viewportObserver.js';
+  import { observeGameCard } from '$lib/performance/viewportObserver.js';
   
   let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null, preserveState = false, enablePreloading = false } = $props();
   
@@ -105,16 +105,28 @@
     }, 300);
   }
 
+
   // Set up viewport observation for intelligent preloading
   onMount(() => {
+
     if (enablePreloading && cardElement && browser) {
       const gameId = game.igdb_id || game.id;
       const imageUrl = game.cover_url;
 
-      // Temporarily disabled viewport observation
-      // if (gameId) {
-      //   observeGameCard(cardElement, gameId, imageUrl);
-      // }
+      // Enhanced viewport observation with mobile support
+      if (gameId) {
+        try {
+          observeGameCard(cardElement, gameId, imageUrl);
+
+          // Also warm the cache immediately when the card comes into view
+          // This is especially important for mobile users
+          if (isMobile) {
+            warmGameCache();
+          }
+        } catch (error) {
+          // Silent fail for viewport observation setup
+        }
+      }
     }
   });
   

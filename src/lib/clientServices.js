@@ -65,7 +65,6 @@ export class RommCrossReferenceService {
         return processed || originalGame;
       });
     } catch (error) {
-      console.warn("Client-side ROMM cross-reference failed:", error);
       return games; // Return original games on error
     }
   }
@@ -93,7 +92,6 @@ export class RommCrossReferenceService {
       const { enrichedGames } = await response.json();
       return enrichedGames || games;
     } catch (error) {
-      console.warn("Batch ROMM cross-reference failed:", error);
       return games;
     }
   }
@@ -151,7 +149,6 @@ export class RommCrossReferenceService {
         this.isProcessing = false;
       }
     } catch (error) {
-      console.warn("Queue processing failed:", error);
       this.isProcessing = false;
     }
   }
@@ -189,7 +186,6 @@ export class WatchlistService {
 
       return watchlist;
     } catch (error) {
-      console.warn("Failed to fetch watchlist:", error);
       return this.cache || [];
     }
   }
@@ -227,7 +223,6 @@ export class WatchlistService {
       this.clearCache();
       return true;
     } catch (error) {
-      console.warn("Failed to add to watchlist:", error);
       return false;
     }
   }
@@ -264,7 +259,6 @@ export class WatchlistService {
       this.clearCache();
       return true;
     } catch (error) {
-      console.warn("Failed to remove from watchlist:", error);
       return false;
     }
   }

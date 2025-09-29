@@ -83,13 +83,11 @@
             requestCoverUrls.set(request.id, result.data[0].cover_url);
           }
         } catch (error) {
-          console.warn(`Failed to fetch cover for request ${request.id}:`, error);
         }
       }
       // Trigger reactivity
       requestCoverUrls = new Map(requestCoverUrls);
     } catch (error) {
-      console.error('Error fetching request cover URLs:', error);
     }
   }
   
@@ -108,7 +106,6 @@
         throw new Error(result.error || 'Failed to remove from watchlist');
       }
     } catch (error) {
-      console.error('Remove from watchlist error:', error);
       alert('Failed to remove from watchlist. Please try again.');
     } finally {
       loading = false;
@@ -205,7 +202,6 @@
             const success = await watchlistService.removeFromWatchlist(igdbId);
             return { igdbId, success };
           } catch (error) {
-            console.error(`Failed to remove ${igdbId}:`, error);
             return { igdbId, success: false, error };
           }
         });
@@ -243,7 +239,6 @@
       }
 
     } catch (error) {
-      console.error('Bulk remove error:', error);
       toasts.error('Failed to complete bulk removal. Please try again.');
     } finally {
       bulkLoading = false;
@@ -275,7 +270,6 @@
         throw new Error(result.error || 'Failed to remove request');
       }
     } catch (error) {
-      console.error('Remove request error:', error);
 
       // Extract more specific error information
       let errorMessage = 'Failed to remove request. Please try again.';
@@ -357,7 +351,6 @@
         throw new Error(result.error || 'Failed to save preferences');
       }
     } catch (error) {
-      console.error('Save preferences error:', error);
       toasts.error('Failed to save preferences. Please try again.');
     } finally {
       savingPreferences = false;

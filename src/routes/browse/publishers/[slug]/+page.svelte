@@ -52,7 +52,6 @@
         }
       }
     } catch (error) {
-      console.error('Failed to load more games:', error);
     } finally {
       loading = false;
     }

@@ -243,7 +243,6 @@ export async function safeAsync(fn, options = {}) {
       `${errorContext} timed out after ${timeout}ms`,
     );
   } catch (error) {
-    console.warn(`${errorContext} failed:`, error.message);
     return fallback;
   }
 }
@@ -278,9 +277,7 @@ export function createHoverPreloader(fetchFn, options = {}) {
           if (cacheKey && cachedData) {
             sessionStorage.setItem(cacheKey, JSON.stringify(cachedData));
           }
-        } catch (error) {
-          console.warn("Hover preload failed:", error);
-        }
+        } catch (error) {}
       }
     }, delay);
   };
@@ -302,9 +299,7 @@ export function createHoverPreloader(fetchFn, options = {}) {
           cachedData = JSON.parse(stored);
           return cachedData;
         }
-      } catch (error) {
-        console.warn("Failed to parse cached data:", error);
-      }
+      } catch (error) {}
     }
 
     return null;

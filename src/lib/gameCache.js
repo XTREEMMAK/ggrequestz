@@ -173,8 +173,6 @@ async function _getGameByIdInternal(igdbId, forceRefresh = false) {
 
     return null;
   } catch (error) {
-    console.error("Error getting game by ID:", error);
-
     // Try to return cached data as fallback
     const fallbackCache = await gamesCache.get(igdbId);
     return fallbackCache ? formatFromCache(fallbackCache) : null;
@@ -208,9 +206,7 @@ export async function searchGames(query, limit = 20) {
       });
 
       // Don't wait for caching to complete
-      Promise.all(cachePromises).catch((error) => {
-        console.error("Error caching search results:", error);
-      });
+      Promise.all(cachePromises).catch((error) => {});
 
       return igdbResults;
     }
@@ -218,8 +214,6 @@ export async function searchGames(query, limit = 20) {
     // Return cached results if IGDB fails
     return cachedResults.map(formatFromCache);
   } catch (error) {
-    console.error("Error searching games:", error);
-
     // Fallback to cache only
     const fallbackResults = await gamesCache.search(query, limit);
     return fallbackResults.map(formatFromCache);
@@ -264,9 +258,7 @@ export async function getPopularGames(limit = 20, offset = 0) {
       });
 
       // Don't wait for caching to complete
-      Promise.all(cachePromises).catch((error) => {
-        console.error("Error caching popular games:", error);
-      });
+      Promise.all(cachePromises).catch((error) => {});
 
       return igdbGames;
     }
@@ -274,8 +266,6 @@ export async function getPopularGames(limit = 20, offset = 0) {
     // Return cached games even if stale
     return cachedGames.slice(offset, offset + limit).map(formatFromCache);
   } catch (error) {
-    console.error("Error getting popular games:", error);
-
     // Fallback to cache only
     const fallbackGames = await gamesCache.getPopular(limit + offset);
     return fallbackGames.slice(offset, offset + limit).map(formatFromCache);
@@ -315,9 +305,7 @@ export async function getRecentGames(limit = 20, offset = 0) {
       });
 
       // Don't wait for caching to complete
-      Promise.all(cachePromises).catch((error) => {
-        console.error("Error caching recent games:", error);
-      });
+      Promise.all(cachePromises).catch((error) => {});
 
       return igdbGames;
     }
@@ -325,8 +313,6 @@ export async function getRecentGames(limit = 20, offset = 0) {
     // Return cached games even if stale
     return cachedGames.slice(offset, offset + limit).map(formatFromCache);
   } catch (error) {
-    console.error("Error getting recent games:", error);
-
     // Fallback to cache only
     const fallbackGames = await gamesCache.getRecent(limit + offset);
     return fallbackGames.slice(offset, offset + limit).map(formatFromCache);
@@ -353,15 +339,11 @@ export async function refreshStaleGames(batchSize = 10) {
           const formattedGame = formatForCache(igdbGame);
           await gamesCache.upsert(formattedGame);
         }
-      } catch (error) {
-        console.error(`Failed to refresh game ${game.igdb_id}:`, error);
-      }
+      } catch (error) {}
     });
 
     await Promise.allSettled(refreshPromises);
-  } catch (error) {
-    console.error("Error refreshing stale games:", error);
-  }
+  } catch (error) {}
 }
 
 /**
@@ -378,9 +360,7 @@ export async function warmUpCache() {
 
     // Warm up recent games (reduced from 30 to 12)
     await getRecentGames(12);
-  } catch (error) {
-    console.error("Error warming up cache:", error);
-  }
+  } catch (error) {}
 }
 
 /**
@@ -393,7 +373,6 @@ export async function cleanupStaleCache(maxAge = 7 * 24 * 60 * 60 * 1000) {
     const result = await gamesCache.cleanup(maxAge);
     return result;
   } catch (error) {
-    console.error("Error cleaning up cache:", error);
     return 0;
   }
 }
@@ -407,7 +386,6 @@ export async function clearAllCache() {
     await gamesCache.clear();
     return true;
   } catch (error) {
-    console.error("Error clearing cache:", error);
     return false;
   }
 }
@@ -429,7 +407,6 @@ export async function getCacheStats() {
       cacheActive: true,
     };
   } catch (error) {
-    console.error("Error getting cache stats:", error);
     return {
       hasPopularGames: false,
       hasRecentGames: false,
@@ -453,7 +430,6 @@ import { browser } from "$app/environment";
  */
 export async function getGameByIdClient(igdbId, forceRefresh = false) {
   if (!browser) {
-    console.warn("getGameByIdClient called on server side");
     return null;
   }
 
@@ -470,11 +446,9 @@ export async function getGameByIdClient(igdbId, forceRefresh = false) {
     try {
       return await getGameById(igdbId, forceRefresh);
     } catch (error) {
-      console.warn("Fallback to server cache failed:", error);
       return null;
     }
   } catch (error) {
-    console.warn("Client-side getGameById failed:", error);
     return null;
   }
 }
@@ -498,7 +472,6 @@ export async function searchGamesClient(query, limit = 20) {
     }
     return [];
   } catch (error) {
-    console.warn("Client-side searchGames failed:", error);
     return [];
   }
 }
@@ -527,8 +500,6 @@ export async function warmGameCacheClient(gameIds) {
       if (batches.length > 1) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-    } catch (error) {
-      console.warn("Batch cache warming failed:", error);
-    }
+    } catch (error) {}
   }
 }

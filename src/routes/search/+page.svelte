@@ -234,7 +234,6 @@
       }
       
     } catch (error) {
-      console.error('Search error:', error);
       searchError = error.message;
     } finally {
       loading = false;
@@ -301,7 +300,6 @@
           }
         })        
         .catch(error => {
-          console.error('Suggestion error:', error);
           searchSuggestions = [];
         })
         .finally(() => {
@@ -437,14 +435,11 @@
             userWatchlist = [...userWatchlist, { igdb_id: gameId, ...detail.game }];
           }
         } else {
-          console.error('Watchlist operation failed:', result.error);
           // Could add user-facing error notification here
         }
       } else {
-        console.error('Watchlist API request failed:', response.status);
       }
     } catch (error) {
-      console.error('Error updating watchlist:', error);
       // Could add user-facing error notification here
     }
   }

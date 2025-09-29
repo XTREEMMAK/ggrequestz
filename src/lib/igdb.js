@@ -113,8 +113,13 @@ export async function igdbRequest(endpoint, query) {
 
   const token = await getAccessToken();
 
-  // Debug: Log the exact query being sent to IGDB
-  console.log(`🔍 IGDB ${endpoint} query:`, query);
+  // Debug: Log the exact query being sent to IGDB (only in development with explicit debug flag)
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.DEBUG_IGDB_QUERIES === "true"
+  ) {
+    console.log(`🔍 IGDB ${endpoint} query:`, query);
+  }
 
   const response = await fetch(`${IGDB_BASE_URL}/${endpoint}`, {
     method: "POST",
@@ -246,7 +251,12 @@ limit ${fetchLimit};`;
 
   try {
     const games = await igdbRequest("games", query);
-    console.log(`🔍 Popular games query returned ${games.length} results`);
+    if (
+      process.env.NODE_ENV === "development" &&
+      process.env.DEBUG_IGDB_QUERIES === "true"
+    ) {
+      console.log(`🔍 Popular games query returned ${games.length} results`);
+    }
 
     if (games.length === 0) {
       return [];

@@ -224,6 +224,41 @@ export const gamesCache = {
    */
   async upsert(gameData) {
     try {
+      // First, check which columns exist in the table to handle missing migrations
+      let availableColumns = [];
+      try {
+        const columnCheck = await query(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name = 'ggr_games_cache'
+        `);
+        availableColumns = columnCheck.rows.map((row) => row.column_name);
+      } catch (err) {
+        console.warn(
+          "Could not check available columns, using defaults:",
+          err.message,
+        );
+        // Fall back to known base columns if we can't check
+        availableColumns = [
+          "igdb_id",
+          "title",
+          "summary",
+          "cover_url",
+          "rating",
+          "release_date",
+          "platforms",
+          "genres",
+          "screenshots",
+          "videos",
+          "companies",
+          "game_modes",
+          "popularity_score",
+          "last_updated",
+          "needs_refresh",
+        ];
+      }
+
+      // Build upsert data dynamically based on available columns
       const upsertData = {
         igdb_id: gameData.igdb_id,
         title: gameData.title,
@@ -240,67 +275,62 @@ export const gamesCache = {
         companies: JSON.stringify(gameData.companies || []),
         game_modes: JSON.stringify(gameData.game_modes || []),
         popularity_score: gameData.popularity_score || 0,
-        // Include ESRB rating fields
-        content_rating: gameData.content_rating,
-        esrb_rating: gameData.esrb_rating,
-        is_mature: gameData.is_mature,
-        is_nsfw: gameData.is_nsfw,
         last_updated: new Date().toISOString(),
         needs_refresh: false,
       };
 
-      const result = await query(
-        `
-        INSERT INTO ggr_games_cache (
-          igdb_id, title, summary, cover_url, rating, release_date,
-          platforms, genres, screenshots, videos, companies, game_modes,
-          popularity_score, content_rating, esrb_rating, is_mature, is_nsfw,
-          last_updated, needs_refresh
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
-        )
-        ON CONFLICT (igdb_id) DO UPDATE SET
-          title = EXCLUDED.title,
-          summary = EXCLUDED.summary,
-          cover_url = EXCLUDED.cover_url,
-          rating = EXCLUDED.rating,
-          release_date = EXCLUDED.release_date,
-          platforms = EXCLUDED.platforms,
-          genres = EXCLUDED.genres,
-          screenshots = EXCLUDED.screenshots,
-          videos = EXCLUDED.videos,
-          companies = EXCLUDED.companies,
-          game_modes = EXCLUDED.game_modes,
-          popularity_score = EXCLUDED.popularity_score,
-          content_rating = EXCLUDED.content_rating,
-          esrb_rating = EXCLUDED.esrb_rating,
-          is_mature = EXCLUDED.is_mature,
-          is_nsfw = EXCLUDED.is_nsfw,
-          last_updated = EXCLUDED.last_updated,
-          needs_refresh = EXCLUDED.needs_refresh
-        RETURNING igdb_id`,
-        [
-          upsertData.igdb_id,
-          upsertData.title,
-          upsertData.summary,
-          upsertData.cover_url,
-          upsertData.rating,
-          upsertData.release_date,
-          upsertData.platforms,
-          upsertData.genres,
-          upsertData.screenshots,
-          upsertData.videos,
-          upsertData.companies,
-          upsertData.game_modes,
-          upsertData.popularity_score,
-          upsertData.content_rating,
-          upsertData.esrb_rating,
-          upsertData.is_mature,
-          upsertData.is_nsfw,
-          upsertData.last_updated,
-          upsertData.needs_refresh,
-        ],
+      // Add ESRB fields only if columns exist (from migration 004)
+      if (availableColumns.includes("content_rating")) {
+        upsertData.content_rating = gameData.content_rating;
+      }
+      if (availableColumns.includes("esrb_rating")) {
+        upsertData.esrb_rating = gameData.esrb_rating;
+      }
+      if (availableColumns.includes("is_mature")) {
+        upsertData.is_mature = gameData.is_mature || false;
+      }
+      if (availableColumns.includes("is_nsfw")) {
+        upsertData.is_nsfw = gameData.is_nsfw || false;
+      }
+
+      // Build dynamic query based on available columns
+      const columns = Object.keys(upsertData).filter(
+        (key) =>
+          availableColumns.includes(key) ||
+          [
+            "igdb_id",
+            "title",
+            "summary",
+            "cover_url",
+            "rating",
+            "release_date",
+            "platforms",
+            "genres",
+            "screenshots",
+            "videos",
+            "companies",
+            "game_modes",
+            "popularity_score",
+            "last_updated",
+            "needs_refresh",
+          ].includes(key),
       );
+
+      const values = columns.map((col) => upsertData[col]);
+      const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
+      const updateSetClause = columns
+        .filter((col) => col !== "igdb_id") // Don't update primary key
+        .map((col) => `${col} = EXCLUDED.${col}`)
+        .join(",\n          ");
+
+      const queryText = `
+        INSERT INTO ggr_games_cache (${columns.join(", ")})
+        VALUES (${placeholders})
+        ON CONFLICT (igdb_id) DO UPDATE SET
+          ${updateSetClause}
+        RETURNING igdb_id`;
+
+      const result = await query(queryText, values);
 
       // TODO: Add to search index via API endpoint (non-blocking)
 

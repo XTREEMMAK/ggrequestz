@@ -5,6 +5,57 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2025-09-29
+
+### Database & Migration Fixes
+
+- **Docker Installation Bug Fix**
+  - Fixed critical Docker entrypoint bug preventing migrations from running on fresh installs
+  - Fresh Docker installations now properly run both `init` and `migrate` commands
+  - Resolved missing tables (ggr_user_preferences, ggr_genre_metadata) on new deployments
+
+- **Migration Consolidation**
+  - Consolidated migrations 002-007 into single comprehensive migration for fresh installs
+  - Archived legacy migration files to prevent accidental execution
+  - Fixed content_rating field type from VARCHAR(255) to TEXT to handle long IGDB descriptions
+  - Improved database initialization reliability and performance
+
+### Code Quality & Performance
+
+- **Debug Cleanup**
+  - Removed console.log statements and debugging code from previous development iterations
+  - Fixed syntax errors in viewport observer and performance metrics modules
+  - Cleaned up empty function bodies and missing console.log statements
+
+- **Smooth Card Scaling**
+  - Restored smooth scaling functionality for game card sizing slider
+  - Replaced CSS Grid with Flexbox + CSS clamp() for continuous scaling
+  - Implemented high-precision range slider (0.1 increments) for smooth transitions
+  - Cards now dynamically adjust items per row without overlapping
+  - Fixed step-wise adjustments to provide truly smooth scaling experience
+
+- **Code Formatting & Linting**
+  - Applied Prettier formatting across entire codebase
+  - Ensured all files pass ESLint requirements
+  - Fixed remaining syntax errors preventing build and formatting
+
+### Technical Improvements
+
+- **Grid Layout System**
+  - Migrated from CSS Grid minmax() to Flexbox with CSS clamp() for smooth scaling
+  - Added dynamic CSS custom properties for responsive card sizing
+  - Improved mobile viewport handling with better responsive breakpoints
+
+- **Performance Optimizations**
+  - Enhanced viewport observation for intelligent preloading
+  - Improved scroll position management and restoration
+  - Optimized performance metrics collection and monitoring
+
+- **Database Schema Improvements**
+  - Enhanced content_rating field to handle unlimited length descriptions
+  - Improved migration tracking and compatibility with existing installations
+  - Added comprehensive database utility functions for content filtering
+
 ## [1.2.1] - 2025-09-28
 
 ### Bug Fixes

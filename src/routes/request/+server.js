@@ -147,6 +147,38 @@ export async function POST({ request, cookies }) {
       status: "pending",
     };
 
+    // If an igdb_id is provided, try to cache the game first (non-blocking)
+    // This ensures we have game data even if it wasn't cached before
+    if (requestData.igdb_id && requestData.game_data) {
+      try {
+        // Import gameCache dynamically to avoid circular dependencies
+        const { gameCache } = await import("$lib/database.js");
+        await gameCache.upsert({
+          igdb_id: requestData.igdb_id,
+          title: requestData.game_data.title || requestData.title,
+          summary: requestData.game_data.summary,
+          cover_url: requestData.game_data.cover_url,
+          rating: requestData.game_data.rating,
+          release_date: requestData.game_data.release_date,
+          platforms: requestData.game_data.platforms,
+          genres: requestData.game_data.genres,
+          screenshots: requestData.game_data.screenshots,
+          videos: requestData.game_data.videos,
+          companies: requestData.game_data.companies,
+          game_modes: requestData.game_data.game_modes,
+          popularity_score: requestData.game_data.popularity_score,
+          content_rating: requestData.game_data.content_rating,
+          esrb_rating: requestData.game_data.esrb_rating,
+          is_mature: requestData.game_data.is_mature,
+          is_nsfw: requestData.game_data.is_nsfw,
+        });
+        console.log(`✅ Cached game data for IGDB ID: ${requestData.igdb_id}`);
+      } catch (cacheError) {
+        // Log but don't fail the request if caching fails
+        console.warn(`⚠️ Could not cache game data: ${cacheError.message}`);
+      }
+    }
+
     // Handle request-type specific fields
     switch (requestData.request_type) {
       case "update":
@@ -260,14 +292,23 @@ export async function POST({ request, cookies }) {
 
     // Handle specific database errors
     if (error.code === "23503") {
-      // Foreign key violation
+      // Foreign key violation - this indicates the game isn't cached yet
+      console.warn(
+        `Foreign key violation for request: ${JSON.stringify({ igdb_id: requestData.igdb_id, title: requestData.title })}`,
+      );
+      console.warn(
+        "This suggests migration 005 hasn't been applied yet to remove foreign key constraints",
+      );
+
       return json(
         {
           success: false,
           error:
-            "Invalid game reference. Please try selecting a game from the search results.",
+            "Database schema issue: The game reference could not be validated. Please contact an administrator.",
+          details:
+            "This error suggests the database migrations need to be updated.",
         },
-        { status: 400 },
+        { status: 500 },
       );
     }
 

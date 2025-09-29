@@ -162,7 +162,6 @@
         }));
       }
     } catch (error) {
-      console.error('Game search error:', error);
       gameSuggestions = [];
     } finally {
       searchLoading = false;
@@ -263,7 +262,6 @@
       }
       
     } catch (error) {
-      console.error('Submit error:', error);
       setErrorMessage(error.message);
     } finally {
       loading = false;

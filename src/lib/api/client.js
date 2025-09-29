@@ -76,10 +76,6 @@ class ApiClient {
         return cachedResult;
       } catch (error) {
         // If caching fails, fall back to direct request
-        console.warn(
-          "API cache failed, falling back to direct request:",
-          error,
-        );
       }
     }
 
