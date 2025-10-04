@@ -5,6 +5,158 @@ All notable changes to GG Requestz will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🔒 Security
+
+- **CRITICAL: Fixed Privilege Escalation Vulnerabilities**
+  - **CVE-2025-SELF-ROLE**: Users can no longer assign or remove roles from themselves
+  - **CVE-2025-ROLE-PERMS**: Non-admins blocked from modifying role permissions to grant themselves admin access
+  - Added comprehensive security checks to prevent horizontal and vertical privilege escalation
+  - Role assignment now requires `role.assign` permission (with `user.edit` fallback for backward compatibility)
+  - Role permission editing now requires BOTH `role.edit_permissions` permission AND admin status
+  - System roles (admin, user) are now protected from modification
+  - Only administrators can assign/remove admin-level roles
+  - Last admin protection: prevents removal of the final administrator
+  - All role modification attempts are now logged for audit trail
+
+- **Authentication & Authorization Fixes**
+  - Fixed basic auth users with role-based admin permissions unable to access admin panel
+  - Fixed basic auth admins unable to see "Admin Panel" menu item in sidebar
+  - Fixed Authentik users getting 403 when creating API keys
+  - Fixed getUserPermissions() trusting session token instead of querying database for basic auth users
+  - Added role-based permission checks for basic auth users (previously only checked `is_admin` flag)
+  - Unified permission checking across all auth methods (Basic Auth and Authentik)
+
+### ✨ New Features
+
+- **Granular API Key Management Permissions**
+  - Added 5 new API key permissions: `apikey.view`, `apikey.create`, `apikey.revoke`, `apikey.delete`, `apikey.manage_all`
+  - Admin role gets all API key permissions by default
+  - User role gets view, create, and revoke permissions (can manage own keys)
+  - API key endpoints now check specific permissions instead of just admin status
+  - Allows fine-grained delegation of API key management capabilities
+
+- **Role Management Permission System**
+  - Added 5 new role management permissions: `role.view`, `role.create`, `role.edit_permissions`, `role.delete`, `role.assign`
+  - Separates viewing roles from modifying them (security best practice)
+  - Only admins with `role.edit_permissions` can modify what permissions a role has
+  - Prevents managers/moderators from escalating privileges via role manipulation
+  - Implements enterprise RBAC security model with separation of duties
+
+### 🐛 Bug Fixes
+
+- **Critical Migration System Fix**
+  - Fixed broken migrations table schema detection in db-manager
+  - Now properly detects and fixes ANY incorrect migration table schema (not just old versions)
+  - Handles migrations tables with missing columns (executed_at, checksum, etc.)
+  - Automatically drops and recreates broken migration tables on container restart
+  - Fixes "column 'applied_at' does not exist" and similar migration errors
+  - Ensures migration 002 runs properly to create ggr_api_keys table
+
+- **Database Schema Fix**
+  - Fixed missing `updated_at` column in ggr_games_cache table (migration 001 bug)
+  - Migration 002 now adds the missing column to fix trigger errors
+  - Resolves "record 'new' has no field 'updated_at'" PostgreSQL errors
+  - Fixes INSERT/UPDATE failures on games cache table
+
+- **Docker Health Check & Setup Endpoints**
+  - Added /api/health to public API routes (fixes Docker unhealthy status)
+  - Added /api/setup/ to public API routes (fixes setup on fresh installs)
+  - Health checks and setup endpoints now work without authentication
+
+- **API Keys UI**
+  - Fixed API keys list not refreshing after creating new key
+  - Changed keys state from $state to $derived for automatic reactivity
+  - List now updates immediately without browser refresh
+  - Replaced browser confirm() dialogs with proper modal components
+  - Added styled confirmation modal for revoke/delete actions with warning icons
+  - Fixed admin API routes (/admin/api/\*) being blocked by API authentication
+  - Fixed basic auth users getting 401 when creating API keys
+  - Fixed basic auth admins getting 403 due to missing permission records
+  - Standardized user object to include both `id` and `user_id` fields for compatibility
+  - Simplified permission checks to use `is_admin` flag instead of database permission lookups
+  - Admin users can now create/delete/revoke API keys properly with both auth methods
+
+- **OpenAPI Documentation**
+  - Renamed DOMAIN to PUBLIC_SITE_URL for clarity and consistency
+  - OpenAPI docs now show correct domain instead of internal Docker address
+  - Updated .env.example and docker-compose.yml to use PUBLIC_SITE_URL
+  - Format: `PUBLIC_SITE_URL=https://yourdomain.com` (include protocol)
+
+## [1.2.3] - 2025-10-02
+
+### 🔒 Security Fixes
+
+- **CRITICAL: Fixed API Authentication Bypass Vulnerability**
+  - All API endpoints were publicly accessible regardless of authentication token
+  - Implemented proper public API routes whitelist (only /api/auth/, /api/version, /api/images/proxy, /api/webhooks/, /api/docs are public)
+  - All other API routes now properly require authentication (session or API key)
+  - Returns 401 Unauthorized with helpful error message for unauthenticated API requests
+  - Fixed inverted authentication logic that was bypassing security checks
+
+### ✨ New Features
+
+- **API Key Management System**
+  - Complete API key management interface in admin panel
+  - Secure API key generation using bcrypt hashing (ggr\_<64 hex characters> format)
+  - Scope-based permissions system (games:read, requests:write, admin:write, etc.)
+  - API key expiration support with automatic validation
+  - Keys shown only once upon creation for security
+  - Track last usage timestamp and manage active/revoked status
+  - Modern UI with card-based layout, status badges, and smooth transitions
+  - API Keys menu added to admin navigation with key icon
+
+- **Enhanced API Documentation**
+  - Comprehensive OpenAPI 3.0 specification with all endpoints documented
+  - Added 8+ new endpoint groups: game requests, OAuth flows, setup endpoints, IGDB integration, cache management
+  - Detailed request/response schemas with examples
+  - Security requirements properly defined for each endpoint
+  - Fixed Scalar API Reference integration for better developer experience
+  - Dynamic OpenAPI spec generation using environment variables (PUBLIC_SITE_URL)
+  - Server URLs automatically adjust for development/production environments
+
+### 🐛 Bug Fixes
+
+- **Admin UI Improvements**
+  - Fixed main sidebar appearing under admin sidebar when collapsed
+  - Resolved content padding issues on admin pages
+  - Proper z-index hierarchy (admin sidebar: z-60, main sidebar: z-40)
+  - Added CSS :has() selector to completely hide main sidebar on admin pages
+  - Fixed layout shift caused by reserved sidebar space
+
+- **Cache & Performance**
+  - Extended homepage cache from 5 to 15 minutes to prevent unnecessary rebuilds
+  - Added cache invalidation after request submission for immediate UI updates
+  - Game request details now appear instantly in admin list without page refresh
+
+### 🔧 Technical Changes
+
+- **Database**
+  - Added ggr_api_keys table with proper indexes
+  - Foreign key constraints for user relationships
+  - JSONB scopes field for flexible permission management
+  - Unique constraint on key_prefix for fast lookups
+
+- **API Authentication Flow**
+  - Priority order: API Key (Bearer token) → Authentik session → Basic auth session
+  - Improved error handling and logging for auth failures
+  - API key authentication updates last_used_at timestamp
+
+- **Code Quality**
+  - Formatted all files with Prettier
+  - Passed svelte-check type checking
+  - Fixed module import issues in API documentation page
+  - Improved transition animations across admin UI
+
+### 📝 Documentation
+
+- **OpenAPI Specification**
+  - Complete API reference at /api/docs
+  - All endpoints documented with examples
+  - Security schemes for API keys and session auth
+  - Proper error response documentation
+
 ## [1.2.2] - 2025-09-29
 
 ### Database & Migration Fixes

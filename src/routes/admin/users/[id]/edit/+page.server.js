@@ -362,19 +362,84 @@ export const actions = {
 
       const localUserId = userResult.rows[0].id;
 
-      // Check permissions
-      const hasPermission = await userHasPermission(localUserId, "user.edit");
-      if (!hasPermission) {
-        return { success: false, error: "Insufficient permissions" };
+      // Check permissions - require role.assign permission to assign roles
+      const hasRoleAssignPermission = await userHasPermission(
+        localUserId,
+        "role.assign",
+      );
+      if (!hasRoleAssignPermission) {
+        // Fallback to user.edit for backward compatibility (temporary)
+        const hasUserEditPermission = await userHasPermission(
+          localUserId,
+          "user.edit",
+        );
+        if (!hasUserEditPermission) {
+          return {
+            success: false,
+            error:
+              "Insufficient permissions. You need the 'role.assign' permission to assign roles to users.",
+          };
+        }
       }
 
       // Parse form data
       const formData = await request.formData();
-      const targetUserId = params.id;
+      const targetUserId = parseInt(params.id);
       const roleId = formData.get("role_id")?.toString();
 
       if (!roleId) {
         return { success: false, error: "Role ID is required" };
+      }
+
+      // SECURITY: Prevent users from modifying their own roles
+      if (localUserId === targetUserId) {
+        return {
+          success: false,
+          error:
+            "You cannot assign roles to yourself. Another administrator must do this.",
+        };
+      }
+
+      // SECURITY: Check if user is trying to assign a role with higher privileges
+      // Get the role being assigned and check its permissions
+      const roleCheck = await query(
+        `SELECT r.id, r.name, r.display_name,
+         EXISTS (
+           SELECT 1 FROM ggr_role_permissions rp
+           JOIN ggr_permissions p ON rp.permission_id = p.id
+           WHERE rp.role_id = r.id
+           AND (p.name = 'admin.*' OR p.name LIKE 'admin.%')
+         ) as has_admin_perms
+         FROM ggr_roles r
+         WHERE r.id = $1`,
+        [roleId],
+      );
+
+      if (roleCheck.rows.length === 0) {
+        return { success: false, error: "Role not found" };
+      }
+
+      const targetRole = roleCheck.rows[0];
+
+      // Only allow assigning admin-level roles if the assigner is themselves an admin
+      if (targetRole.has_admin_perms || targetRole.name === "admin") {
+        const assignerIsAdmin = await query(
+          `SELECT EXISTS (
+            SELECT 1 FROM ggr_users WHERE id = $1 AND is_admin = TRUE
+          ) OR EXISTS (
+            SELECT 1 FROM ggr_user_roles ur
+            JOIN ggr_roles r ON ur.role_id = r.id
+            WHERE ur.user_id = $1 AND r.name = 'admin' AND ur.is_active = TRUE
+          ) as is_admin`,
+          [localUserId],
+        );
+
+        if (!assignerIsAdmin.rows[0]?.is_admin) {
+          return {
+            success: false,
+            error: `Only administrators can assign the '${targetRole.display_name}' role. This role grants administrative privileges.`,
+          };
+        }
       }
 
       // Check if role assignment already exists
@@ -485,42 +550,101 @@ export const actions = {
 
       const localUserId = userResult.rows[0].id;
 
-      // Check permissions
-      const hasPermission = await userHasPermission(localUserId, "user.edit");
-      if (!hasPermission) {
-        return { success: false, error: "Insufficient permissions" };
+      // Check permissions - require role.assign permission to remove roles
+      const hasRoleAssignPermission = await userHasPermission(
+        localUserId,
+        "role.assign",
+      );
+      if (!hasRoleAssignPermission) {
+        // Fallback to user.edit for backward compatibility (temporary)
+        const hasUserEditPermission = await userHasPermission(
+          localUserId,
+          "user.edit",
+        );
+        if (!hasUserEditPermission) {
+          return {
+            success: false,
+            error:
+              "Insufficient permissions. You need the 'role.assign' permission to remove roles from users.",
+          };
+        }
       }
 
       // Parse form data
       const formData = await request.formData();
-      const targetUserId = params.id;
+      const targetUserId = parseInt(params.id);
       const roleId = formData.get("role_id")?.toString();
 
       if (!roleId) {
         return { success: false, error: "Role ID is required" };
       }
 
-      // Check if this is an admin role and if removing it would leave no admins
+      // SECURITY: Prevent users from removing their own roles
+      if (localUserId === targetUserId) {
+        return {
+          success: false,
+          error:
+            "You cannot remove roles from yourself. Another administrator must do this.",
+        };
+      }
+
+      // Get the role being removed and check if it's an admin role
       const roleCheck = await query(
-        "SELECT name FROM ggr_roles WHERE id = $1",
+        `SELECT r.id, r.name, r.display_name,
+         EXISTS (
+           SELECT 1 FROM ggr_role_permissions rp
+           JOIN ggr_permissions p ON rp.permission_id = p.id
+           WHERE rp.role_id = r.id
+           AND (p.name = 'admin.*' OR p.name LIKE 'admin.%')
+         ) as has_admin_perms
+         FROM ggr_roles r
+         WHERE r.id = $1`,
         [roleId],
       );
-      if (roleCheck.rows.length > 0 && roleCheck.rows[0].name === "admin") {
-        // Count remaining admin users (excluding the current user's admin role)
+
+      if (roleCheck.rows.length === 0) {
+        return { success: false, error: "Role not found" };
+      }
+
+      const targetRole = roleCheck.rows[0];
+
+      // SECURITY: Only allow removing admin-level roles if the remover is themselves an admin
+      if (targetRole.has_admin_perms || targetRole.name === "admin") {
+        const removerIsAdmin = await query(
+          `SELECT EXISTS (
+            SELECT 1 FROM ggr_users WHERE id = $1 AND is_admin = TRUE
+          ) OR EXISTS (
+            SELECT 1 FROM ggr_user_roles ur
+            JOIN ggr_roles r ON ur.role_id = r.id
+            WHERE ur.user_id = $1 AND r.name = 'admin' AND ur.is_active = TRUE
+          ) as is_admin`,
+          [localUserId],
+        );
+
+        if (!removerIsAdmin.rows[0]?.is_admin) {
+          return {
+            success: false,
+            error: `Only administrators can remove the '${targetRole.display_name}' role.`,
+          };
+        }
+
+        // Check if removing this role would leave no admins
         const adminCount = await query(
-          `
-          SELECT COUNT(*) as count 
-          FROM ggr_user_roles ur 
-          JOIN ggr_roles r ON ur.role_id = r.id 
-          WHERE r.name = 'admin' 
-          AND ur.is_active = true 
-          AND NOT (ur.user_id = $1 AND ur.role_id = $2)
-        `,
+          `SELECT COUNT(*) as count
+          FROM ggr_user_roles ur
+          JOIN ggr_roles r ON ur.role_id = r.id
+          WHERE r.name = 'admin'
+          AND ur.is_active = true
+          AND NOT (ur.user_id = $1 AND ur.role_id = $2)`,
           [targetUserId, roleId],
         );
 
         if (parseInt(adminCount.rows[0].count) === 0) {
-          return { success: false, error: "Cannot remove the last admin role" };
+          return {
+            success: false,
+            error:
+              "Cannot remove the last admin role. At least one administrator must remain.",
+          };
         }
       }
 

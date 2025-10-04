@@ -221,6 +221,18 @@ body {
   border-right: 1px solid var(--border-color);
 }
 
+/* Force hide main sidebar on admin pages */
+body:has([data-admin-page]) .sidebar {
+  display: none !important;
+}
+
+/* Remove main content padding/margin on admin pages */
+body:has([data-admin-page]) main {
+  padding-left: 0 !important;
+  padding-top: 0 !important;
+  margin-left: 0 !important;
+}
+
 .sidebar-item {
   @apply flex items-center space-x-3 px-4 py-3 text-gray-300 relative;
   /* Remove default button focus/active styles */

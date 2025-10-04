@@ -109,7 +109,7 @@ const performanceTiming = async ({ event, resolve }) => {
 
 // Authentication hook
 const authGuard = async ({ event, resolve }) => {
-  const { url, cookies } = event;
+  const { url, cookies, request } = event;
 
   // Special logging for admin routes
   if (url.pathname.startsWith("/admin")) {
@@ -124,26 +124,30 @@ const authGuard = async ({ event, resolve }) => {
     "/auth/setup",
   ];
 
-  // Define API routes that require authentication
-  const authenticatedApiRoutes = ["/api/watchlist/", "/api/user/watchlist"];
+  // Define PUBLIC API routes that don't require authentication
+  // All other API routes will require authentication by default
+  const publicApiRoutes = [
+    "/api/auth/", // Auth endpoints
+    "/api/version", // Version endpoint
+    "/api/images/proxy", // Image proxy
+    "/api/webhooks/", // Webhooks from external services
+    "/api/docs", // API documentation
+    "/api/setup/", // Setup endpoints (needed during initial setup)
+    "/api/health", // Health check endpoint (needed for Docker healthchecks)
+  ];
 
   // Check if current route is public
   const isPublicRoute = publicRoutes.some((route) =>
     url.pathname.startsWith(route),
   );
 
-  // Check if this is an authenticated API route
-  const isAuthenticatedApiRoute = authenticatedApiRoutes.some((route) =>
+  // Check if this is a public API route
+  const isPublicApiRoute = publicApiRoutes.some((route) =>
     url.pathname.startsWith(route),
   );
 
-  // Skip auth check for public routes and most API endpoints (except authenticated ones)
-  if (
-    isPublicRoute ||
-    (url.pathname.startsWith("/api/") && !isAuthenticatedApiRoute)
-  ) {
-    if (url.pathname.includes("/api/auth/basic/setup")) {
-    }
+  // Skip auth check for public routes and public API endpoints only
+  if (isPublicRoute || isPublicApiRoute) {
     return resolve(event);
   }
 
@@ -151,10 +155,27 @@ const authGuard = async ({ event, resolve }) => {
   let user = null;
 
   try {
-    // Try Authentik session first
-    const sessionCookie = cookies.get("session");
-    if (sessionCookie) {
-      user = await getSession(`session=${sessionCookie}`);
+    // First, check for API key authentication in Authorization header
+    const authHeader = request.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const apiKey = authHeader.substring(7);
+      try {
+        const { authenticateApiKey } = await import("$lib/apiKeys.js");
+        user = await authenticateApiKey(apiKey);
+        if (user) {
+          user.auth_type = "api_key";
+        }
+      } catch (error) {
+        console.error("🔑 API key authentication failed:", error);
+      }
+    }
+
+    // If no API key, try Authentik session
+    if (!user) {
+      const sessionCookie = cookies.get("session");
+      if (sessionCookie) {
+        user = await getSession(`session=${sessionCookie}`);
+      }
     }
 
     // Try basic auth session if no Authentik session
@@ -168,19 +189,32 @@ const authGuard = async ({ event, resolve }) => {
     console.error("🔐 AUTH GUARD: Auth check error:", error);
   }
 
-  // Set user in locals for API routes (they need it in the handler)
+  // Set user in locals for all routes (they may need it in the handler)
   event.locals.user = user;
 
-  // For authenticated API routes, return 401 if no user
-  if (isAuthenticatedApiRoute && !user) {
-    return new Response(JSON.stringify({ error: "Authentication required" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+  // For API routes (excluding admin API routes), return 401 if no user
+  // Note: /admin/api/* routes are admin pages, not public API endpoints
+  if (
+    url.pathname.startsWith("/api/") &&
+    !url.pathname.startsWith("/admin/") &&
+    !user
+  ) {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: "Authentication required",
+        message:
+          "Please provide a valid API key in the Authorization header (Bearer <token>)",
+      }),
+      {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
-  // For regular pages, redirect to login if not authenticated
-  if (!user && !isAuthenticatedApiRoute) {
+  // For regular pages (not API), redirect to login if not authenticated
+  if (!user && !url.pathname.startsWith("/api/")) {
     throw redirect(302, "/login");
   }
 

@@ -94,7 +94,10 @@ ROMM_USERNAME=your_romm_user
 ROMM_PASSWORD=your_romm_password
 N8N_WEBHOOK_URL=https://workflows.example.com/webhook
 
-# Optional: Proxy
+# Public Site URL (for API documentation and external links)
+PUBLIC_SITE_URL=https://ggr.example.com
+
+# Optional: Proxy (Traefik - only if using proxy profile)
 DOMAIN=example.com
 ACME_EMAIL=admin@example.com
 ```

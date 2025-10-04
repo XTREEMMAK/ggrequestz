@@ -97,6 +97,12 @@
       permission: 'system.settings'
     },
     {
+      href: '/admin/api-keys',
+      label: 'API Keys',
+      icon: 'heroicons:key',
+      permission: 'admin.panel'
+    },
+    {
       href: '/admin/analytics',
       label: 'Analytics',
       icon: 'heroicons:chart-bar',
@@ -142,17 +148,17 @@
 </svelte:head>
 
 {#if hasAdminAccess}
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 relative z-[100]" onclick={handleClickOutside}>
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 relative z-[100]" data-admin-page onclick={handleClickOutside}>
     <!-- Mobile sidebar backdrop -->
     {#if mobileSidebarOpen}
       <div
-        class="fixed inset-0 z-[5] lg:hidden bg-gray-600 opacity-75"
+        class="fixed inset-0 z-[55] lg:hidden bg-gray-600 opacity-75"
         onclick={closeMobileSidebar}
       ></div>
     {/if}
     
     <!-- Sidebar -->
-    <div class="fixed inset-y-0 left-0 z-10 bg-white dark:bg-gray-800 shadow-lg transform transition-all duration-300 ease-in-out {mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 {sidebarCollapsed ? 'w-16' : 'w-64'}" id="sidebar">
+    <div class="fixed inset-y-0 left-0 z-[60] bg-white dark:bg-gray-800 shadow-lg transform transition-all duration-300 ease-in-out {mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 {sidebarCollapsed ? 'w-16' : 'w-64'}" id="sidebar">
       <div class="flex flex-col h-full">
         <!-- Logo/Header -->
         <div class="flex items-center justify-between h-16 bg-blue-600 dark:bg-blue-700 {sidebarCollapsed ? 'px-2' : 'px-6'}">
@@ -377,7 +383,7 @@
     <!-- Main content -->
     <div class="{sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'} transition-all duration-300">
       <!-- Mobile header for admin -->
-      <div class="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div class="lg:hidden fixed top-0 left-0 right-0 z-[50] bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between h-16 px-4">
           <!-- Mobile menu button -->
           <button
@@ -403,7 +409,7 @@
       </div>
       
       <!-- Desktop top bar -->
-      <div class="hidden lg:block sticky top-0 z-10 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div class="hidden lg:block sticky top-0 z-[50] bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between h-16 px-4 sm:px-6">
           
           <!-- Page title -->
@@ -421,6 +427,8 @@
                 Navigation Management
               {:else if currentPath.includes('/settings')}
                 System Settings
+              {:else if currentPath.includes('/api-keys')}
+                API Keys
               {:else if currentPath.includes('/analytics')}
                 Analytics
               {:else}

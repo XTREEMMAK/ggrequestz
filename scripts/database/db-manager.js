@@ -218,13 +218,34 @@ async function runMigrations() {
     `);
 
     const columns = tableCheck.rows.map((row) => row.column_name);
-    const hasOldSchema =
-      columns.includes("version") && !columns.includes("migration_name");
 
-    if (hasOldSchema) {
-      console.log("🔧 Detected old migration table schema, fixing...");
+    // Expected columns in the correct schema
+    const requiredColumns = [
+      "id",
+      "migration_name",
+      "executed_at",
+      "success",
+      "checksum",
+    ];
+    const hasCorrectSchema = requiredColumns.every((col) =>
+      columns.includes(col),
+    );
+
+    // Check for various broken schema states:
+    // 1. Old schema with 'version' but no 'migration_name'
+    // 2. Missing required columns like 'executed_at'
+    // 3. Has wrong column names (e.g., 'applied_at' instead of 'executed_at')
+    const hasOldOrBrokenSchema = !hasCorrectSchema;
+
+    if (hasOldOrBrokenSchema && columns.length > 0) {
+      console.log("🔧 Detected incorrect migration table schema, fixing...");
+      console.log(`   Current columns: ${columns.join(", ")}`);
+      console.log(`   Expected columns: ${requiredColumns.join(", ")}`);
+
       // Drop old table and recreate with correct schema
-      await client.query(`DROP TABLE IF EXISTS ${CONFIG.migrationTable}`);
+      await client.query(
+        `DROP TABLE IF EXISTS ${CONFIG.migrationTable} CASCADE`,
+      );
       console.log("✅ Old migration table removed");
     }
 

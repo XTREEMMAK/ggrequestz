@@ -138,10 +138,12 @@
 		}
 		
 		// Add Admin Panel if user has admin permissions (position 1000, always last)
-		if (user && userPermissions.isAdmin) {
-			allNavItems.push({ 
-				name: 'Admin Panel', 
-				href: '/admin', 
+		// Support both object format { isAdmin: true } and array format ["admin.panel", ...]
+		const isAdmin = userPermissions?.isAdmin || (Array.isArray(userPermissions) && userPermissions.includes("admin.panel"));
+		if (user && isAdmin) {
+			allNavItems.push({
+				name: 'Admin Panel',
+				href: '/admin',
 				icon: 'admin',
 				position: 1000
 			});
@@ -162,20 +164,33 @@
 	);
 	
 	// Hide entire mobile header on admin pages, login pages, setup pages, and register pages
-	let shouldShowMobileHeader = $derived(
-		!currentPath.startsWith('/admin') &&
-		!currentPath.startsWith('/login') &&
-		!currentPath.startsWith('/setup') &&
-		!currentPath.startsWith('/register')
-	);
+	let shouldShowMobileHeader = $state(true);
 
 	// Hide sidebar navigation on login pages, setup pages, register pages, and admin pages
-	let shouldShowSidebar = $derived(
-		!currentPath.startsWith('/login') &&
-		!currentPath.startsWith('/setup') &&
-		!currentPath.startsWith('/register') &&
-		!currentPath.startsWith('/admin')
-	);
+	let shouldShowSidebar = $state(true);
+
+	// Update visibility flags based on current path
+	$effect(() => {
+		const path = currentPath;
+
+		shouldShowMobileHeader =
+			!path.startsWith('/admin') &&
+			!path.startsWith('/login') &&
+			!path.startsWith('/setup') &&
+			!path.startsWith('/register');
+
+		shouldShowSidebar =
+			!path.startsWith('/login') &&
+			!path.startsWith('/setup') &&
+			!path.startsWith('/register') &&
+			!path.startsWith('/admin');
+
+		// Force close mobile sidebar when navigating to admin pages
+		if (path.startsWith('/admin')) {
+			sidebarOpen = false;
+			sidebarCollapsed = false; // Reset collapse state when entering admin
+		}
+	});
 	
 	function isActivePath(path) {
 		if (path === '/') {
@@ -226,10 +241,10 @@
 
 <div class="min-h-screen" style="background-color: var(--bg-primary);" onclick={handleClickOutside}>
 	<!-- Mobile sidebar overlay (hidden on login, setup, register, and admin pages) -->
-	{#if shouldShowSidebar}
+	{#if !currentPath.startsWith('/admin') && !currentPath.startsWith('/login') && !currentPath.startsWith('/setup') && !currentPath.startsWith('/register')}
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
-		class="fixed inset-0 z-40 lg:hidden cursor-pointer {sidebarOpen ? 'block' : 'hidden'} {currentPath.startsWith('/admin') ? 'hidden' : ''}"
+		class="fixed inset-0 z-40 lg:hidden cursor-pointer {sidebarOpen ? 'block' : 'hidden'}"
 		style="background-color: var(--overlay);"
 		onclick={toggleSidebar}
 		aria-label="Close sidebar"
@@ -240,8 +255,10 @@
 	{/if}
 
 	<!-- Sidebar (hidden on login, setup, register, and admin pages) -->
-	{#if shouldShowSidebar}
-	<div class="fixed inset-y-0 left-0 z-50 sidebar transform transition-all duration-200 ease-in-out lg:translate-x-0 {sidebarOpen ? 'translate-x-0' : '-translate-x-full'} {sidebarCollapsed ? 'w-16' : 'w-64'} {currentPath.startsWith('/admin') ? 'hidden !important' : ''}">
+	{#if !currentPath.startsWith('/admin') && !currentPath.startsWith('/login') && !currentPath.startsWith('/setup') && !currentPath.startsWith('/register')}
+	<div
+		class="fixed inset-y-0 left-0 z-40 sidebar transform transition-all duration-200 ease-in-out lg:translate-x-0 {sidebarOpen ? 'translate-x-0' : '-translate-x-full'} {sidebarCollapsed ? 'w-16' : 'w-64'}"
+	>
 		<!-- Logo/Header -->
 		<div class="flex items-center justify-between h-26 px-4" style="border-bottom: 1px solid var(--border-color);">
 			{#if !sidebarCollapsed}
@@ -536,9 +553,9 @@
 	</div>
 
 	<!-- Floating expand button for collapsed sidebar -->
-	{#if sidebarCollapsed && shouldShowSidebar}
+	{#if sidebarCollapsed && !currentPath.startsWith('/admin') && !currentPath.startsWith('/login') && !currentPath.startsWith('/setup') && !currentPath.startsWith('/register')}
 		<button
-			class="hidden lg:block fixed top-4 left-20 z-50 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-2 rounded-lg shadow-lg transition-all duration-200 {currentPath.startsWith('/admin') ? 'hidden !important' : ''}"
+			class="hidden lg:block fixed top-4 left-20 z-50 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-2 rounded-lg shadow-lg transition-all duration-200"
 			onclick={toggleSidebarCollapse}
 			aria-label="Expand sidebar"
 		>
@@ -627,7 +644,7 @@
 	{/if}
 
 	<!-- Main content -->
-	<main class="{shouldShowSidebar ? (sidebarCollapsed ? 'lg:pl-16 lg:pt-16' : 'lg:pl-64 lg:pt-0') : ''} {shouldShowMobileHeader ? 'pt-24' : (shouldShowSidebar && !sidebarCollapsed ? 'pt-0' : '')} transition-all duration-200">
+	<main class="{!currentPath.startsWith('/admin') && !currentPath.startsWith('/login') && !currentPath.startsWith('/setup') && !currentPath.startsWith('/register') ? (sidebarCollapsed ? 'lg:pl-16 lg:pt-16' : 'lg:pl-64 lg:pt-0') : 'lg:pl-0'} {shouldShowMobileHeader ? 'pt-24' : (!currentPath.startsWith('/admin') && !currentPath.startsWith('/login') && !currentPath.startsWith('/setup') && !currentPath.startsWith('/register') && !sidebarCollapsed ? 'pt-0' : '')} transition-all duration-200">
 		{@render children()}
 	</main>
 

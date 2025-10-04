@@ -1092,5 +1092,248 @@ export const customNavigation = {
   },
 };
 
+/**
+ * API Keys operations
+ */
+export const apiKeys = {
+  /**
+   * Get all API keys for a user
+   * @param {number} userId - User ID
+   * @returns {Promise<Array>} - Array of API keys (without hashes)
+   */
+  async getByUserId(userId) {
+    try {
+      const result = await query(
+        `SELECT id, name, key_prefix, scopes, is_active, last_used_at,
+                expires_at, created_at, updated_at
+         FROM ggr_api_keys
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [userId],
+      );
+
+      return result.rows.map((row) => ({
+        ...row,
+        scopes: row.scopes || [],
+      }));
+    } catch (error) {
+      console.error("Failed to get API keys by user ID:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Get API key by ID
+   * @param {number} keyId - API key ID
+   * @param {number} userId - User ID (for authorization)
+   * @returns {Promise<Object|null>} - API key record
+   */
+  async getById(keyId, userId) {
+    try {
+      const result = await query(
+        `SELECT id, name, key_prefix, scopes, is_active, last_used_at,
+                expires_at, created_at, updated_at, user_id
+         FROM ggr_api_keys
+         WHERE id = $1 AND user_id = $2`,
+        [keyId, userId],
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      return {
+        ...row,
+        scopes: row.scopes || [],
+      };
+    } catch (error) {
+      console.error("Failed to get API key by ID:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Get API key by prefix (for authentication)
+   * @param {string} prefix - Key prefix
+   * @returns {Promise<Object|null>} - API key record with user info
+   */
+  async getByPrefix(prefix) {
+    try {
+      const result = await query(
+        `SELECT ak.*, u.email, u.name as user_name, u.is_active as user_is_active
+         FROM ggr_api_keys ak
+         JOIN ggr_users u ON ak.user_id = u.id
+         WHERE ak.key_prefix = $1 AND ak.is_active = true`,
+        [prefix],
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      return {
+        ...row,
+        scopes: row.scopes || [],
+      };
+    } catch (error) {
+      console.error("Failed to get API key by prefix:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Create a new API key
+   * @param {number} userId - User ID
+   * @param {string} name - Descriptive name
+   * @param {string} keyHash - Hashed API key
+   * @param {string} keyPrefix - Key prefix for display
+   * @param {Array<string>} scopes - Permission scopes
+   * @param {number|null} createdBy - Creator user ID
+   * @param {Date|null} expiresAt - Optional expiration date
+   * @returns {Promise<Object|null>} - Created key info
+   */
+  async create(
+    userId,
+    name,
+    keyHash,
+    keyPrefix,
+    scopes = [],
+    createdBy = null,
+    expiresAt = null,
+  ) {
+    try {
+      const result = await query(
+        `INSERT INTO ggr_api_keys
+           (user_id, name, key_hash, key_prefix, scopes, created_by, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, key_prefix, created_at`,
+        [
+          userId,
+          name,
+          keyHash,
+          keyPrefix,
+          JSON.stringify(scopes),
+          createdBy,
+          expiresAt,
+        ],
+      );
+
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error("Failed to create API key:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Update API key metadata
+   * @param {number} keyId - API key ID
+   * @param {number} userId - User ID (for authorization)
+   * @param {Object} updates - Fields to update
+   * @returns {Promise<boolean>} - Success status
+   */
+  async update(keyId, userId, updates) {
+    try {
+      const allowedFields = ["name", "scopes", "expires_at"];
+      const setClause = [];
+      const values = [];
+      let paramIndex = 1;
+
+      for (const [key, value] of Object.entries(updates)) {
+        if (allowedFields.includes(key)) {
+          setClause.push(`${key} = $${paramIndex}`);
+          values.push(key === "scopes" ? JSON.stringify(value) : value);
+          paramIndex++;
+        }
+      }
+
+      if (setClause.length === 0) {
+        return false;
+      }
+
+      setClause.push(`updated_at = NOW()`);
+      values.push(keyId, userId);
+
+      const result = await query(
+        `UPDATE ggr_api_keys
+         SET ${setClause.join(", ")}
+         WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
+         RETURNING id`,
+        values,
+      );
+
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error("Failed to update API key:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Revoke (deactivate) an API key
+   * @param {number} keyId - API key ID
+   * @param {number} userId - User ID (for authorization)
+   * @returns {Promise<boolean>} - Success status
+   */
+  async revoke(keyId, userId) {
+    try {
+      const result = await query(
+        `UPDATE ggr_api_keys
+         SET is_active = false, updated_at = NOW()
+         WHERE id = $1 AND user_id = $2
+         RETURNING id`,
+        [keyId, userId],
+      );
+
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error("Failed to revoke API key:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete an API key permanently
+   * @param {number} keyId - API key ID
+   * @param {number} userId - User ID (for authorization)
+   * @returns {Promise<boolean>} - Success status
+   */
+  async delete(keyId, userId) {
+    try {
+      const result = await query(
+        `DELETE FROM ggr_api_keys
+         WHERE id = $1 AND user_id = $2
+         RETURNING id`,
+        [keyId, userId],
+      );
+
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error("Failed to delete API key:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Update last_used_at timestamp
+   * @param {number} keyId - API key ID
+   * @returns {Promise<void>}
+   */
+  async updateLastUsed(keyId) {
+    try {
+      await query(
+        `UPDATE ggr_api_keys
+         SET last_used_at = NOW()
+         WHERE id = $1`,
+        [keyId],
+      );
+    } catch (error) {
+      console.error("Failed to update API key last_used_at:", error);
+    }
+  },
+};
+
 // Export direct query function for advanced usage
 export { query };

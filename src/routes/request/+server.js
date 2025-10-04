@@ -7,6 +7,7 @@ import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { sendNewRequestNotification } from "$lib/gotify.js";
+import { invalidateCache } from "$lib/cache.js";
 
 /**
  * Submit a new game request
@@ -236,6 +237,11 @@ export async function POST({ request, cookies }) {
     );
 
     const insertedRequest = result.rows[0];
+
+    // Invalidate cached game requests to ensure fresh data
+    invalidateCache("game-requests").catch((err) =>
+      console.warn("Failed to invalidate request cache:", err),
+    );
 
     // Log the request for analytics
     try {

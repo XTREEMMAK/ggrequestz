@@ -43,9 +43,9 @@
     if (savedState) {
       try {
         const cachedData = JSON.parse(savedState);
-        // Check if cache is still valid (5 minutes)
+        // Check if cache is still valid (15 minutes)
         const cacheAge = Date.now() - (cachedData.timestamp || 0);
-        if (cacheAge <= 5 * 60 * 1000) {
+        if (cacheAge <= 15 * 60 * 1000) {
           // If cached value exists for this field, use it regardless of whether it's truthy or falsy
           if (cachedData.hasOwnProperty(fallback.name)) {
             return cachedData[fallback.name];

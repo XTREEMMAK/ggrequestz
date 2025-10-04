@@ -48,9 +48,32 @@ export async function load({ cookies }) {
   try {
     const userId = await getUserId(cookies);
 
-    if (!userId || !(await userHasPermission(userId, "user.edit"))) {
+    // Check if user has permission to view roles (role.view OR user.edit for backward compatibility)
+    const hasViewPermission =
+      (await userHasPermission(userId, "role.view")) ||
+      (await userHasPermission(userId, "user.edit"));
+
+    if (!userId || !hasViewPermission) {
       throw redirect(302, "/admin?error=permission_denied");
     }
+
+    // Check if user can edit role permissions (requires role.edit_permissions AND admin status)
+    const hasEditPermission = await userHasPermission(
+      userId,
+      "role.edit_permissions",
+    );
+    const isAdminResult = await query(
+      `SELECT EXISTS (
+        SELECT 1 FROM ggr_users WHERE id = $1 AND is_admin = TRUE
+      ) OR EXISTS (
+        SELECT 1 FROM ggr_user_roles ur
+        JOIN ggr_roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND r.name = 'admin' AND ur.is_active = TRUE
+      ) as is_admin`,
+      [userId],
+    );
+    const isAdmin = isAdminResult.rows[0]?.is_admin || false;
+    const canEditPermissions = hasEditPermission && isAdmin;
 
     // Get all roles with their permissions
     const rolesQuery = `
@@ -110,6 +133,7 @@ export async function load({ cookies }) {
       roles,
       availablePermissions,
       permissionsByCategory,
+      canEditPermissions, // Pass to frontend to disable editing UI for non-admins
     };
   } catch (err) {
     console.error("Roles page load error:", err);
@@ -124,8 +148,42 @@ export const actions = {
     try {
       const userId = await getUserId(cookies);
 
-      if (!userId || !(await userHasPermission(userId, "user.edit"))) {
-        return { success: false, error: "Insufficient permissions" };
+      if (!userId) {
+        return { success: false, error: "Authentication required" };
+      }
+
+      // SECURITY: Check if user has role.edit_permissions permission
+      const hasEditPermission = await userHasPermission(
+        userId,
+        "role.edit_permissions",
+      );
+      if (!hasEditPermission) {
+        return {
+          success: false,
+          error:
+            "Insufficient permissions. You need the 'role.edit_permissions' permission to modify role permissions.",
+        };
+      }
+
+      // SECURITY: Verify user is an administrator
+      const isAdminResult = await query(
+        `SELECT EXISTS (
+          SELECT 1 FROM ggr_users WHERE id = $1 AND is_admin = TRUE
+        ) OR EXISTS (
+          SELECT 1 FROM ggr_user_roles ur
+          JOIN ggr_roles r ON ur.role_id = r.id
+          WHERE ur.user_id = $1 AND r.name = 'admin' AND ur.is_active = TRUE
+        ) as is_admin`,
+        [userId],
+      );
+
+      const isAdmin = isAdminResult.rows[0]?.is_admin || false;
+      if (!isAdmin) {
+        return {
+          success: false,
+          error:
+            "Only administrators can modify role permissions. This is a security-critical operation.",
+        };
       }
 
       const formData = await request.formData();
@@ -136,7 +194,7 @@ export const actions = {
         return { success: false, error: "Role ID is required" };
       }
 
-      // Check if role is system role and prevent modification of critical system roles
+      // Check if role exists and get its details
       const roleCheck = await query(
         "SELECT name, is_system FROM ggr_roles WHERE id = $1",
         [roleId],
@@ -147,6 +205,14 @@ export const actions = {
       }
 
       const role = roleCheck.rows[0];
+
+      // SECURITY: Prevent modification of critical system roles
+      if (role.is_system && (role.name === "admin" || role.name === "user")) {
+        return {
+          success: false,
+          error: `Cannot modify the '${role.name}' system role. This role is protected to maintain system integrity.`,
+        };
+      }
 
       // Start transaction
       await query("BEGIN");

@@ -39,45 +39,45 @@ export async function load({ parent }) {
 
       const isBasicAdmin = userResult.rows[0].is_admin;
 
-      if (!isBasicAdmin) {
-        throw redirect(302, "/?error=unauthorized");
-      }
+      // For direct admins, grant full permissions immediately
+      if (isBasicAdmin) {
+        let pendingRequestsCount = 0;
+        try {
+          const pendingResult = await query(
+            "SELECT COUNT(*) as count FROM ggr_game_requests WHERE status = $1",
+            ["pending"],
+          );
+          pendingRequestsCount = parseInt(pendingResult.rows[0].count) || 0;
+        } catch (error) {
+          console.warn(
+            "Failed to get pending requests count for basic auth:",
+            error,
+          );
+        }
 
-      let pendingRequestsCount = 0;
-      try {
-        const pendingResult = await query(
-          "SELECT COUNT(*) as count FROM ggr_game_requests WHERE status = $1",
-          ["pending"],
-        );
-        pendingRequestsCount = parseInt(pendingResult.rows[0].count) || 0;
-      } catch (error) {
-        console.warn(
-          "Failed to get pending requests count for basic auth:",
-          error,
-        );
+        return {
+          userPermissions: [
+            "admin.panel",
+            "request.view_all",
+            "user.view",
+            "user.manage",
+            "user.edit",
+            "user.create",
+            "user.delete",
+            "system.settings",
+            "analytics.view",
+            "navigation.manage",
+            "request.manage",
+            "request.edit",
+            "request.approve",
+            "request.reject",
+            "request.delete",
+          ], // Grant full admin permissions for basic auth direct admins
+          localUserId,
+          pendingRequestsCount,
+        };
       }
-
-      return {
-        userPermissions: [
-          "admin.panel",
-          "request.view_all",
-          "user.view",
-          "user.manage",
-          "user.edit",
-          "user.create",
-          "user.delete",
-          "system.settings",
-          "analytics.view",
-          "navigation.manage",
-          "request.manage",
-          "request.edit",
-          "request.approve",
-          "request.reject",
-          "request.delete",
-        ], // Grant full admin permissions for basic auth admins
-        localUserId,
-        pendingRequestsCount,
-      };
+      // For non-direct admins, fall through to role-based permission check below
     } else {
       // Handle Authentik users - query the ggr_users table including is_admin flag
       userResult = await query(

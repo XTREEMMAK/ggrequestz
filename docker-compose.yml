@@ -54,6 +54,7 @@ services:
       PM2_INSTANCES: ${PM2_INSTANCES:-max}
       NODE_ENV: production
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
     volumes:
       - ggrequestz-logs:/app/logs
     depends_on:

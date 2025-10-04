@@ -6,7 +6,7 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.3-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
@@ -15,6 +15,8 @@ A modern game discovery and request management platform with IGDB integration, R
 - **🛡️ Content Filtering** - Comprehensive ESRB rating filters and custom content blocks
 - **📚 ROMM Integration** - Seamless integration with your ROMM game library
 - **🔐 Flexible Authentication** - Support for OIDC providers (Authentik, Keycloak, Auth0) and basic auth with user registration
+- **🔑 API Key Management** - Generate scoped API keys for programmatic access with Bearer token authentication
+- **📚 Interactive API Docs** - Complete OpenAPI 3.0 specification with dynamic server URLs at `/api/docs`
 - **⚡ High Performance** - Redis caching, hover preloading, and optimized data fetching
 - **🎨 Modern UI** - Responsive design with dark mode and smooth animations
 
@@ -69,6 +71,7 @@ docker compose up -d
 - [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, Basic Auth
 - [ROMM Integration](docs/guides/INTEGRATION_GUIDE.md) - Connect with ROMM
 - [API Documentation](docs/API.md) - REST API reference
+- [Interactive API Docs](/api/docs) - OpenAPI specification with live examples
 
 ## 🔧 Key Features Configuration
 
@@ -107,10 +110,10 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:v1.2.0
+docker pull ghcr.io/xtreemmak/ggrequestz:v1.2.3
 ```
 
-> **📋 v1.2.0 Release Notes:** Major content filtering system with comprehensive ESRB rating filters, custom content blocks UI, enhanced genre filtering, user registration system, and significant code quality improvements. Content filtering now works properly across all game discovery sections.
+> **📋 v1.2.3 Release Notes:** **CRITICAL SECURITY FIX** - Fixed API authentication bypass vulnerability. Added complete API Key Management System with scoped permissions, dynamic OpenAPI specification with environment-based URLs, admin UI improvements (sidebar fixes), and enhanced caching. All API endpoints now properly require authentication by default.
 
 ## 🤝 Contributing
 

@@ -331,6 +331,7 @@ export function getBasicAuthUser(sessionToken) {
 
   return {
     id: payload.id,
+    user_id: payload.id, // Add user_id for consistency with Authentik auth
     username: payload.username,
     email: payload.email,
     name: payload.username,

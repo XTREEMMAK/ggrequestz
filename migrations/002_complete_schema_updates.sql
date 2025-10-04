@@ -6,6 +6,10 @@
 -- PART 1: Update ggr_games_cache table with all additional columns
 -- ============================================================================
 
+-- Add updated_at column if missing (migration 001 bug fix)
+ALTER TABLE ggr_games_cache
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
 -- Add metadata column for ROMM integration
 ALTER TABLE ggr_games_cache
 ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
@@ -297,7 +301,49 @@ COMMENT ON COLUMN ggr_games_cache.is_mature IS 'Quick flag for mature content fi
 COMMENT ON COLUMN ggr_games_cache.is_nsfw IS 'Quick flag for NSFW content filtering';
 
 -- ============================================================================
--- PART 8: Update migration tracking
+-- PART 8: API Keys System
+-- ============================================================================
+
+-- Create API keys table for API authentication
+CREATE TABLE IF NOT EXISTS ggr_api_keys (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    key_hash TEXT NOT NULL,
+    key_prefix VARCHAR(16) NOT NULL,
+    scopes JSONB DEFAULT '[]',
+    is_active BOOLEAN DEFAULT true,
+    last_used_at TIMESTAMP,
+    expires_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    created_by INTEGER,
+
+    FOREIGN KEY (user_id) REFERENCES ggr_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES ggr_users(id),
+    UNIQUE(key_prefix)
+);
+
+-- Indexes for API keys
+CREATE INDEX IF NOT EXISTS idx_ggr_api_keys_user_id
+    ON ggr_api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_ggr_api_keys_key_prefix
+    ON ggr_api_keys(key_prefix);
+CREATE INDEX IF NOT EXISTS idx_ggr_api_keys_active
+    ON ggr_api_keys(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_ggr_api_keys_expires
+    ON ggr_api_keys(expires_at) WHERE expires_at IS NOT NULL;
+
+-- Comments for API keys table
+COMMENT ON TABLE ggr_api_keys IS 'API keys for programmatic access to the API';
+COMMENT ON COLUMN ggr_api_keys.key_hash IS 'Bcrypt hash of the API key (never store plaintext)';
+COMMENT ON COLUMN ggr_api_keys.key_prefix IS 'First 8-16 characters of key for display (e.g., ggr_1234...)';
+COMMENT ON COLUMN ggr_api_keys.scopes IS 'Array of permission scopes this key has access to';
+COMMENT ON COLUMN ggr_api_keys.last_used_at IS 'Last time this API key was used for authentication';
+COMMENT ON COLUMN ggr_api_keys.expires_at IS 'Optional expiration date for the key';
+
+-- ============================================================================
+-- PART 9: Update migration tracking
 -- ============================================================================
 
 -- Update schema version to 2 (since this combines 2-6)

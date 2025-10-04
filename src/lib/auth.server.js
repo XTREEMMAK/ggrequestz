@@ -290,11 +290,35 @@ export async function requireAuth(request) {
 
 /**
  * Get authenticated user from request (handles multiple auth types) with caching
+ * Checks in order: API key, Authentik/OIDC session, basic auth session
  * @param {Object} cookies - Cookies object
+ * @param {Object} request - Request object (optional, for API key auth)
  * @returns {Promise<Object|null>} - User object or null
  */
-export async function getAuthenticatedUser(cookies) {
-  // First check for Authentik/OIDC session cookie
+export async function getAuthenticatedUser(cookies, request = null) {
+  // First check for API key authentication in Authorization header
+  if (request) {
+    const authHeader = request.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const apiKey = authHeader.substring(7); // Remove "Bearer " prefix
+      try {
+        const { authenticateApiKey } = await import("./apiKeys.js");
+        const apiKeyUser = await withCache(
+          `api-key-${apiKey.slice(-16)}`, // Use last 16 chars as cache key
+          () => authenticateApiKey(apiKey),
+          5 * 60 * 1000, // 5 minute cache
+        );
+        if (apiKeyUser) {
+          apiKeyUser.auth_type = "api_key";
+          return apiKeyUser;
+        }
+      } catch (error) {
+        console.error("API key authentication failed:", error);
+      }
+    }
+  }
+
+  // Check for Authentik/OIDC session cookie
   const sessionCookie = cookies.get("session");
 
   if (sessionCookie) {
@@ -346,6 +370,23 @@ export async function getAuthenticatedUser(cookies) {
   }
 
   return null;
+}
+
+/**
+ * Check if user has required API scopes
+ * @param {Object} user - Authenticated user object
+ * @param {Array<string>} requiredScopes - Required scopes
+ * @returns {Promise<boolean>} - True if user has required scopes
+ */
+export async function checkApiScopes(user, requiredScopes = []) {
+  // If user doesn't have scopes (session-based auth), allow all
+  if (!user || !user.scopes) {
+    return true;
+  }
+
+  // API key authentication - check scopes
+  const { verifyScopes } = await import("./apiKeys.js");
+  return verifyScopes(user.scopes, requiredScopes);
 }
 
 /**
@@ -483,9 +524,28 @@ export async function getUserPermissions(user) {
       const { query } = await import("./database.js");
 
       try {
-        // For basic auth users, check permissions directly
+        // For basic auth users, check both direct admin flag and role-based permissions
         if (user.auth_type === "basic") {
-          return { isAdmin: user.is_admin || false };
+          // Get user from database to check current is_admin status
+          const userResult = await query(
+            "SELECT id, is_admin FROM ggr_users WHERE id = $1 AND is_active = TRUE AND password_hash IS NOT NULL",
+            [parseInt(user.id)],
+          );
+
+          if (userResult.rows.length > 0) {
+            const dbUser = userResult.rows[0];
+
+            // Check if user has direct is_admin flag set
+            if (dbUser.is_admin) {
+              return { isAdmin: true };
+            } else {
+              // Check role-based permissions
+              const { userHasPermission } = await import("./userProfile.js");
+              const isAdmin = await userHasPermission(dbUser.id, "admin.panel");
+              return { isAdmin };
+            }
+          }
+          return { isAdmin: false };
         } else {
           // For Authentik users, get user's local ID and check permissions
           const userResult = await query(

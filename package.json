@@ -1,7 +1,7 @@
 {
   "name": "gg-requestz",
   "private": true,
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development DOTENV_CONFIG_PATH=.env.dev vite dev",
@@ -55,6 +55,7 @@
   },
   "dependencies": {
     "@iconify/svelte": "^5.0.1",
+    "@scalar/api-reference": "^1.36.2",
     "bcrypt": "^5.1.1",
     "canvas-confetti": "^1.9.3",
     "cookie": "^0.6.0",

@@ -6,14 +6,15 @@ Complete reference for all GG Requestz configuration options.
 
 ### System Configuration
 
-| Variable        | Description                   | Default      | Required |
-| --------------- | ----------------------------- | ------------ | -------- |
-| `PUID`          | User ID for file permissions  | `1000`       | No       |
-| `PGID`          | Group ID for file permissions | `1000`       | No       |
-| `TZ`            | Timezone                      | `UTC`        | No       |
-| `APP_PORT`      | Application port              | `3000`       | No       |
-| `NODE_ENV`      | Environment mode              | `production` | No       |
-| `PM2_INSTANCES` | PM2 worker instances          | `max`        | No       |
+| Variable          | Description                                | Default                 | Required |
+| ----------------- | ------------------------------------------ | ----------------------- | -------- |
+| `PUID`            | User ID for file permissions               | `1000`                  | No       |
+| `PGID`            | Group ID for file permissions              | `1000`                  | No       |
+| `TZ`              | Timezone                                   | `UTC`                   | No       |
+| `APP_PORT`        | Application port                           | `3000`                  | No       |
+| `NODE_ENV`        | Environment mode                           | `production`            | No       |
+| `PM2_INSTANCES`   | PM2 worker instances                       | `max`                   | No       |
+| `PUBLIC_SITE_URL` | Public URL for API docs and external links | `http://localhost:3000` | No       |
 
 ### Database Configuration
 
