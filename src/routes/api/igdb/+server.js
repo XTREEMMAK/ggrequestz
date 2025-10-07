@@ -9,6 +9,7 @@ import {
   getPopularGames,
   getRecentGames,
 } from "$lib/gameCache.js";
+import { getGlobalFilters } from "$lib/globalFilters.js";
 
 export async function GET({ url }) {
   try {
@@ -25,7 +26,41 @@ export async function GET({ url }) {
         if (!query) {
           throw error(400, "Query parameter is required for search");
         }
+
+        // Check if search query contains blocked keywords from global filters
+        const globalFilters = await getGlobalFilters();
+        if (globalFilters && globalFilters.enabled) {
+          const blockedKeywords = globalFilters.custom_content_blocks || [];
+          const queryLower = query.toLowerCase();
+          const isBlocked = blockedKeywords.some((keyword) =>
+            queryLower.includes(keyword.toLowerCase()),
+          );
+
+          if (isBlocked) {
+            // Return empty results if query contains blocked keywords
+            return json({
+              success: true,
+              data: [],
+              count: 0,
+              blocked: true,
+            });
+          }
+        }
+
         result = await searchGames(query, limit);
+
+        // Filter results by game titles containing blocked keywords
+        if (globalFilters && globalFilters.enabled) {
+          const blockedKeywords = globalFilters.custom_content_blocks || [];
+          if (blockedKeywords.length > 0) {
+            result = result.filter((game) => {
+              const titleLower = (game.title || game.name || "").toLowerCase();
+              return !blockedKeywords.some((keyword) =>
+                titleLower.includes(keyword.toLowerCase()),
+              );
+            });
+          }
+        }
         break;
 
       case "game":
@@ -78,7 +113,41 @@ export async function POST({ request }) {
         if (!query) {
           throw error(400, "Query is required for search");
         }
+
+        // Check if search query contains blocked keywords from global filters
+        const globalFilters = await getGlobalFilters();
+        if (globalFilters && globalFilters.enabled) {
+          const blockedKeywords = globalFilters.custom_content_blocks || [];
+          const queryLower = query.toLowerCase();
+          const isBlocked = blockedKeywords.some((keyword) =>
+            queryLower.includes(keyword.toLowerCase()),
+          );
+
+          if (isBlocked) {
+            // Return empty results if query contains blocked keywords
+            return json({
+              success: true,
+              data: [],
+              count: 0,
+              blocked: true,
+            });
+          }
+        }
+
         result = await searchGames(query, limit);
+
+        // Filter results by game titles containing blocked keywords
+        if (globalFilters && globalFilters.enabled) {
+          const blockedKeywords = globalFilters.custom_content_blocks || [];
+          if (blockedKeywords.length > 0) {
+            result = result.filter((game) => {
+              const titleLower = (game.title || game.name || "").toLowerCase();
+              return !blockedKeywords.some((keyword) =>
+                titleLower.includes(keyword.toLowerCase()),
+              );
+            });
+          }
+        }
         break;
 
       case "batch_search":

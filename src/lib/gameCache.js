@@ -11,6 +11,7 @@ import {
   getRecentGames as igdbGetRecent,
 } from "./igdb.js";
 import { generateSlug } from "./utils.js";
+import { getGlobalFilters, filterBannedGames } from "./globalFilters.js";
 
 // Cache TTL settings (in milliseconds)
 const CACHE_TTL = {
@@ -238,11 +239,21 @@ export async function getPopularGames(limit = 20, offset = 0) {
       );
 
       if (freshGames.length >= Math.min(limit + offset, 10)) {
-        return freshGames.slice(offset, offset + limit).map(formatFromCache);
+        let formattedGames = freshGames
+          .slice(offset, offset + limit)
+          .map(formatFromCache);
+
+        // Apply global banned games filter
+        const globalFilters = await getGlobalFilters();
+        if (globalFilters && globalFilters.enabled) {
+          formattedGames = filterBannedGames(formattedGames, globalFilters);
+        }
+
+        return formattedGames;
       }
     }
 
-    // Fallback to IGDB API
+    // Fallback to IGDB API (filtering happens inside igdbGetPopular)
     const igdbGames = await igdbGetPopular(limit, offset);
 
     if (igdbGames.length > 0) {
@@ -263,12 +274,26 @@ export async function getPopularGames(limit = 20, offset = 0) {
       return igdbGames;
     }
 
-    // Return cached games even if stale
-    return cachedGames.slice(offset, offset + limit).map(formatFromCache);
+    // Return cached games even if stale (apply filtering)
+    let staleCachedGames = cachedGames
+      .slice(offset, offset + limit)
+      .map(formatFromCache);
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      staleCachedGames = filterBannedGames(staleCachedGames, globalFilters);
+    }
+    return staleCachedGames;
   } catch (error) {
-    // Fallback to cache only
+    // Fallback to cache only (apply filtering)
     const fallbackGames = await gamesCache.getPopular(limit + offset);
-    return fallbackGames.slice(offset, offset + limit).map(formatFromCache);
+    let formattedFallback = fallbackGames
+      .slice(offset, offset + limit)
+      .map(formatFromCache);
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      formattedFallback = filterBannedGames(formattedFallback, globalFilters);
+    }
+    return formattedFallback;
   }
 }
 
@@ -290,7 +315,17 @@ export async function getRecentGames(limit = 20, offset = 0) {
       );
 
       if (freshGames.length >= Math.min(limit + offset, 10)) {
-        return freshGames.slice(offset, offset + limit).map(formatFromCache);
+        let formattedGames = freshGames
+          .slice(offset, offset + limit)
+          .map(formatFromCache);
+
+        // Apply global banned games filter
+        const globalFilters = await getGlobalFilters();
+        if (globalFilters && globalFilters.enabled) {
+          formattedGames = filterBannedGames(formattedGames, globalFilters);
+        }
+
+        return formattedGames;
       }
     }
 
@@ -310,12 +345,26 @@ export async function getRecentGames(limit = 20, offset = 0) {
       return igdbGames;
     }
 
-    // Return cached games even if stale
-    return cachedGames.slice(offset, offset + limit).map(formatFromCache);
+    // Return cached games even if stale (apply filtering)
+    let staleCachedGames = cachedGames
+      .slice(offset, offset + limit)
+      .map(formatFromCache);
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      staleCachedGames = filterBannedGames(staleCachedGames, globalFilters);
+    }
+    return staleCachedGames;
   } catch (error) {
-    // Fallback to cache only
+    // Fallback to cache only (apply filtering)
     const fallbackGames = await gamesCache.getRecent(limit + offset);
-    return fallbackGames.slice(offset, offset + limit).map(formatFromCache);
+    let formattedFallback = fallbackGames
+      .slice(offset, offset + limit)
+      .map(formatFromCache);
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      formattedFallback = filterBannedGames(formattedFallback, globalFilters);
+    }
+    return formattedFallback;
   }
 }
 

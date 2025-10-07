@@ -8,61 +8,39 @@ import {
   saveUserPreferences,
   getUserPreferences,
 } from "$lib/userPreferences.js";
-import { verifyBasicAuthToken } from "$lib/basicAuth.js";
+import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { invalidateCache } from "$lib/cache.js";
+import { query } from "$lib/database.js";
 
 export async function POST({ request, cookies }) {
   try {
-    // Get user from cookie - check both session types
-    const sessionCookie = cookies.get("session");
-    const basicAuthSessionCookie = cookies.get("basic_auth_session");
-
-    if (!sessionCookie && !basicAuthSessionCookie) {
+    // Verify user authentication (supports session, basic auth, and API keys)
+    const user = await getAuthenticatedUser(cookies, request);
+    if (!user) {
       throw error(401, "Authentication required");
     }
 
-    const activeCookie = sessionCookie || basicAuthSessionCookie;
-
-    // Parse token to get user info
-    let payload;
-    try {
-      if (sessionCookie) {
-        // JWT format (Authentik session)
-        payload = JSON.parse(atob(sessionCookie.split(".")[1]));
-      } else if (basicAuthSessionCookie) {
-        // Basic Auth token format
-        payload = verifyBasicAuthToken(basicAuthSessionCookie);
-        if (!payload) {
-          throw new Error("Invalid basic auth token");
-        }
+    // Get user's database ID
+    let userId;
+    if (user.auth_type === "api_key") {
+      userId = user.user_id;
+    } else if (user.auth_type === "basic") {
+      userId = user.id || parseInt(user.sub?.replace("basic_auth_", ""));
+    } else {
+      // Authentik users
+      const userResult = await query(
+        "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+        [user.sub],
+      );
+      if (userResult.rows.length === 0) {
+        throw error(404, "User not found");
       }
-    } catch (e) {
-      console.error("Failed to parse session token:", e);
-      throw error(401, "Invalid session token");
+      userId = userResult.rows[0].id;
     }
 
-    console.log("🔍 JWT Payload:", { payload });
-    let userId = payload.id;
-
-    // Handle different auth methods
     if (!userId) {
-      if (payload.sub?.startsWith("basic_auth_")) {
-        userId = parseInt(payload.sub.replace("basic_auth_", ""));
-      } else {
-        // For Authentik users, look up database ID
-        const { query } = await import("$lib/database.js");
-        const userResult = await query(
-          "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [payload.sub],
-        );
-        if (userResult.rows.length === 0) {
-          throw error(404, "User not found");
-        }
-        userId = userResult.rows[0].id;
-      }
+      throw error(400, "Invalid user ID");
     }
-
-    console.log("🔍 Resolved userId:", userId);
 
     // Parse request body
     const preferences = await request.json();
@@ -130,53 +108,34 @@ export async function POST({ request, cookies }) {
   }
 }
 
-export async function GET({ url, cookies }) {
+export async function GET({ url, cookies, request }) {
   try {
-    // Get user from cookie - check both session types
-    const sessionCookie = cookies.get("session");
-    const basicAuthSessionCookie = cookies.get("basic_auth_session");
-
-    if (!sessionCookie && !basicAuthSessionCookie) {
+    // Verify user authentication (supports session, basic auth, and API keys)
+    const user = await getAuthenticatedUser(cookies, request);
+    if (!user) {
       throw error(401, "Authentication required");
     }
 
-    const activeCookie = sessionCookie || basicAuthSessionCookie;
-
-    // Parse token to get user info
-    let payload;
-    try {
-      if (sessionCookie) {
-        // JWT format (Authentik session)
-        payload = JSON.parse(atob(sessionCookie.split(".")[1]));
-      } else if (basicAuthSessionCookie) {
-        // Basic Auth token format
-        payload = verifyBasicAuthToken(basicAuthSessionCookie);
-        if (!payload) {
-          throw new Error("Invalid basic auth token");
-        }
+    // Get user's database ID
+    let userId;
+    if (user.auth_type === "api_key") {
+      userId = user.user_id;
+    } else if (user.auth_type === "basic") {
+      userId = user.id || parseInt(user.sub?.replace("basic_auth_", ""));
+    } else {
+      // Authentik users
+      const userResult = await query(
+        "SELECT id FROM ggr_users WHERE authentik_sub = $1",
+        [user.sub],
+      );
+      if (userResult.rows.length === 0) {
+        throw error(404, "User not found");
       }
-    } catch (e) {
-      console.error("Failed to parse session token:", e);
-      throw error(401, "Invalid session token");
+      userId = userResult.rows[0].id;
     }
-    let userId = payload.id;
 
-    // Handle different auth methods
     if (!userId) {
-      if (payload.sub?.startsWith("basic_auth_")) {
-        userId = parseInt(payload.sub.replace("basic_auth_", ""));
-      } else {
-        // For Authentik users, look up database ID
-        const { query } = await import("$lib/database.js");
-        const userResult = await query(
-          "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-          [payload.sub],
-        );
-        if (userResult.rows.length === 0) {
-          throw error(404, "User not found");
-        }
-        userId = userResult.rows[0].id;
-      }
+      throw error(400, "Invalid user ID");
     }
 
     // Get user preferences

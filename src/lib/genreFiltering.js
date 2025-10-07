@@ -149,10 +149,11 @@ export async function buildGenreFilter(userPreferences) {
 /**
  * Filter games array based on user genre preferences (client-side filtering)
  * @param {Array} games - Array of game objects
- * @param {Object} userPreferences - User's genre preferences
+ * @param {Object} userPreferences - User's genre preferences (should include global filters merged via mergeFiltersWithGlobal)
  * @returns {Array} Filtered games array
  */
 export function filterGamesByGenre(games, userPreferences) {
+  // Note: userPreferences should already include global excluded genres merged at the data loading level
   if (!userPreferences || !games || games.length === 0) {
     return games;
   }

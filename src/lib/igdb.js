@@ -6,6 +6,7 @@
 import { browser } from "$app/environment";
 import { assessContentSafety, processIGDBAgeRatings } from "./contentRating.js";
 import { buildGenreFilter, filterGamesByGenre } from "./genreFiltering.js";
+import { filterBannedGames, getGlobalFilters } from "./globalFilters.js";
 
 // Only load environment variables on server-side
 let IGDB_CLIENT_ID, IGDB_CLIENT_SECRET;
@@ -265,6 +266,7 @@ limit ${fetchLimit};`;
     // Simple formatting - just return essential fields
     let formattedGames = games.map((game) => ({
       id: game.id,
+      igdb_id: game.id.toString(), // Add igdb_id for consistency with other functions
       title: game.name || "Unknown",
       slug: game.slug || "",
       summary: game.summary || "",
@@ -279,6 +281,12 @@ limit ${fetchLimit};`;
       websites: game.websites || [],
       is_in_library: false,
     }));
+
+    // Apply global banned games filter first (always applies)
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      formattedGames = filterBannedGames(formattedGames, globalFilters);
+    }
 
     // Apply genre filtering if user preferences exist
     if (userPreferences && userPreferences.preferred_genres?.length > 0) {
@@ -330,6 +338,12 @@ async function getPopularGamesByGenre(
       ? games
       : await resolveGamesAgeRatings(games);
     let formattedGames = gamesWithResolvedRatings.map(formatGameData);
+
+    // Apply global banned games filter first (always applies)
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      formattedGames = filterBannedGames(formattedGames, globalFilters);
+    }
 
     // Apply content filtering if user preferences exist
     if (userPreferences) {
@@ -396,6 +410,12 @@ async function getHighRatedGames(
       : await resolveGamesAgeRatings(games);
     let formattedGames = gamesWithResolvedRatings.map(formatGameData);
 
+    // Apply global banned games filter first (always applies)
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      formattedGames = filterBannedGames(formattedGames, globalFilters);
+    }
+
     // Apply content filtering if user preferences exist
     if (userPreferences) {
       formattedGames = formattedGames.filter((game) => {
@@ -461,6 +481,12 @@ limit ${fetchLimit};`;
       ? games
       : await resolveGamesAgeRatings(games);
     let formattedGames = gamesWithResolvedRatings.map(formatGameData);
+
+    // Apply global banned games filter first (always applies)
+    const globalFilters = await getGlobalFilters();
+    if (globalFilters && globalFilters.enabled) {
+      formattedGames = filterBannedGames(formattedGames, globalFilters);
+    }
 
     // Apply content filtering if user preferences exist
     if (userPreferences) {

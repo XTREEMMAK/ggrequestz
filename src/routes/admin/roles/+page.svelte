@@ -6,27 +6,31 @@
   import { enhance } from '$app/forms';
   import Icon from '@iconify/svelte';
   import { formatDate } from '$lib/utils.js';
-  
+  import { toasts } from '$lib/stores/toast.js';
+
   let { data, form } = $props();
   let roles = $derived(data?.roles || []);
   let permissionsByCategory = $derived(data?.permissionsByCategory || {});
-  
+
   let selectedRole = $state(null);
   let selectedPermissions = $state(new Set());
   let loading = $state(false);
   let showPermissionModal = $state(false);
-  
+
   // Form feedback
   $effect(() => {
     if (form?.success) {
+      toasts.success('Role updated successfully');
       selectedRole = null;
       showPermissionModal = false;
       selectedPermissions = new Set();
-      
+
       // Show success message briefly
       setTimeout(() => {
         window.location.reload();
       }, 1000);
+    } else if (form?.error) {
+      toasts.error(form.error);
     }
   });
   

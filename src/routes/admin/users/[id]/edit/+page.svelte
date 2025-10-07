@@ -8,24 +8,25 @@
   import { enhance } from '$app/forms';
   import LoadingSpinner from '../../../../../components/LoadingSpinner.svelte';
   import { formatDate } from '$lib/utils.js';
+  import { toasts } from '$lib/stores/toast.js';
   import Icon from '@iconify/svelte';
-  
+
   let { data, form } = $props();
   let user = $derived(data?.user);
   let availableRoles = $derived(data?.availableRoles || []);
   let userPermissions = $derived(data?.userPermissions || []);
   let adminProtection = $derived(data?.adminProtection || { isCurrentUser: false, isLastActiveAdmin: false, canModifyUser: true });
-  
+
   let loading = $state(false);
   let roleLoading = $state(false);
-  
+
   // Form fields
   let name = $state('');
   let email = $state('');
   let preferredUsername = $state('');
   let isActive = $state(false);
   let selectedRoleId = $state('');
-  
+
   // Initialize form fields when user data is available
   $effect(() => {
     if (user) {
@@ -35,18 +36,21 @@
       isActive = user.is_active || false;
     }
   });
-  
+
   // Filter available roles to exclude ones already assigned
   let unassignedRoles = $derived(
-    availableRoles.filter(role => 
+    availableRoles.filter(role =>
       !user.roles.some(userRole => userRole.id === role.id)
     )
   );
-  
+
   $effect(() => {
     if (form?.success) {
+      toasts.success('User updated successfully');
       // Refresh page to show updated data
       window.location.reload();
+    } else if (form?.error) {
+      toasts.error(form.error);
     }
   });
   

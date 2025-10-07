@@ -4,6 +4,8 @@
 
 import { redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
+import { getGlobalFilters } from "$lib/globalFilters.js";
+import { getAvailableGenres } from "$lib/genreFiltering.js";
 
 export async function load({ parent }) {
   const { userPermissions } = await parent();
@@ -25,13 +27,23 @@ export async function load({ parent }) {
       settings[row.key] = row.value;
     });
 
+    // Load global content filters
+    const globalFilters = await getGlobalFilters();
+
+    // Load available genres for filter selection
+    const availableGenres = await getAvailableGenres();
+
     return {
       settings,
+      globalFilters,
+      availableGenres,
     };
   } catch (error) {
     console.error("Settings page load error:", error);
     return {
       settings: {},
+      globalFilters: {},
+      availableGenres: [],
     };
   }
 }

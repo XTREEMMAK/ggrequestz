@@ -16,8 +16,8 @@ import { invalidateCache } from "$lib/cache.js";
  */
 export async function POST({ request, cookies }) {
   try {
-    // Verify user authentication
-    const user = await getAuthenticatedUser(cookies);
+    // Verify user authentication (pass request for API key auth)
+    const user = await getAuthenticatedUser(cookies, request);
     if (!user) {
       return json(
         { success: false, error: "Authentication required" },
@@ -30,7 +30,29 @@ export async function POST({ request, cookies }) {
     let localUserId;
 
     try {
-      if (user.auth_type === "basic") {
+      if (user.auth_type === "api_key") {
+        // For API key users, the user_id is already in the user object
+        if (!user.user_id) {
+          return json(
+            { success: false, error: "Invalid API key user format" },
+            { status: 400 },
+          );
+        }
+        localUserId = user.user_id;
+
+        // Verify user still exists and is active
+        userResult = await query(
+          "SELECT id, username, email FROM ggr_users WHERE id = $1 AND is_active = TRUE",
+          [localUserId],
+        );
+
+        if (userResult.rows.length === 0) {
+          return json(
+            { success: false, error: "User not found or inactive" },
+            { status: 404 },
+          );
+        }
+      } else if (user.auth_type === "basic") {
         // For basic auth users, try multiple lookup strategies
         let basicAuthId;
 
@@ -344,10 +366,10 @@ export async function POST({ request, cookies }) {
  * @param {Request} request - The request object
  * @returns {Response} - JSON response with user's requests
  */
-export async function GET({ url, cookies }) {
+export async function GET({ url, cookies, request }) {
   try {
-    // Verify user authentication
-    const user = await getAuthenticatedUser(cookies);
+    // Verify user authentication (pass request for API key auth)
+    const user = await getAuthenticatedUser(cookies, request);
     if (!user) {
       return json(
         { success: false, error: "Authentication required" },
@@ -360,7 +382,29 @@ export async function GET({ url, cookies }) {
     let localUserId;
 
     try {
-      if (user.auth_type === "basic") {
+      if (user.auth_type === "api_key") {
+        // For API key users, the user_id is already in the user object
+        if (!user.user_id) {
+          return json(
+            { success: false, error: "Invalid API key user format" },
+            { status: 400 },
+          );
+        }
+        localUserId = user.user_id;
+
+        // Verify user still exists and is active
+        userResult = await query(
+          "SELECT id, username, email FROM ggr_users WHERE id = $1 AND is_active = TRUE",
+          [localUserId],
+        );
+
+        if (userResult.rows.length === 0) {
+          return json(
+            { success: false, error: "User not found or inactive" },
+            { status: 404 },
+          );
+        }
+      } else if (user.auth_type === "basic") {
         // For basic auth users, try multiple lookup strategies
         let basicAuthId;
 
@@ -405,7 +449,7 @@ export async function GET({ url, cookies }) {
         );
       }
 
-      localUserId = userResult.rows[0].id;
+      localUserId = localUserId || userResult.rows[0].id;
     } catch (dbError) {
       console.error(
         "❌ GET requests: Database error during user lookup:",

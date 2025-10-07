@@ -343,19 +343,73 @@ COMMENT ON COLUMN ggr_api_keys.last_used_at IS 'Last time this API key was used 
 COMMENT ON COLUMN ggr_api_keys.expires_at IS 'Optional expiration date for the key';
 
 -- ============================================================================
--- PART 9: Update migration tracking
+-- PART 9: Fix trigger function (from migration 003)
 -- ============================================================================
 
--- Update schema version to 2 (since this combines 2-6)
-INSERT INTO ggr_schema_version (version, rollback_sql) VALUES (2, '
+-- Create the function that updates last_updated timestamp
+CREATE OR REPLACE FUNCTION update_games_cache_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.last_updated = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Drop and recreate trigger to ensure it uses the correct function
+DROP TRIGGER IF EXISTS update_games_cache_updated_at ON ggr_games_cache;
+
+CREATE TRIGGER update_games_cache_updated_at
+    BEFORE UPDATE ON ggr_games_cache
+    FOR EACH ROW
+    EXECUTE FUNCTION update_games_cache_timestamp();
+
+-- ============================================================================
+-- PART 10: Add Global Content Filter Settings (from migrations 004 & 005)
+-- ============================================================================
+
+-- Add global content filter settings to system settings table
+INSERT INTO ggr_system_settings (key, value, category, description, is_sensitive, updated_at)
+VALUES
+    -- Global filter master switch
+    ('content.global_filter_enabled', 'false', 'content', 'Enable global content filtering (supersedes user preferences)', false, NOW()),
+
+    -- ESRB rating limit
+    ('content.global_max_esrb_rating', 'null', 'content', 'Maximum ESRB rating allowed globally (EC, E, E10+, T, M, AO, or null for no limit)', false, NOW()),
+
+    -- Mature content filters
+    ('content.global_hide_mature', 'false', 'content', 'Globally hide mature content', false, NOW()),
+    ('content.global_hide_nsfw', 'false', 'content', 'Globally hide NSFW content', false, NOW()),
+
+    -- Custom content blocks (JSON array of keywords)
+    ('content.global_custom_blocks', '[]', 'content', 'Global list of custom content keywords to block (JSON array)', false, NOW()),
+
+    -- Genre filters (JSON array of genre names)
+    ('content.global_excluded_genres', '[]', 'content', 'Globally excluded genres (JSON array)', false, NOW()),
+
+    -- Banned games (JSON array of IGDB IDs)
+    ('content.global_banned_games', '[]', 'content', 'List of banned game IGDB IDs (JSON array)', false, NOW())
+ON CONFLICT (key) DO NOTHING;
+
+-- Create index for content-related settings for faster lookups
+CREATE INDEX IF NOT EXISTS idx_ggr_system_settings_content_category
+    ON ggr_system_settings(category) WHERE category = 'content';
+
+COMMENT ON INDEX idx_ggr_system_settings_content_category IS 'Index for fast lookup of content filter settings';
+
+-- ============================================================================
+-- PART 11: Update migration tracking
+-- ============================================================================
+
+-- Update schema version to 5 (since this combines 2-5)
+INSERT INTO ggr_schema_version (version, rollback_sql) VALUES (5, '
     -- This consolidated migration would need manual rollback
-    -- It combines migrations 002-006
+    -- It combines migrations 002-005
     -- To rollback: restore database from backup before migration
 ') ON CONFLICT (version) DO NOTHING;
 
 -- Record this consolidated migration
 INSERT INTO ggr_migrations (migration_name, version, checksum)
-VALUES ('002_complete_schema_updates', 2, '002_consolidated_v1')
+VALUES ('002_complete_schema_updates', 5, '002_consolidated_v2')
 ON CONFLICT (migration_name) DO NOTHING;
 
 -- For compatibility with existing installations that ran individual migrations,
@@ -364,8 +418,11 @@ INSERT INTO ggr_migrations (migration_name, version, checksum)
 SELECT * FROM (VALUES
     ('002_add_games_cache_metadata.sql', 2, 'games_cache_metadata_v1'),
     ('003_user_preferences_and_content_filtering', 3, '003_user_prefs_content_filter_v1'),
+    ('003_hotfix_missing_columns', 3, '003_hotfix_columns_v1'),
     ('004_add_esrb_columns_to_games_cache', 4, '004_esrb_games_cache_v1'),
+    ('004_add_global_content_filters', 4, '004_global_content_filters_v1'),
     ('005_fix_foreign_key_constraints', 5, '005_fix_fk_constraints_v1'),
+    ('005_add_banned_games_global_filter', 5, '005_banned_games_v1'),
     ('006_fix_content_rating_field_length', 6, '006_fix_content_rating_length_v1'),
     ('007_fix_content_rating_field_type', 7, '007_content_rating_text_v1')
 ) AS migrations(migration_name, version, checksum)

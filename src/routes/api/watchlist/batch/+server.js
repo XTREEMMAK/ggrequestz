@@ -4,9 +4,10 @@
  */
 
 import { json } from "@sveltejs/kit";
-import { getSession } from "$lib/auth.server.js";
-import { cacheUserPermissions } from "$lib/cache.js";
+import { getAuthenticatedUser } from "$lib/auth.server.js";
+import { getUserIdFromAuth } from "$lib/getUserId.js";
 import { watchlist } from "$lib/database.js";
+import { query } from "$lib/database.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -44,53 +45,21 @@ export async function POST({ request, cookies }) {
       return json({ error: "Too many game IDs (max 100)" }, { status: 400 });
     }
 
-    // Get user session with caching
-    const cookieHeader = cookies.get("session")
-      ? `session=${cookies.get("session")}`
-      : cookies.get("basic_auth_session")
-        ? `basic_auth_session=${cookies.get("basic_auth_session")}`
-        : null;
-
-    if (!cookieHeader) {
+    // Verify authentication (supports session, basic auth, and API keys)
+    const user = await getAuthenticatedUser(cookies, request);
+    if (!user) {
       return json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const user = await getSession(cookieHeader);
-    if (!user) {
-      return json({ error: "Invalid session" }, { status: 401 });
-    }
-
-    // Get user's database ID - enhanced extraction logic
+    // Get user's database ID
     let userId;
-    if (
-      process.env.NODE_ENV === "development" &&
-      process.env.DEBUG_USER_AUTH === "true"
-    ) {
-      console.log("🔍 User object:", {
-        sub: user.sub,
-        localUserId: user.localUserId,
-        id: user.id,
-        user_id: user.user_id,
-      });
+    try {
+      userId = await getUserIdFromAuth(user, query);
+      console.log("✅ Extracted userId:", userId);
+    } catch (err) {
+      console.error("Failed to get user ID:", err);
+      return json({ error: "Authentication error" }, { status: 401 });
     }
-
-    if (user.sub?.startsWith("basic_auth_")) {
-      userId = user.sub.replace("basic_auth_", "");
-    } else if (user.localUserId) {
-      userId = user.localUserId;
-    } else if (user.id) {
-      userId = user.id;
-    } else if (user.user_id) {
-      userId = user.user_id;
-    } else if (user.sub && !user.sub.startsWith("basic_auth_")) {
-      // Try using sub directly if it's not a basic_auth format
-      userId = user.sub;
-    } else {
-      console.error("❌ Could not extract user ID from user object:", user);
-      return json({ error: "User ID not found" }, { status: 400 });
-    }
-
-    console.log("✅ Extracted userId:", userId);
 
     // Batch fetch watchlist status directly (watchlist.batchContains returns a Map)
     const watchlistStatuses = await watchlist.batchContains(

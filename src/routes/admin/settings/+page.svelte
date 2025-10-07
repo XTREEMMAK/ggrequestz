@@ -11,7 +11,9 @@
   let { data } = $props();
   let settings = $state(data?.settings || {});
   let userPermissions = $derived(data?.userPermissions || []);
-  
+  let globalFilters = $state(data?.globalFilters || {});
+  let availableGenres = $state(data?.availableGenres || []);
+
   let loading = $state(false);
   let saveStatus = $state('');
   let activeSection = $state('integrations');
@@ -32,8 +34,8 @@
   let sections = [
     {
       id: 'integrations',
-      label: 'Integrations',
-      icon: 'heroicons:puzzle-piece',
+      label: 'Tools',
+      icon: 'heroicons:wrench-screwdriver',
       description: 'Configure external service connections'
     },
     {
@@ -41,6 +43,12 @@
       label: 'Notifications',
       icon: 'heroicons:bell',
       description: 'Configure notification preferences'
+    },
+    {
+      id: 'content',
+      label: 'Content Filtering',
+      icon: 'heroicons:shield-check',
+      description: 'Global content filters (supersede user settings)'
     },
     {
       id: 'requests',
@@ -78,6 +86,14 @@
     'system.maintenance_mode': settings['system.maintenance_mode'] === 'true',
     'system.registration_enabled': settings['system.registration_enabled'] === 'true',
 
+    // Global content filters
+    'content.global_filter_enabled': globalFilters.enabled || false,
+    'content.global_max_esrb_rating': globalFilters.max_esrb_rating || 'M',
+    'content.global_hide_mature': globalFilters.hide_mature_content || false,
+    'content.global_hide_nsfw': globalFilters.hide_nsfw_content || false,
+    'content.global_custom_blocks': Array.isArray(globalFilters.custom_content_blocks) ? globalFilters.custom_content_blocks : [],
+    'content.global_excluded_genres': Array.isArray(globalFilters.excluded_genres) ? globalFilters.excluded_genres : [],
+    'content.global_banned_games': Array.isArray(globalFilters.banned_games) ? globalFilters.banned_games : [],
   });
   
   // Editable form state
@@ -94,6 +110,13 @@
     'request.require_approval': false,
     'system.maintenance_mode': false,
     'system.registration_enabled': false,
+    'content.global_filter_enabled': false,
+    'content.global_max_esrb_rating': 'M',
+    'content.global_hide_mature': false,
+    'content.global_hide_nsfw': false,
+    'content.global_custom_blocks': [],
+    'content.global_excluded_genres': [],
+    'content.global_banned_games': [],
   });
   
   // Sync editable data with settings on load only if form is empty
@@ -137,7 +160,7 @@
         // Update local settings
         settings = { ...settings, ...settingsToSave };
 
-
+        toasts.success('Settings saved successfully');
         setTimeout(() => { saveStatus = ''; }, 3000);
       } else {
         throw new Error(result.error || 'Failed to save settings');
@@ -145,6 +168,7 @@
     } catch (error) {
       console.error('Save settings error:', error);
       saveStatus = 'error';
+      toasts.error(error.message || 'Failed to save settings');
       setTimeout(() => { saveStatus = ''; }, 5000);
     } finally {
       loading = false;
@@ -246,6 +270,86 @@
     } finally {
       loading = false;
     }
+  }
+
+  // Global content filter helpers
+  async function saveGlobalFilters() {
+    if (!canEditSettings) return;
+
+    loading = true;
+    saveStatus = '';
+
+    try {
+      const globalFilterData = {
+        enabled: editableFormData['content.global_filter_enabled'],
+        max_esrb_rating: editableFormData['content.global_max_esrb_rating'],
+        hide_mature_content: editableFormData['content.global_hide_mature'],
+        hide_nsfw_content: editableFormData['content.global_hide_nsfw'],
+        custom_content_blocks: editableFormData['content.global_custom_blocks'],
+        excluded_genres: editableFormData['content.global_excluded_genres'],
+        banned_games: editableFormData['content.global_banned_games'],
+      };
+
+      const response = await fetch('/admin/api/settings/content-filters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(globalFilterData)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        saveStatus = 'success';
+        globalFilters = globalFilterData;
+        toasts.success('Global content filters saved successfully');
+        setTimeout(() => { saveStatus = ''; }, 3000);
+      } else {
+        throw new Error(result.error || 'Failed to save global filters');
+      }
+    } catch (error) {
+      console.error('Save global filters error:', error);
+      saveStatus = 'error';
+      toasts.error(error.message || 'Failed to save global filters');
+      setTimeout(() => { saveStatus = ''; }, 5000);
+    } finally {
+      loading = false;
+    }
+  }
+
+  function toggleGlobalExcludedGenre(genreName) {
+    const excluded = editableFormData['content.global_excluded_genres'] || [];
+    if (excluded.includes(genreName)) {
+      editableFormData['content.global_excluded_genres'] = excluded.filter(g => g !== genreName);
+    } else {
+      editableFormData['content.global_excluded_genres'] = [...excluded, genreName];
+    }
+  }
+
+  function addGlobalCustomBlock(keyword) {
+    const blocks = editableFormData['content.global_custom_blocks'] || [];
+    const trimmed = keyword.trim().toLowerCase();
+    if (trimmed && !blocks.includes(trimmed)) {
+      editableFormData['content.global_custom_blocks'] = [...blocks, trimmed];
+    }
+  }
+
+  function removeGlobalCustomBlock(keyword) {
+    const blocks = editableFormData['content.global_custom_blocks'] || [];
+    editableFormData['content.global_custom_blocks'] = blocks.filter(b => b !== keyword);
+  }
+
+  function addGlobalBannedGame(igdbId) {
+    const bannedGames = editableFormData['content.global_banned_games'] || [];
+    const trimmed = igdbId.trim();
+    const gameId = parseInt(trimmed);
+
+    if (!isNaN(gameId) && gameId > 0 && !bannedGames.includes(gameId)) {
+      editableFormData['content.global_banned_games'] = [...bannedGames, gameId];
+    }
+  }
+
+  function removeGlobalBannedGame(igdbId) {
+    const bannedGames = editableFormData['content.global_banned_games'] || [];
+    editableFormData['content.global_banned_games'] = bannedGames.filter(id => id !== igdbId);
   }
 
   // Confirmation dialog helpers
@@ -358,16 +462,29 @@
             </p>
           </div>
         {:else}
-          <!-- Integrations Section -->
+          <!-- Tools Section -->
           {#if activeSection === 'integrations'}
             <div class="space-y-6">
               <div>
                 <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  External Service Integrations
+                  External Service Tools
                 </h2>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
                   Configure connections to external services like ROMM library and notification providers.
                 </p>
+              </div>
+
+              <!-- Testing Configuration Warning -->
+              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+                <div class="flex items-start">
+                  <Icon icon="heroicons:information-circle" class="w-5 h-5 text-yellow-600 dark:text-yellow-500 mr-3 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 class="text-sm font-medium text-yellow-800 dark:text-yellow-400 mb-1">Testing Configuration</h4>
+                    <p class="text-sm text-yellow-700 dark:text-yellow-300">
+                      These sections are used for testing only. Please add to your environment file.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <!-- ROMM Integration -->
@@ -660,7 +777,7 @@
                   Notification Preferences
                 </h2>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  Configure which events should trigger notifications. Set up notification providers in the Integrations section.
+                  Configure which events should trigger notifications. Set up notification providers in the Tools section.
                 </p>
               </div>
 
@@ -726,8 +843,256 @@
               </div>
             </div>
           {/if}
-          
-          
+
+          <!-- Content Filtering Section -->
+          {#if activeSection === 'content'}
+            <div class="space-y-6">
+              <div>
+                <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  Global Content Filters
+                </h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Set system-wide content filtering rules that supersede individual user preferences.
+                </p>
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
+                  <div class="flex items-start">
+                    <Icon icon="heroicons:exclamation-triangle" class="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 mr-2 flex-shrink-0" />
+                    <div class="text-sm text-amber-800 dark:text-amber-200">
+                      <p class="font-medium mb-1">Important:</p>
+                      <ul class="list-disc list-inside space-y-1 text-xs">
+                        <li>Global filters apply to all users and cannot be bypassed</li>
+                        <li>Users can add their own restrictions on top of these</li>
+                        <li>Changes invalidate cached content for all users</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Enable/Disable Global Filtering -->
+              <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    bind:checked={editableFormData['content.global_filter_enabled']}
+                    class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    disabled={!canEditSettings}
+                  />
+                  <div class="ml-3">
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                      Enable Global Content Filtering
+                    </span>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      Turn on system-wide content restrictions
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Filter Options (only shown when enabled) -->
+              {#if editableFormData['content.global_filter_enabled']}
+                <!-- ESRB Rating Limit -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                    <Icon icon="heroicons:star" class="w-5 h-5 mr-2" />
+                    Maximum ESRB Rating
+                  </h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Set the highest ESRB rating allowed on the platform
+                  </p>
+                  <select
+                    bind:value={editableFormData['content.global_max_esrb_rating']}
+                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    disabled={!canEditSettings}
+                  >
+                    <option value="EC">EC (Early Childhood)</option>
+                    <option value="E">E (Everyone)</option>
+                    <option value="E10+">E10+ (Everyone 10+)</option>
+                    <option value="T">T (Teen)</option>
+                    <option value="M">M (Mature 17+)</option>
+                    <option value="AO">AO (Adults Only 18+)</option>
+                  </select>
+                </div>
+
+                <!-- Mature Content Toggles -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                    <Icon icon="heroicons:shield-exclamation" class="w-5 h-5 mr-2" />
+                    Content Restrictions
+                  </h3>
+                  <div class="space-y-3">
+                    <label class="flex items-center">
+                      <input
+                        type="checkbox"
+                        bind:checked={editableFormData['content.global_hide_mature']}
+                        class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        disabled={!canEditSettings}
+                      />
+                      <div class="ml-3">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">
+                          Hide Mature Content
+                        </span>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                          Block games with mature themes and content descriptors
+                        </p>
+                      </div>
+                    </label>
+
+                    <label class="flex items-center">
+                      <input
+                        type="checkbox"
+                        bind:checked={editableFormData['content.global_hide_nsfw']}
+                        class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        disabled={!canEditSettings}
+                      />
+                      <div class="ml-3">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">
+                          Hide NSFW Content
+                        </span>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                          Block games with sexual content or nudity
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Custom Content Blocks -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                    <Icon icon="heroicons:no-symbol" class="w-5 h-5 mr-2" />
+                    Custom Content Blocks
+                  </h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Block games containing specific keywords in titles or descriptions
+                  </p>
+
+                  <div class="flex flex-wrap gap-2 mb-3">
+                    {#each (editableFormData['content.global_custom_blocks'] || []) as keyword}
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                        {keyword}
+                        <button
+                          type="button"
+                          onclick={() => removeGlobalCustomBlock(keyword)}
+                          class="ml-2 hover:text-red-600 dark:hover:text-red-400"
+                          disabled={!canEditSettings}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    {/each}
+                  </div>
+
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter keyword to block"
+                      class="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      disabled={!canEditSettings}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' && e.target.value.trim()) {
+                          e.preventDefault();
+                          addGlobalCustomBlock(e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <!-- Excluded Genres -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                    <Icon icon="heroicons:tag" class="w-5 h-5 mr-2" />
+                    Excluded Genres
+                  </h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Hide games from specific genres across the platform
+                  </p>
+
+                  <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {#each availableGenres as genre}
+                      <label class="flex items-center p-2 rounded border {(editableFormData['content.global_excluded_genres'] || []).includes(genre.name) ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'}">
+                        <input
+                          type="checkbox"
+                          checked={(editableFormData['content.global_excluded_genres'] || []).includes(genre.name)}
+                          onchange={() => toggleGlobalExcludedGenre(genre.name)}
+                          class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          disabled={!canEditSettings}
+                        />
+                        <span class="ml-2 text-sm text-gray-900 dark:text-white">{genre.name}</span>
+                      </label>
+                    {/each}
+                  </div>
+                </div>
+
+                <!-- Banned Games -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h3 class="text-md font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                    <Icon icon="heroicons:x-circle" class="w-5 h-5 mr-2" />
+                    Banned Games
+                  </h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Ban specific games by their IGDB ID. Banned games will not appear in search results, popular games, or anywhere on the platform.
+                  </p>
+
+                  <div class="flex flex-wrap gap-2 mb-3">
+                    {#each (editableFormData['content.global_banned_games'] || []) as gameId}
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                        ID: {gameId}
+                        <button
+                          type="button"
+                          onclick={() => removeGlobalBannedGame(gameId)}
+                          class="ml-2 hover:text-red-600 dark:hover:text-red-400"
+                          disabled={!canEditSettings}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    {/each}
+                  </div>
+
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Enter IGDB game ID"
+                      class="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      disabled={!canEditSettings}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' && e.target.value.trim()) {
+                          e.preventDefault();
+                          addGlobalBannedGame(e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    You can find the IGDB ID in the game's URL on IGDB.com or by searching for the game in the app.
+                  </p>
+                </div>
+              {/if}
+
+              <!-- Save Button -->
+              <div class="flex justify-end">
+                <button
+                  type="button"
+                  onclick={saveGlobalFilters}
+                  disabled={!canEditSettings || loading}
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                >
+                  {#if loading}
+                    <LoadingSpinner size="sm" class="mr-2" />
+                  {:else}
+                    <Icon icon="heroicons:check" class="w-5 h-5 mr-2" />
+                  {/if}
+                  Save Global Filters
+                </button>
+              </div>
+            </div>
+          {/if}
+
+
           <!-- Request Settings Section -->
           {#if activeSection === 'requests'}
             <div class="space-y-6">

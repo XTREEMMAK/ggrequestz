@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.5] - 2025-10-06
+
+### ✨ New Features
+
+- **Global Content Filtering System**
+  - Added system-wide content filtering that supersedes user preferences
+  - Admins can now ban specific games globally by IGDB ID
+  - Support for global keyword blocking in game titles
+  - Global genre exclusion filters
+  - Global ESRB rating limits and mature content filters
+  - All global filters apply across homepage, search, and API results
+
+- **Enhanced Admin Settings**
+  - New "Content Filtering" section in Admin Settings
+  - Real-time game search for adding games to ban list
+  - Watchlist integration for banned games management
+  - Genre selection with multi-select interface
+  - Custom keyword blocking with visual tag management
+
+### 🐛 Bug Fixes
+
+- **Content Filter Enforcement**
+  - Fixed banned games appearing in Popular Games section
+  - Fixed banned games appearing in Recent Releases section
+  - Fixed banned games appearing in ROMM cross-reference results
+  - Fixed client-side cached data overriding server-filtered results
+  - Fixed session storage restoration bypassing global filters
+  - Fixed array type validation errors when loading filter settings
+  - Fixed `globalExcluded is not iterable` error in filter merging
+
+- **Toast Notifications**
+  - Fixed toast notifications not appearing on admin pages
+  - Increased z-index from 50 to 9999 for proper display above modals
+  - Added toast notifications to all admin settings save operations
+
+- **Mobile Layout**
+  - Fixed admin panel content appearing under sticky navigation on mobile
+  - Changed from padding-top to margin-top (50px) for correct spacing
+
+- **Form Validation**
+  - Added requirement for at least 1 platform selection before request submission
+  - Added toast error notifications for validation failures
+
+### 🔧 Performance & Code Quality
+
+- **Migration Consolidation**
+  - Consolidated migrations 002-005 into single migration file
+  - Moved legacy individual migrations to `migrations/legacy/` folder
+  - Improved database setup efficiency for new installations
+
+- **Code Cleanup**
+  - Removed excessive debug logging from production code
+  - Cleaned up array validation patterns across codebase
+  - Simplified session storage restoration logic
+  - Streamlined global filter application in homepage data loading
+
+- **Array Type Safety**
+  - Added comprehensive `Array.isArray()` checks throughout codebase
+  - Fixed `.includes is not a function` errors in admin settings
+  - Fixed `.map is not a function` errors in game filtering
+  - Added fallback empty arrays for all JSON array fields from database
+
+### 📚 Documentation
+
+- Updated migration tracking for consolidated schema
+- Added detailed comments for global filter functionality
+- Documented filter precedence (global > user preferences)
+
+## [1.2.4] - 2025-10-06
+
+### 🐛 Bug Fixes
+
+- **Environment Configuration**
+  - Fixed development environment loading `.env` instead of `.env.development`
+  - Renamed `.env.dev` → `.env.development` to follow Vite/SvelteKit conventions
+  - Updated npm scripts to set `NODE_ENV=development` for proper env file loading
+  - Server-side code now correctly uses `.env.development` in development mode
+  - Created `load-env.js` preloader to ensure correct environment file loading with `--import` flag
+
+- **API Key Authentication**
+  - Fixed API request endpoint returning 302 redirects instead of 401 errors
+  - Moved `/request` API endpoint to `/api/request` for consistency and proper authentication flow
+  - Fixed all API endpoints to support API key authentication (Bearer token)
+  - Added `request` parameter to `getAuthenticatedUser()` calls across 8+ endpoints
+  - Created `getUserIdFromAuth()` utility for consistent user ID extraction across auth types
+  - Fixed `/api/user/preferences`, `/api/watchlist/*`, `/api/request/rescind` endpoints
+  - Updated client API calls and documentation to reflect new endpoint location
+
+- **API Documentation**
+  - Fixed Scalar API documentation not loading after Vue deprecation fix
+  - Added `/api/openapi.json` to public routes list for unauthenticated access
+  - Added Vue feature flags to `vite.config.js` for proper Scalar rendering
+  - Reverted spec.url format to working configuration
+
+### 🎨 UI Improvements
+
+- **Admin Settings Page**
+  - Added yellow info notice to external integrations section
+  - Warning users that test configuration should be moved to environment file
+
+- **Admin API Keys Page**
+  - Added "API Docs" button for easy access to interactive API documentation
+
 ### 🔒 Security
 
 - **CRITICAL: Fixed Privilege Escalation Vulnerabilities**
@@ -687,7 +790,7 @@ When upgrading from v1.0.3 to v1.1.0:
 - **Environment Configuration**
   - Fixed development environment using wrong `.env` file
   - Separated `.env` (Docker/production) from `.env.dev` (development)
-  - Fixed DOTENV_CONFIG_PATH support for development
+  - **Note**: This fix was incomplete - see Unreleased section for proper Vite/SvelteKit integration
   - Corrected environment variable loading in multiple modules
 
 - **Search & UI**
@@ -704,7 +807,7 @@ When upgrading from v1.0.3 to v1.1.0:
   - Default to pulling pre-built images instead of building locally
 
 - **Development Workflow**
-  - Development scripts now use `.env.dev` by default
+  - Development scripts now use `.env.development` by default (Vite convention)
   - Improved separation between production and development configs
   - Better error messages for configuration issues
 

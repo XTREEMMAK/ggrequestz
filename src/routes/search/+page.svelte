@@ -47,6 +47,13 @@
   
   // Initialize from URL on mount - only run once
   onMount(() => {
+    // Check if search was blocked by global filters
+    if (data?.blockedSearch) {
+      searchError = 'This search contains blocked keywords and cannot be performed.';
+      searchResults = { hits: [], found: 0 };
+      return;
+    }
+
     // Restore all filters from URL parameters
     restoreFiltersFromUrl();
 
@@ -163,17 +170,25 @@
       searchResults = { hits: [], found: 0 };
       return;
     }
-    
+
     loading = true;
     searchError = '';
-    
+
     try {
       const data = await igdbRequest('search', {
         q: searchQuery.trim(),
         limit: resultsPerPage,
         offset: (currentPage - 1) * resultsPerPage
       });
-      
+
+      // Check if search was blocked
+      if (data.blocked) {
+        searchError = 'This search contains blocked keywords and cannot be performed.';
+        searchResults = { hits: [], found: 0 };
+        loading = false;
+        return;
+      }
+
       if (data.success) {
         // Format IGDB response to match expected structure
         let allGames = data.data.map(game => ({
@@ -268,6 +283,8 @@
   function handleSearchInput({ detail }) {
     // Only update search query, don't trigger search or navigation
     searchQuery = detail.value;
+    // Clear any previous search errors
+    searchError = '';
     if (!searchQuery.trim()) {
       // Just clear results when search is empty, don't navigate at all
       searchResults = { hits: [], found: 0 };
@@ -288,17 +305,21 @@
 
   function handleSearchSuggestion({ detail }) {
     suggestionLoading = true;
-    
+
     // Get autocomplete suggestions from IGDB
     if (detail.query.length >= 2) {
       igdbRequest('search', { q: detail.query, limit: 5 })
         .then(data => {
-          if (data.success) {
+          if (data.blocked) {
+            // Don't show suggestions for blocked keywords
+            searchSuggestions = [];
+          } else if (data.success) {
+            // Results are already filtered server-side
             searchSuggestions = data.data.map(game => game.title);
           } else {
             searchSuggestions = [];
           }
-        })        
+        })
         .catch(error => {
           searchSuggestions = [];
         })

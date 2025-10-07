@@ -69,7 +69,7 @@ export async function getGameById(gameId, forceRefresh = false) {
  * @returns {Promise<Object>} - Response
  */
 export async function submitGameRequest(requestData) {
-  return await apiClient.post("/request", requestData);
+  return await apiClient.post("/api/request", requestData);
 }
 
 /**

@@ -132,6 +132,7 @@ const authGuard = async ({ event, resolve }) => {
     "/api/images/proxy", // Image proxy
     "/api/webhooks/", // Webhooks from external services
     "/api/docs", // API documentation
+    "/api/openapi.json", // OpenAPI spec (needed for API docs)
     "/api/setup/", // Setup endpoints (needed during initial setup)
     "/api/health", // Health check endpoint (needed for Docker healthchecks)
   ];

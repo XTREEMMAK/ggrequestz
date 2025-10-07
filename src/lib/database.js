@@ -21,8 +21,9 @@ async function loadEnvironmentVariables() {
       try {
         // Use dynamic import for dotenv in ESM context
         const { config } = await import("dotenv");
-        // Use DOTENV_CONFIG_PATH if set (for development), otherwise default to .env
-        const envPath = process.env.DOTENV_CONFIG_PATH || ".env";
+        // Use .env.development in development mode (Vite convention), otherwise .env
+        const envPath =
+          process.env.NODE_ENV === "development" ? ".env.development" : ".env";
         config({ path: envPath });
       } catch (error) {
         console.warn(

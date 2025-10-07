@@ -490,6 +490,64 @@ Check if game is in user's watchlist.
 
 ### Game Requests
 
+#### POST /api/request
+
+Submit a new game request.
+
+**Authentication Required:** Yes (API key or session)
+
+**Required Scopes:** `requests:write` (for API keys)
+
+**Request:**
+
+```json
+{
+  "request_type": "game",
+  "title": "The Legend of Zelda: Breath of the Wild",
+  "igdb_id": "72129",
+  "platforms": ["Nintendo Switch", "Wii U"],
+  "priority": "medium",
+  "description": "Would love to have this game in the library",
+  "game_data": {
+    "title": "The Legend of Zelda: Breath of the Wild",
+    "summary": "Game description...",
+    "cover_url": "https://images.igdb.com/...",
+    "rating": 97.5,
+    "platforms": ["Nintendo Switch", "Wii U"],
+    "genres": ["Adventure", "RPG"]
+  }
+}
+```
+
+**Request Types:**
+
+- `game` - Request a new game
+- `update` - Request an update to existing game (include `update_type`, `new_information`, `existing_game`)
+- `fix` - Report an issue with a game (include `issue_type`, `affected_platform`, `existing_game`)
+
+**Priority Levels:**
+
+- `low` - Nice to have
+- `medium` - Would appreciate (default)
+- `high` - Really want this
+- `urgent` - Critical request
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "request": {
+    "id": 123,
+    "title": "The Legend of Zelda: Breath of the Wild",
+    "request_type": "game",
+    "priority": "medium",
+    "status": "pending",
+    "created_at": "2025-10-06T12:00:00Z"
+  }
+}
+```
+
 #### POST /api/request/rescind
 
 Remove/rescind a game request.

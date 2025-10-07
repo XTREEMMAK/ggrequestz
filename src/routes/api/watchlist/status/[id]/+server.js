@@ -5,6 +5,8 @@
 
 import { json, error } from "@sveltejs/kit";
 import { watchlist } from "$lib/database.js";
+import { query } from "$lib/database.js";
+import { getUserIdFromAuth } from "$lib/getUserId.js";
 
 export async function GET({ params, locals }) {
   const { user } = locals;
@@ -19,23 +21,8 @@ export async function GET({ params, locals }) {
   }
 
   try {
-    // Convert user.sub to the correct userId format for database lookup
-    let userId;
-    if (user.sub?.startsWith("basic_auth_")) {
-      // For Basic Auth users, extract actual user ID from sub
-      userId = user.sub.replace("basic_auth_", "");
-    } else {
-      // For Authentik users, look up database ID by authentik_sub
-      const { query } = await import("$lib/database.js");
-      const userResult = await query(
-        "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub],
-      );
-      if (userResult.rows.length === 0) {
-        throw error(404, "User not found in database");
-      }
-      userId = userResult.rows[0].id;
-    }
+    // Get user's database ID (supports all auth types including API keys)
+    const userId = await getUserIdFromAuth(user, query);
 
     const isInWatchlist = await watchlist.contains(userId, gameId);
 

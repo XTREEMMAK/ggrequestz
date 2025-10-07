@@ -15,8 +15,10 @@ const { Client } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables
-config();
+// Load environment variables - use .env.development in development mode (Vite convention)
+const configPath =
+  process.env.NODE_ENV === "development" ? ".env.development" : ".env";
+config({ path: configPath });
 
 async function setupPostgreSQL() {
   console.log("🐘 Setting up PostgreSQL database for GG Requestz...");

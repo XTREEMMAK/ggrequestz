@@ -70,6 +70,10 @@ export default defineConfig({
   // Define server-only modules to prevent client-side bundling
   define: {
     global: "globalThis",
+    // Vue feature flags for @scalar/api-reference
+    __VUE_OPTIONS_API__: true,
+    __VUE_PROD_DEVTOOLS__: false,
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
   },
 
   // External server-only dependencies for client build

@@ -29,6 +29,10 @@ import {
 import { safeAsync, withTimeout } from "$lib/utils.js";
 
 import { redirect } from "@sveltejs/kit";
+import {
+  getGlobalFilters,
+  mergeFiltersWithGlobal,
+} from "$lib/globalFilters.js";
 
 export async function load({ parent, cookies, url, depends }) {
   const { user, needsSetup, authMethod } = await parent();
@@ -84,10 +88,15 @@ export async function load({ parent, cookies, url, depends }) {
       }
     }
 
-    // Get user preferences
+    // Get user preferences and merge with global filters
     let userPreferences = null;
     try {
+      // Always load global filters
+      const globalFilters = await getGlobalFilters();
+
+      // Load user preferences
       userPreferences = await getUserPreferences(parseInt(userId));
+
       // Check if user has enabled filtering for homepage sections
       const hasHomepageFiltering =
         userPreferences &&
@@ -95,8 +104,19 @@ export async function load({ parent, cookies, url, depends }) {
           userPreferences.apply_to_popular ||
           userPreferences.apply_to_recent);
 
-      // If no homepage filtering is enabled, don't use preferences
+      // Clear user preferences if they haven't enabled homepage filtering
+      // (Global filters will still be applied via merge)
       if (!hasHomepageFiltering) {
+        userPreferences = null;
+      }
+
+      // Merge global filters with user preferences (global takes precedence)
+      // If global filters are enabled, this will return an object with banned_games etc.
+      // even if userPreferences is null
+      userPreferences = mergeFiltersWithGlobal(userPreferences, globalFilters);
+
+      // Only set to null if both global filters are disabled AND no user preferences
+      if (!globalFilters.enabled && !hasHomepageFiltering) {
         userPreferences = null;
       }
     } catch (error) {
@@ -129,12 +149,8 @@ export async function load({ parent, cookies, url, depends }) {
       // Get new releases from IGDB (restored to 24 games with enhanced caching)
       safeAsync(
         async () => {
-          // Fetch more games for dynamic display limits (up to 24 for wide screens)
-          if (
-            userPreferences &&
-            (userPreferences.apply_to_recent ||
-              userPreferences.apply_to_homepage)
-          ) {
+          // Always apply filters if we have merged preferences (includes global filters)
+          if (userPreferences) {
             // Try to use cached filtered results first
             const cacheKey = `recent-games-filtered-${userId}`;
             return await withCache(
@@ -157,11 +173,8 @@ export async function load({ parent, cookies, url, depends }) {
       // Get popular games from IGDB (restored to 24 games with enhanced caching)
       safeAsync(
         async () => {
-          if (
-            userPreferences &&
-            (userPreferences.apply_to_popular ||
-              userPreferences.apply_to_homepage)
-          ) {
+          // Always apply filters if we have merged preferences (includes global filters)
+          if (userPreferences) {
             // Try to use cached filtered results first
             const cacheKey = `popular-games-filtered-${userId}`;
             return await withCache(

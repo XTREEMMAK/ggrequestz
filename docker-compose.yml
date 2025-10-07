@@ -117,58 +117,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # Optional: Gotify Notification Server
-  gotify:
-    image: gotify/server
-    container_name: ggrequestz-gotify
-    restart: unless-stopped
-    environment:
-      GOTIFY_DEFAULTUSER_NAME: admin
-      GOTIFY_DEFAULTUSER_PASS: ${GOTIFY_ADMIN_PASSWORD:-admin123}
-    volumes:
-      - gotify-data:/app/data
-    ports:
-      - "${GOTIFY_EXTERNAL_PORT:-8080}:80"
-    networks:
-      - ggrequestz-network
-    profiles:
-      - notifications
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Optional: Reverse Proxy (Traefik)
-  traefik:
-    image: traefik:v3.0
-    container_name: ggrequestz-traefik
-    restart: unless-stopped
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8090:8080" # Traefik dashboard
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - traefik-letsencrypt:/letsencrypt
-    networks:
-      - ggrequestz-network
-    profiles:
-      - proxy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
-
 volumes:
   postgres-data:
     driver: local

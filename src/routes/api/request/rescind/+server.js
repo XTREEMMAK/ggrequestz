@@ -4,41 +4,20 @@
  */
 
 import { json, error } from "@sveltejs/kit";
-import { requireAuth } from "$lib/auth.server.js";
+import { getAuthenticatedUser } from "$lib/auth.server.js";
+import { getUserIdFromAuth } from "$lib/getUserId.js";
 import { query } from "$lib/database.js";
 
-export async function POST({ request }) {
+export async function POST({ request, cookies }) {
   try {
-    // Verify authentication
-    const user = await requireAuth(request);
+    // Verify authentication (supports session, basic auth, and API keys)
+    const user = await getAuthenticatedUser(cookies, request);
     if (!user) {
       throw error(401, "Authentication required");
     }
 
-    // Get user's local database ID
-    let userResult;
-    let localUserId;
-
-    if (user.sub?.startsWith("basic_auth_")) {
-      // For basic auth, extract ID from the user.sub format: basic_auth_123
-      const basicAuthId = user.sub.replace("basic_auth_", "");
-      userResult = await query(
-        "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)],
-      );
-    } else {
-      // For Authentik users
-      userResult = await query(
-        "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub],
-      );
-    }
-
-    if (userResult.rows.length === 0) {
-      throw error(404, "User not found in database");
-    }
-
-    localUserId = userResult.rows[0].id;
+    // Get user's database ID
+    const localUserId = await getUserIdFromAuth(user, query);
 
     // Parse request data
     const { request_id } = await request.json();

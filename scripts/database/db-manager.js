@@ -19,9 +19,10 @@ const __dirname = dirname(__filename);
 // Database Manager Version
 const DB_MANAGER_VERSION = "1.1.3";
 
-// Load environment variables - respect DOTENV_CONFIG_PATH if specified
-const configPath = process.env.DOTENV_CONFIG_PATH;
-config(configPath ? { path: configPath } : {});
+// Load environment variables - use .env.development in development mode (Vite convention)
+const configPath =
+  process.env.NODE_ENV === "development" ? ".env.development" : ".env";
+config({ path: configPath });
 
 console.log("🗄️  G.G Requestz Database Manager v" + DB_MANAGER_VERSION);
 console.log("==================================");

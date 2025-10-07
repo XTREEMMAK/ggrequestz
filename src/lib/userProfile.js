@@ -37,12 +37,15 @@ export async function findUserByAuthentikSub(authentikSub) {
  */
 export async function createUserFromAuthentik(userInfo) {
   try {
+    // Check if this is the first user (no admins exist yet)
+    const isFirstUser = !(await hasAdminUsers());
+
     const result = await query(
       `
       INSERT INTO ggr_users (
         authentik_sub, email, name, preferred_username, avatar_url,
-        created_at, updated_at, last_login
-      ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NOW())
+        is_admin, created_at, updated_at, last_login
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), NOW())
       RETURNING *`,
       [
         userInfo.sub,
@@ -50,13 +53,22 @@ export async function createUserFromAuthentik(userInfo) {
         userInfo.name || null,
         userInfo.preferred_username || null,
         userInfo.picture || userInfo.avatar_url || null,
+        isFirstUser, // Make first user an admin automatically
       ],
     );
 
     const user = result.rows[0];
 
-    // Assign roles based on Authentik groups
-    await assignRolesFromAuthentikGroups(user.id, userInfo.groups || []);
+    if (isFirstUser) {
+      console.log(`✅ First Authentik user created as admin: ${user.email}`);
+    }
+
+    // Assign roles based on Authentik groups (but skip admin flag update for first user)
+    await assignRolesFromAuthentikGroups(
+      user.id,
+      userInfo.groups || [],
+      isFirstUser,
+    );
 
     return user;
   } catch (error) {
@@ -69,9 +81,14 @@ export async function createUserFromAuthentik(userInfo) {
  * Update existing user profile with latest Authentik info
  * @param {number} userId - Local user ID
  * @param {Object} userInfo - User info from Authentik
+ * @param {boolean} preserveRoles - Whether to preserve existing roles (true when linking basic auth)
  * @returns {Promise<Object|null>} - Updated user profile or null
  */
-export async function updateUserFromAuthentik(userId, userInfo) {
+export async function updateUserFromAuthentik(
+  userId,
+  userInfo,
+  preserveRoles = false,
+) {
   try {
     const result = await query(
       `
@@ -96,7 +113,14 @@ export async function updateUserFromAuthentik(userId, userInfo) {
     const user = result.rows[0];
 
     // Update roles based on current Authentik groups
-    await assignRolesFromAuthentikGroups(user.id, userInfo.groups || []);
+    // Skip role sync if preserveRoles is true (when linking existing basic auth account)
+    if (!preserveRoles) {
+      await assignRolesFromAuthentikGroups(user.id, userInfo.groups || []);
+    } else {
+      console.log(
+        `ℹ️ Preserving existing roles for user ${user.id} (linked from basic auth)`,
+      );
+    }
 
     return user;
   } catch (error) {
@@ -109,9 +133,14 @@ export async function updateUserFromAuthentik(userId, userInfo) {
  * Assign roles to user based on Authentik groups
  * @param {number} userId - Local user ID
  * @param {Array} authentikGroups - Array of Authentik group names
+ * @param {boolean} isFirstUser - Whether this is the first user (skip admin flag update)
  * @returns {Promise<void>}
  */
-async function assignRolesFromAuthentikGroups(userId, authentikGroups) {
+async function assignRolesFromAuthentikGroups(
+  userId,
+  authentikGroups,
+  isFirstUser = false,
+) {
   try {
     // Mapping of Authentik groups to internal roles
     const groupRoleMapping = {
@@ -123,11 +152,26 @@ async function assignRolesFromAuthentikGroups(userId, authentikGroups) {
     // Check if user has admin group for direct is_admin flag
     const hasAdminGroup = authentikGroups.includes("gg-requestz-admins");
 
-    // Update the direct is_admin flag based on group membership
-    await query(
-      "UPDATE ggr_users SET is_admin = $1, updated_at = NOW() WHERE id = $2",
-      [hasAdminGroup, userId],
+    console.log(
+      `🔍 AUTH DEBUG: assignRolesFromAuthentikGroups - userId: ${userId}, groups: ${JSON.stringify(authentikGroups)}, hasAdminGroup: ${hasAdminGroup}, isFirstUser: ${isFirstUser}`,
     );
+
+    // Update the direct is_admin flag based on group membership
+    // Skip this for first user - they already have is_admin=true from INSERT
+    if (!isFirstUser) {
+      await query(
+        "UPDATE ggr_users SET is_admin = $1, updated_at = NOW() WHERE id = $2",
+        [hasAdminGroup, userId],
+      );
+
+      console.log(
+        `✅ AUTH DEBUG: Updated is_admin to ${hasAdminGroup} for user ${userId}`,
+      );
+    } else {
+      console.log(
+        `ℹ️ AUTH DEBUG: Skipping is_admin update for first user ${userId}`,
+      );
+    }
 
     // Find which roles to assign
     const rolesToAssign = [];
@@ -167,6 +211,13 @@ async function assignRolesFromAuthentikGroups(userId, authentikGroups) {
     }
   } catch (error) {
     console.error("❌ Failed to assign roles from Authentik groups:", error);
+    console.error("❌ Error details:", {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+      userId,
+      authentikGroups,
+    });
   }
 }
 
@@ -372,11 +423,36 @@ export async function upsertUserFromAuthentik(userInfo) {
     let user = await findUserByAuthentikSub(userInfo.sub);
 
     if (user) {
-      // User exists, update with latest info and last login
+      // User exists with Authentik sub, update with latest info and last login
       user = await updateUserFromAuthentik(user.id, userInfo);
     } else {
-      // User doesn't exist, create new profile
-      user = await createUserFromAuthentik(userInfo);
+      // Check if a user with the same email exists (e.g., from basic auth)
+      const existingUser = await getUserByEmail(userInfo.email);
+
+      if (existingUser && !existingUser.authentik_sub) {
+        // Found a basic auth user with matching email - link the Authentik account
+        console.log(
+          `🔗 Linking Authentik account to existing user: ${existingUser.email} (ID: ${existingUser.id})`,
+        );
+
+        // Update the user with Authentik sub to link accounts
+        await query(
+          "UPDATE ggr_users SET authentik_sub = $1, updated_at = NOW() WHERE id = $2",
+          [userInfo.sub, existingUser.id],
+        );
+
+        // Now update with latest Authentik info, but preserve existing roles
+        user = await updateUserFromAuthentik(existingUser.id, userInfo, true);
+      } else if (existingUser && existingUser.authentik_sub) {
+        // Edge case: email exists but with different authentik_sub
+        console.error(
+          `❌ Email ${userInfo.email} already exists with different Authentik account`,
+        );
+        return null;
+      } else {
+        // No existing user found, create new profile
+        user = await createUserFromAuthentik(userInfo);
+      }
     }
 
     if (!user) {

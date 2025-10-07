@@ -198,15 +198,24 @@
       Manage API keys for programmatic access to your application
     </p>
   </div>
-  <button
-    type="button"
-    onclick={() => showCreateModal = true}
-    disabled={loading}
-    class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-  >
-    <Icon icon="heroicons:plus" class="w-5 h-5" />
-    <span>Create API Key</span>
-  </button>
+  <div class="flex gap-3">
+    <a
+      href="/api/docs"
+      class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+    >
+      <Icon icon="heroicons:book-open" class="w-5 h-5" />
+      <span>API Docs</span>
+    </a>
+    <button
+      type="button"
+      onclick={() => showCreateModal = true}
+      disabled={loading}
+      class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+    >
+      <Icon icon="heroicons:plus" class="w-5 h-5" />
+      <span>Create API Key</span>
+    </button>
+  </div>
 </div>
 
 <!-- API Keys List -->

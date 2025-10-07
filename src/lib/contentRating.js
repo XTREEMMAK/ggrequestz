@@ -472,7 +472,7 @@ function checkTitleForMatureContent(title, customKeywords = []) {
 /**
  * Assess if game content passes user's filtering preferences
  * @param {Object} gameRating - Game's content rating data
- * @param {Object} userPreferences - User's content filtering preferences
+ * @param {Object} userPreferences - User's content filtering preferences (should have global filters merged via mergeFiltersWithGlobal)
  * @param {string} gameTitle - Game title for title-based filtering
  * @returns {Object} Assessment result with allowed status and warnings
  */
@@ -481,6 +481,8 @@ export function assessContentSafety(
   userPreferences,
   gameTitle = "",
 ) {
+  // Note: userPreferences should already include global filters merged at the data loading level
+  // This ensures global filters are automatically enforced without separate logic
   if (!userPreferences) {
     return { allowed: true, warnings: [] };
   }

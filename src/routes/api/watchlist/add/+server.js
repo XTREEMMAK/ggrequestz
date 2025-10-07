@@ -3,58 +3,22 @@
  */
 
 import { json, error } from "@sveltejs/kit";
-import { requireAuth } from "$lib/auth.server.js";
-import { getBasicAuthUser } from "$lib/basicAuth.js";
+import { getAuthenticatedUser } from "$lib/auth.server.js";
+import { getUserIdFromAuth } from "$lib/getUserId.js";
 import { watchlist } from "$lib/database.js";
 import { query } from "$lib/database.js";
-import { parse } from "cookie";
 import { invalidateCache } from "$lib/cache.js";
 
-export async function POST({ request }) {
+export async function POST({ request, cookies }) {
   try {
-    // Verify authentication - try both Authentik and Basic Auth
-    let user = await requireAuth(request);
-
-    // If Authentik auth failed, try Basic Auth
-    if (!user) {
-      const cookieHeader = request.headers.get("cookie");
-      if (cookieHeader) {
-        const cookies = parse(cookieHeader);
-        const basicAuthSession = cookies.basic_auth_session;
-        if (basicAuthSession) {
-          user = getBasicAuthUser(basicAuthSession);
-        }
-      }
-    }
-
+    // Verify authentication (supports session, basic auth, and API keys)
+    const user = await getAuthenticatedUser(cookies, request);
     if (!user) {
       throw error(401, "Authentication required");
     }
 
-    // Get user's local database ID
-    let userResult;
-    let localUserId;
-
-    if (user.sub?.startsWith("basic_auth_")) {
-      // For basic auth, extract ID from the user.sub format: basic_auth_123
-      const basicAuthId = user.sub.replace("basic_auth_", "");
-      userResult = await query(
-        "SELECT id FROM ggr_users WHERE id = $1 AND password_hash IS NOT NULL",
-        [parseInt(basicAuthId)],
-      );
-    } else {
-      // For Authentik users
-      userResult = await query(
-        "SELECT id FROM ggr_users WHERE authentik_sub = $1",
-        [user.sub],
-      );
-    }
-
-    if (userResult.rows.length === 0) {
-      throw error(404, "User not found in database");
-    }
-
-    localUserId = userResult.rows[0].id;
+    // Get user's database ID
+    const localUserId = await getUserIdFromAuth(user, query);
 
     // Parse request data
     const body = await request.json();

@@ -8,6 +8,8 @@
   import LoadingSpinner from './LoadingSpinner.svelte';
   import { debounce } from '$lib/utils.js';
   import { igdbRequest, submitGameRequest } from '$lib/api.client.js';
+  import { getGlobalFilters } from '$lib/globalFilters.js';
+  import { toasts } from '$lib/stores/toast.js';
   import { fade, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Icon from '@iconify/svelte';
@@ -106,6 +108,9 @@
   function setErrorMessage(message = '') {
     submitError = message;
     if (message) {
+      // Show toast notification
+      toasts.error(message, 5000);
+
       // Clear any existing timer
       if (errorTimer) {
         clearTimeout(errorTimer);
@@ -151,8 +156,12 @@
   const debouncedGameSearch = debounce(async (query) => {
     try {
       const data = await igdbRequest('search', { q: query, limit: 5 });
-      
-      if (data.success) {
+
+      if (data.blocked) {
+        // Don't show suggestions for blocked keywords
+        gameSuggestions = [];
+      } else if (data.success) {
+        // Results are already filtered server-side
         gameSuggestions = data.data.map(game => ({
           title: game.title,
           igdb_id: game.igdb_id,
@@ -160,6 +169,8 @@
           summary: game.summary,
           cover_url: game.cover_url
         }));
+      } else {
+        gameSuggestions = [];
       }
     } catch (error) {
       gameSuggestions = [];
@@ -168,8 +179,29 @@
     }
   }, 300);
   
-  function handleGameSelect({ detail }) {
+  async function handleGameSelect({ detail }) {
     const game = detail.suggestion;
+
+    // Check if game title contains blocked keywords
+    try {
+      const globalFilters = await getGlobalFilters();
+      if (globalFilters && globalFilters.enabled) {
+        const blockedKeywords = globalFilters.custom_content_blocks || [];
+        const titleLower = game.title.toLowerCase();
+        const isBlocked = blockedKeywords.some(keyword =>
+          titleLower.includes(keyword.toLowerCase())
+        );
+
+        if (isBlocked) {
+          setErrorMessage('This game contains blocked content and cannot be requested.');
+          gameSuggestions = [];
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check global filters:', error);
+    }
+
     gameRequestForm.title = game.title;
     gameRequestForm.igdb_id = game.igdb_id;
     gameRequestForm.platforms = game.platforms || [];
@@ -207,6 +239,9 @@
         case 'game':
           if (!gameRequestForm.title.trim()) {
             throw new Error('Game title is required');
+          }
+          if (gameRequestForm.platforms.length === 0) {
+            throw new Error('Please select at least one platform');
           }
           requestData = {
             ...requestData,
@@ -276,14 +311,14 @@
       priority: 'medium',
       description: ''
     };
-    
+
     updateRequestForm = {
       existing_game: '',
       update_type: 'content',
       new_information: '',
       description: ''
     };
-    
+
     fixRequestForm = {
       existing_game: '',
       issue_type: 'broken_link',

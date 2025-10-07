@@ -6,13 +6,14 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.2.3-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.5-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
 
 - **🔍 Advanced Search** - Search 200,000+ games with filters and real-time results
-- **🛡️ Content Filtering** - Comprehensive ESRB rating filters and custom content blocks
+- **🛡️ Content Filtering** - Comprehensive ESRB rating filters, custom content blocks, and global game banning
+- **🔒 Global Content Controls** - System-wide content filtering that supersedes user preferences for safe environments
 - **📚 ROMM Integration** - Seamless integration with your ROMM game library
 - **🔐 Flexible Authentication** - Support for OIDC providers (Authentik, Keycloak, Auth0) and basic auth with user registration
 - **🔑 API Key Management** - Generate scoped API keys for programmatic access with Bearer token authentication
@@ -70,10 +71,25 @@ docker compose up -d
 
 - [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, Basic Auth
 - [ROMM Integration](docs/guides/INTEGRATION_GUIDE.md) - Connect with ROMM
+- [Content Filtering](docs/guides/CONTENT_FILTERING.md) - User and global filtering options
 - [API Documentation](docs/API.md) - REST API reference
 - [Interactive API Docs](/api/docs) - OpenAPI specification with live examples
 
 ## 🔧 Key Features Configuration
+
+### Global Content Filtering
+
+Administrators can enforce system-wide content restrictions that supersede individual user preferences:
+
+- **Ban Specific Games** - Remove specific games by IGDB ID from all search results and listings
+- **Keyword Blocking** - Block games containing specific keywords in their titles
+- **Genre Filters** - Exclude entire genres from appearing in the system
+- **ESRB Limits** - Set maximum ESRB ratings globally
+- **Mature Content** - Hide mature and NSFW content system-wide
+
+Access these controls in **Admin Panel → Settings → Content Filtering**
+
+> **Use Case**: Perfect for family-friendly environments, educational institutions, or organizations requiring content compliance.
 
 ### Getting IGDB API Credentials
 

@@ -11,20 +11,19 @@
 		if (apiReferenceEl) {
 			// Initialize Scalar API Reference using the correct method
 			Scalar.createApiReference(apiReferenceEl, {
+				// Use spec.url at top level (modern format)
 				spec: {
 					url: '/api/openapi.json'
 				},
-				configuration: {
-					theme: 'default',
-					layout: 'modern',
-					defaultOpenAllTags: false,
-					showSidebar: true,
-					darkMode: true,
-					authentication: {
-						preferredSecurityScheme: 'bearerAuth',
-						apiKey: {
-							token: ''
-						}
+				theme: 'default',
+				layout: 'modern',
+				defaultOpenAllTags: false,
+				showSidebar: true,
+				darkMode: true,
+				authentication: {
+					preferredSecurityScheme: 'bearerAuth',
+					apiKey: {
+						token: ''
 					}
 				},
 				customCss: `

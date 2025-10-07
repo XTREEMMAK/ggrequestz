@@ -451,7 +451,7 @@
       </div>
       
       <!-- Page content -->
-      <main class="flex-1 w-full max-w-none pt-16 lg:pt-0">
+      <main class="flex-1 w-full max-w-none mt-[50px] lg:mt-0">
         <div class="p-3 sm:p-4 md:p-6 w-full max-w-none min-w-0 overflow-x-auto">
           {@render children()}
         </div>

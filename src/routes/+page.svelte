@@ -38,7 +38,13 @@
   function initializeStateWithRestoration(serverData, fallback) {
     if (!browser) return serverData !== undefined ? serverData : fallback.default;
 
-    // Check if we have saved state that should take precedence
+    // ALWAYS prefer server data if it exists (server applies global filters)
+    // Only use cached data if no server data is provided
+    if (serverData !== undefined) {
+      return serverData;
+    }
+
+    // Check if we have saved state as fallback
     const savedState = sessionStorage.getItem('homepage_content_state');
     if (savedState) {
       try {
@@ -46,18 +52,18 @@
         // Check if cache is still valid (15 minutes)
         const cacheAge = Date.now() - (cachedData.timestamp || 0);
         if (cacheAge <= 15 * 60 * 1000) {
-          // If cached value exists for this field, use it regardless of whether it's truthy or falsy
+          // If cached value exists for this field, use it
           if (cachedData.hasOwnProperty(fallback.name)) {
             return cachedData[fallback.name];
           }
         }
       } catch (error) {
-        // Invalid cache, use server data
+        // Invalid cache, use default
       }
     }
 
-    // Return server data if provided (even if it's false), otherwise use default
-    return serverData !== undefined ? serverData : fallback.default;
+    // Return default if no server data or cached data
+    return fallback.default;
   }
 
   let newInLibrary = $state(initializeStateWithRestoration(data?.newInLibrary, { name: 'newInLibrary', default: [] }));

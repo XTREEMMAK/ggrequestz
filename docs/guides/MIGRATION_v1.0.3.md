@@ -82,10 +82,10 @@ docker compose logs ggrequestz
 
 ## Environment Variable Comparison
 
-| Component             | v1.0.2              | v1.0.3                          |
+| Component             | v1.0.2              | v1.0.3+                         |
 | --------------------- | ------------------- | ------------------------------- |
 | **Docker Production** | `.env.docker`       | `.env`                          |
-| **Local Development** | `.env`              | `.env.dev`                      |
+| **Local Development** | `.env`              | `.env.development`              |
 | **Docker Build**      | `.env.docker-build` | `.env.docker-build` (unchanged) |
 | **Template**          | `.env.example`      | `.env.example` (unchanged)      |
 
@@ -124,11 +124,11 @@ For contributors and developers:
 npm run dev
 ```
 
-### v1.0.3 Development
+### v1.0.3+ Development
 
 ```bash
-# Now uses .env.dev for local development
-# Update any local tooling to use .env.dev
+# Now uses .env.development for local development (Vite standard convention)
+# Update any local tooling to use .env.development
 npm run dev
 ```
 
