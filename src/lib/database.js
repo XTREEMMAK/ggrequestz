@@ -91,17 +91,31 @@ async function getPool() {
       );
     }
 
+    // With PM2 in cluster mode every worker builds its own pool, so `max` is
+    // per-worker: total connections are max * nCPU against the server's
+    // max_connections.
+    const maxConnections = parseInt(process.env.POSTGRES_POOL_MAX || "10", 10);
+
     pool = new Pool({
       host: env.host,
       port: parseInt(env.port),
       database: env.db,
       user: env.user,
       password: String(env.password), // Explicitly convert to string
-      max: 20,
-      idleTimeoutMillis: 30000,
+      max: maxConnections,
+      // Idle connections used to be reaped after 30s, so a low-traffic
+      // instance paid a fresh TCP + auth handshake on nearly every request.
+      // 0 keeps them open for the life of the worker.
+      idleTimeoutMillis: 0,
       connectionTimeoutMillis: 10000,
+      // TCP keep-alive below the typical Docker/NAT conntrack idle timeout
+      // (~5 min), so idle sockets are kept alive rather than silently dropped
+      // and only discovered dead on the next query.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 30000,
       // Force IPv4 to avoid IPv6 localhost issues in Docker
       family: 4,
+      application_name: "ggrequestz",
     });
 
     pool.on("error", (err) => {
@@ -109,6 +123,28 @@ async function getPool() {
     });
   }
   return pool;
+}
+
+/**
+ * Open a connection at startup so the first real request does not pay for the
+ * `pg` import, the TCP handshake, and authentication.
+ * @returns {Promise<boolean>} - Whether the pool was successfully warmed
+ */
+async function warmPool() {
+  if (browser) return false;
+  try {
+    const poolInstance = await getPool();
+    const client = await poolInstance.connect();
+    try {
+      await client.query("SELECT 1");
+    } finally {
+      client.release();
+    }
+    return true;
+  } catch (error) {
+    console.warn("⚠️ Database pool warm-up failed:", error.message);
+    return false;
+  }
 }
 
 /**
@@ -1337,4 +1373,4 @@ export const apiKeys = {
 };
 
 // Export direct query function for advanced usage
-export { query };
+export { query, warmPool };
