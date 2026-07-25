@@ -32,6 +32,9 @@
   let { data } = $props();
 
   let user = $derived(data?.user);
+  // Supplied by the root layout; used to decide whether admin-only remediation
+  // hints are shown alongside integration errors.
+  let userPermissions = $derived(data?.userPermissions || { isAdmin: false });
   let currentPath = $derived($page.url.pathname);
 
   // Initialize state with potential restoration from navigation
@@ -106,6 +109,11 @@
   // Real-time watchlist status tracking
   let watchlistStatuses = $state(new Map());
   let rommAvailable = $derived(data?.rommAvailable || false);
+  // Whether ROMM is set up at all — this controls whether the "New in Library"
+  // section is rendered. `rommAvailable` only controls what it shows, so a
+  // broken ROMM reports an error instead of silently disappearing.
+  let rommConfigured = $derived(data?.rommConfigured ?? data?.rommAvailable ?? false);
+  let rommError = $derived(data?.rommError || null);
 
   let genres = $state(data?.genres || []);
   let publishers = $state(data?.publishers || []);
@@ -1584,7 +1592,7 @@
   // Get section visibility and availability
   function getSections() {
     return [
-      { id: 'romms', name: 'New in Library', visible: rommAvailable && showNewInLibrary, count: newInLibrary.length },
+      { id: 'romms', name: 'New in Library', visible: rommConfigured && showNewInLibrary, count: newInLibrary.length },
       { id: 'new-releases', name: 'New Releases', visible: showNewReleases, count: newReleases.length },
       { id: 'popular-games', name: 'Popular Games', visible: showPopularGames, count: popularGames.length }
     ].filter(section => section.visible && section.count > 0);
@@ -1758,7 +1766,7 @@
   {:else}
     
     <!-- New in Library from ROMM -->
-{#if rommAvailable && showNewInLibrary}
+{#if rommConfigured && showNewInLibrary}
   <section class="mb-10" data-section="romms">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
       <div class="flex items-center gap-3">
@@ -1853,12 +1861,51 @@
           {/each}
         </div>
       {/if}
-    {:else}
-      <!-- Loading skeleton when no games yet -->
+    {:else if rommError}
+      <!--
+        ROMM failed. Previously this branch rendered skeletons forever, so a
+        403 or an unreachable server looked identical to "still loading".
+      -->
+      <div
+        class="rounded-lg border border-red-800/60 bg-red-950/40 p-5 text-sm"
+        role="alert"
+      >
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+          <div class="min-w-0">
+            <p class="font-semibold text-red-200">
+              Couldn't load your ROMM library
+            </p>
+            <p class="text-red-300/90 mt-1">
+              {rommError.message}
+              {#if rommError.status}
+                <span class="text-red-400/70">(HTTP {rommError.status})</span>
+              {/if}
+            </p>
+            {#if rommError.hint && userPermissions?.isAdmin}
+              <p class="text-red-300/70 mt-2 text-xs leading-relaxed">
+                {rommError.hint}
+              </p>
+            {/if}
+          </div>
+        </div>
+      </div>
+    {:else if loadingNewInLibrary}
+      <!-- Genuinely in flight -->
       <div class="responsive-grid gap-3 sm:gap-4 xl:gap-6 {$sidebarCollapsed ? 'sidebar-collapsed' : ''}">
         {#each Array(getSkeletonCount()) as _, i}
           <SkeletonLoader variant="card" rounded="lg" />
         {/each}
+      </div>
+    {:else}
+      <!-- Reached ROMM successfully; there is simply nothing in the library -->
+      <div class="rounded-lg border border-gray-700 bg-gray-800/40 p-6 text-center">
+        <p class="text-gray-300 font-medium">No games in your ROMM library yet</p>
+        <p class="text-gray-400 text-sm mt-1">
+          Games will appear here once they've been scanned into ROMM.
+        </p>
       </div>
     {/if}
 

@@ -16,7 +16,10 @@ import { gameRequests, watchlist } from "$lib/database.js";
 import {
   getRecentlyAddedROMs,
   isRommAvailable,
+  isRommConfigured,
+  getRommAvailabilitySnapshot,
   crossReferenceWithROMM,
+  describeRommError,
 } from "$lib/romm.server.js";
 import {
   cachePopularGames,
@@ -124,25 +127,53 @@ export async function load({ parent, cookies, url, depends }) {
       userPreferences = null;
     }
 
+    // Whether ROMM is set up at all. Pure config read, no I/O — this decides
+    // whether the "New in Library" section exists on the page. Availability
+    // (below) only decides what that section *shows*, so a broken ROMM
+    // surfaces an error instead of silently vanishing.
+    const rommConfigured = await isRommConfigured();
+
     // Check if ROMM is available (with caching and timeout) - optimized for speed
-    const rommAvailable = await safeAsync(
-      () =>
-        withCache(
-          "romm-availability",
+    const rommAvailable = rommConfigured
+      ? await safeAsync(
           () =>
-            withTimeout(
-              isRommAvailable(cookieHeader),
-              1500 * timeoutMultiplier,
-              "ROMM availability check timed out",
+            withCache(
+              "romm-availability",
+              () =>
+                withTimeout(
+                  isRommAvailable(cookieHeader),
+                  1500 * timeoutMultiplier,
+                  "ROMM availability check timed out",
+                ),
+              5 * 60 * 1000, // 5 minutes cache
             ),
-          5 * 60 * 1000, // 5 minutes cache
-        ),
-      {
-        timeout: 2000 * timeoutMultiplier,
-        fallback: false,
-        errorContext: "ROMM availability check",
-      },
-    );
+          {
+            timeout: 2000 * timeoutMultiplier,
+            fallback: false,
+            errorContext: "ROMM availability check",
+          },
+        )
+      : false;
+
+    // Configured but unreachable — carry the reason recorded by the background
+    // health probe so the page can explain itself rather than showing an empty
+    // shelf or an endless skeleton.
+    let rommError = null;
+    if (rommConfigured && !rommAvailable) {
+      const snapshot = getRommAvailabilitySnapshot();
+      rommError = {
+        reason: snapshot.reason || "unreachable",
+        status: snapshot.status,
+        message:
+          snapshot.reason === "http_403"
+            ? "ROMM accepted the credentials but denied access to the library."
+            : "Could not reach the ROMM server.",
+        hint:
+          snapshot.reason === "http_403"
+            ? "The ROMM account is missing the 'roms.read' scope. Grant its group library read access in the ROMM admin UI, or set ROMM_API_TOKEN to a Client API Token with roms.read."
+            : "Check ROMM_SERVER_URL and that ROMM is reachable from this container.",
+      };
+    }
 
     // Prioritize critical data first - load games with enhanced caching
     const criticalDataPromise = Promise.all([
@@ -219,7 +250,9 @@ export async function load({ parent, cookies, url, depends }) {
       ),
     ]);
 
-    // Secondary data - ROMM integration (optimized with enhanced caching)
+    // Secondary data - ROMM integration (optimized with enhanced caching).
+    // A failure here is recorded rather than flattened into an empty array, so
+    // the page can tell "your library is empty" apart from "ROMM is broken".
     const secondaryDataPromise = rommAvailable
       ? Promise.all([
           // Get newest ROMs from ROMM library (20 initial for new simplified loading strategy)
@@ -233,6 +266,9 @@ export async function load({ parent, cookies, url, depends }) {
               timeout: 4000 * timeoutMultiplier,
               fallback: [],
               errorContext: "ROMM library loading",
+              onError: (error) => {
+                rommError = describeRommError(error);
+              },
             },
           ),
           // ROMM cross-reference for critical games (will be done client-side for better UX)
@@ -260,6 +296,9 @@ export async function load({ parent, cookies, url, depends }) {
       recentRequests,
       userWatchlist,
       rommAvailable,
+      rommConfigured,
+      // null when ROMM is healthy; otherwise { reason, status, message, hint }
+      rommError,
       loading: false,
       // Flag to indicate ROMM cross-reference should be done client-side
       needsRommCrossReference:
@@ -278,6 +317,8 @@ export async function load({ parent, cookies, url, depends }) {
       recentRequests: [],
       userWatchlist: [],
       rommAvailable: false,
+      rommConfigured: false,
+      rommError: null,
       loading: false,
       needsRommCrossReference: false,
       error: error.message,
