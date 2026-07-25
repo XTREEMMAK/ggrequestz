@@ -46,6 +46,9 @@ services:
       GOTIFY_URL: ${GOTIFY_URL:-}
       GOTIFY_TOKEN: ${GOTIFY_TOKEN:-}
       ROMM_SERVER_URL: ${ROMM_SERVER_URL:-}
+      # RomM 5.0+ Client API Token (preferred; needs the roms.read scope)
+      ROMM_API_TOKEN: ${ROMM_API_TOKEN:-}
+      # Password-grant fallback for RomM 4.x
       ROMM_USERNAME: ${ROMM_USERNAME:-}
       ROMM_PASSWORD: ${ROMM_PASSWORD:-}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}

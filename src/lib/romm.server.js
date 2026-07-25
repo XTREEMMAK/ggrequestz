@@ -5,9 +5,18 @@
 
 import { browser } from "$app/environment";
 import { getGameById } from "./gameCache.js";
+import { fetchWithTimeout, isTimeoutOrNetworkError } from "./utils.js";
+
+// Outbound deadlines. Nothing here may block unbounded — ROMM is typically
+// reached over a public URL, so a slow or unreachable instance previously
+// stalled every request that touched it.
+const AUTH_TIMEOUT_MS = 5000;
+const REQUEST_TIMEOUT_MS = 5000;
+// Hard ceiling across all retries for a single logical request.
+const TOTAL_BUDGET_MS = 12000;
 
 // Configuration variables
-let ROMM_SERVER_URL, ROMM_USERNAME, ROMM_PASSWORD;
+let ROMM_SERVER_URL, ROMM_USERNAME, ROMM_PASSWORD, ROMM_API_TOKEN;
 
 // Lazy load environment variables only when needed on server
 async function loadEnvironmentVariables() {
@@ -23,6 +32,10 @@ async function loadEnvironmentVariables() {
   ROMM_SERVER_URL = env.ROMM_SERVER_URL || process.env.ROMM_SERVER_URL;
   ROMM_USERNAME = env.ROMM_USERNAME || process.env.ROMM_USERNAME;
   ROMM_PASSWORD = env.ROMM_PASSWORD || process.env.ROMM_PASSWORD;
+  // RomM 5.0+ Client API Token ("rmm_"-prefixed). Preferred over the password
+  // grant: it carries an explicit scope set, does not expire every 30 minutes,
+  // and means the ROMM account password never has to be stored here.
+  ROMM_API_TOKEN = env.ROMM_API_TOKEN || process.env.ROMM_API_TOKEN;
 }
 
 // Session token storage for authenticated requests
@@ -45,6 +58,12 @@ async function authenticateROMM() {
 
   await loadEnvironmentVariables();
 
+  // A Client API Token is used verbatim as the bearer credential — there is no
+  // token exchange to perform.
+  if (ROMM_API_TOKEN) {
+    return ROMM_API_TOKEN;
+  }
+
   if (!ROMM_SERVER_URL || !ROMM_USERNAME || !ROMM_PASSWORD) {
     console.warn(
       "⚠️ ROMM server URL or credentials not configured - ROMM features disabled",
@@ -53,25 +72,54 @@ async function authenticateROMM() {
   }
 
   try {
-    const response = await fetch(`${ROMM_SERVER_URL}/api/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+    const response = await fetchWithTimeout(
+      `${ROMM_SERVER_URL}/api/token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "password",
+          username: ROMM_USERNAME,
+          password: ROMM_PASSWORD,
+          scope: "roms.read",
+        }),
       },
-      body: new URLSearchParams({
-        grant_type: "password",
-        username: ROMM_USERNAME,
-        password: ROMM_PASSWORD,
-        scope: "roms.read",
-      }),
-    });
+      AUTH_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
+
+      // RomM rejects the token request outright when the account lacks a
+      // requested scope — verified against RomM 5.0.0, which answers
+      // 403 {"detail":"Insufficient scope"}. This is the exact failure a
+      // RomM 5.0 permission change produces, so name the remedy rather than
+      // dumping a bare status line.
+      if (response.status === 403 && /insufficient scope/i.test(errorText)) {
+        const err = new Error(
+          "ROMM denied the 'roms.read' scope for this account",
+        );
+        err.status = 403;
+        err.reason = "insufficient_scope";
+        console.error(
+          "🚫 ROMM refused to issue a token: the account lacks the 'roms.read' scope. " +
+            "In the ROMM admin UI grant this user's permission group read access to ROMs " +
+            "(RomM 5.0 introduced per-user/per-group permissions and may have revoked it on upgrade), " +
+            "or set ROMM_API_TOKEN to a Client API Token that carries roms.read.",
+        );
+        throw err;
+      }
+
       console.error(
         `ROMM authentication failed: ${response.status} ${response.statusText} - ${errorText}`,
       );
-      return null;
+      const err = new Error(
+        `ROMM authentication failed: ${response.status} ${response.statusText}`,
+      );
+      err.status = response.status;
+      throw err;
     }
 
     const data = await response.json();
@@ -82,10 +130,59 @@ async function authenticateROMM() {
       return null;
     }
 
+    warnIfMissingReadScope(token);
+
     return token;
   } catch (error) {
+    // Propagate HTTP-level failures so callers can classify them (a 403 needs
+    // a different message and a different fix than an unreachable host).
+    // Only genuinely unexpected errors degrade to null.
+    if (error?.status) throw error;
+
     console.error("ROMM authentication error:", error);
-    return null;
+    throw error;
+  }
+}
+
+/**
+ * Warn when RomM issued a token without library-read permission.
+ *
+ * RomM grants the *intersection* of the requested scopes and what the account
+ * actually has, so a user who has lost `roms.read` still receives HTTP 200 and
+ * a perfectly valid token here — every subsequent library call then fails with
+ * 403. RomM 5.0's group-based permission system made this easy to fall into.
+ *
+ * The payload is only inspected for diagnostics; it is never trusted, so no
+ * signature verification is required.
+ *
+ * @param {string} token - Access token returned by ROMM
+ */
+function warnIfMissingReadScope(token) {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return;
+
+    const claims = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    );
+    const scopes =
+      typeof claims.scopes === "string"
+        ? claims.scopes.split(/\s+/).filter(Boolean)
+        : Array.isArray(claims.scopes)
+          ? claims.scopes
+          : null;
+
+    if (scopes && !scopes.includes("roms.read")) {
+      console.error(
+        `🚫 ROMM issued a token WITHOUT the 'roms.read' scope (granted: ${
+          scopes.length ? scopes.join(", ") : "none"
+        }). Library requests will fail with 403. Grant this account library ` +
+          `read access in the ROMM admin UI (Settings → Users), or use a ` +
+          `Client API Token via ROMM_API_TOKEN.`,
+      );
+    }
+  } catch {
+    // Non-JWT or unexpected shape — nothing to diagnose, carry on.
   }
 }
 
@@ -102,6 +199,7 @@ async function rommRequest(
   options = {},
   cookies = null,
   retryCount = 0,
+  deadline = null,
 ) {
   await loadEnvironmentVariables();
 
@@ -109,19 +207,30 @@ async function rommRequest(
     throw new Error("ROMM server URL not configured");
   }
 
+  // A single absolute deadline is threaded through every retry. Previously each
+  // attempt had its own escalating timeout with no overall ceiling, so a slow
+  // ROMM could hold a request for ~57s.
+  const budget = deadline ?? Date.now() + TOTAL_BUDGET_MS;
+  const remaining = () => budget - Date.now();
+
+  if (remaining() <= 0) {
+    throw new Error(
+      `ROMM request budget exhausted after ${TOTAL_BUDGET_MS}ms: ${endpoint}`,
+    );
+  }
+
   const maxRetries = 3;
-  const isDocker = process.env.NODE_ENV === "production";
-  const baseTimeout = isDocker ? 5000 : 3000; // Higher timeout in Docker
+  const attemptTimeout = Math.min(REQUEST_TIMEOUT_MS, remaining());
 
   let headers = {
     accept: "application/json",
     ...options.headers,
   };
 
-  // Forward cookies if provided (for same-domain authentication)
-  if (!sessionToken && cookies) {
-    headers["Cookie"] = cookies;
-  }
+  // Note: `cookies` is accepted for call-site compatibility but deliberately
+  // not forwarded. Callers pass GGR's own `session=<JWT>` cookie, which ROMM
+  // cannot consume — sending it achieved nothing and leaked a GGR session
+  // token to a third-party service.
 
   // Get session token if we don't have one
   if (!sessionToken) {
@@ -133,72 +242,80 @@ async function rommRequest(
     headers["Authorization"] = `Bearer ${sessionToken}`;
   }
 
-  const fetchOptions = {
-    ...options,
-    headers,
-    // Add timeout using AbortController
-    signal: AbortSignal.timeout(baseTimeout * (retryCount + 1)),
+  const fetchOptions = { ...options, headers };
+  const url = `${ROMM_SERVER_URL}/api${endpoint}`;
+
+  /** Wait for the backoff, but never past the overall deadline. */
+  const backoff = async () => {
+    const wait = Math.min(1000 * Math.pow(2, retryCount), remaining());
+    if (wait <= 0) return false;
+    await delay(wait);
+    return remaining() > 0;
   };
 
   try {
-    const response = await fetch(
-      `${ROMM_SERVER_URL}/api${endpoint}`,
-      fetchOptions,
-    );
+    let response = await fetchWithTimeout(url, fetchOptions, attemptTimeout);
 
-    // Handle authentication issues with simple retry
+    // Expired token: re-authenticate once and replay the request. The replayed
+    // response replaces the original so error reporting below describes the
+    // attempt that actually failed.
     if (response.status === 401) {
-      // Clear existing token and try to re-authenticate once
       sessionToken = null;
       sessionToken = await authenticateROMM();
 
-      if (sessionToken) {
-        // Retry the request with new token
+      if (sessionToken && remaining() > 0) {
         headers["Authorization"] = `Bearer ${sessionToken}`;
-        const retryResponse = await fetch(`${ROMM_SERVER_URL}/api${endpoint}`, {
-          ...fetchOptions,
-          headers,
-        });
-
-        if (retryResponse.ok) {
-          return await retryResponse.json();
-        }
+        response = await fetchWithTimeout(
+          url,
+          { ...fetchOptions, headers },
+          Math.min(REQUEST_TIMEOUT_MS, remaining()),
+        );
       }
     }
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
 
-      // Retry on 5xx errors or network issues
-      if (response.status >= 500 && retryCount < maxRetries) {
+      // Retry on 5xx only; 4xx will not resolve itself.
+      if (
+        response.status >= 500 &&
+        retryCount < maxRetries &&
+        (await backoff())
+      ) {
         console.warn(
-          `ROMM API error (attempt ${retryCount + 1}/${maxRetries}): ${response.status}`,
+          `ROMM API error (attempt ${retryCount + 1}/${maxRetries}): ${response.status} ${url}`,
         );
-        // Exponential backoff
-        await delay(1000 * Math.pow(2, retryCount));
-        return rommRequest(endpoint, options, cookies, retryCount + 1);
+        return rommRequest(endpoint, options, cookies, retryCount + 1, budget);
       }
 
       console.error(
+        `ROMM API error: ${response.status} ${response.statusText} - ${errorText} (${url})`,
+      );
+      const error = new Error(
         `ROMM API error: ${response.status} ${response.statusText} - ${errorText}`,
       );
-      throw new Error(
-        `ROMM API error: ${response.status} ${response.statusText} - ${errorText}`,
-      );
+      // Callers need the status to tell a permission problem (403) apart from
+      // a missing endpoint (404) or an outage.
+      error.status = response.status;
+      error.endpoint = endpoint;
+      throw error;
     }
 
     return await response.json();
   } catch (error) {
-    // Handle timeout and network errors with retry
-    if (error.name === "AbortError" || error.message.includes("fetch")) {
-      if (retryCount < maxRetries) {
-        console.warn(
-          `ROMM request timeout/network error (attempt ${retryCount + 1}/${maxRetries})`,
-        );
-        // Exponential backoff
-        await delay(1000 * Math.pow(2, retryCount));
-        return rommRequest(endpoint, options, cookies, retryCount + 1);
-      }
+    // Retry only genuine timeout/network failures. Note AbortSignal.timeout()
+    // rejects with a TimeoutError, not an AbortError — the previous check for
+    // "AbortError" never matched, so this path relied on a substring test
+    // against the message.
+    if (
+      isTimeoutOrNetworkError(error) &&
+      retryCount < maxRetries &&
+      (await backoff())
+    ) {
+      console.warn(
+        `ROMM request ${error.name} (attempt ${retryCount + 1}/${maxRetries}): ${url}`,
+      );
+      return rommRequest(endpoint, options, cookies, retryCount + 1, budget);
     }
     throw error;
   }
@@ -227,13 +344,25 @@ export async function getRecentlyAddedROMs(
       cookies,
     );
 
-    if (!data.items) return [];
+    if (!Array.isArray(data?.items)) {
+      // A 200 with an unexpected body is a contract change, not an empty
+      // library. Say so rather than rendering "no games".
+      throw new Error(
+        `ROMM returned an unexpected response shape for /roms (expected { items, total }, got keys: ${Object.keys(data || {}).join(", ") || "none"})`,
+      );
+    }
 
     // Use batched formatting to reduce IGDB API calls and respect rate limits
     return await batchFormatROMData(data.items);
   } catch (error) {
-    console.error("Failed to get recently added ROMs:", error);
-    return [];
+    // Deliberately rethrown. Returning [] here made "ROMM is broken"
+    // indistinguishable from "the library is empty", which is why the library
+    // could disappear with no error anywhere in the UI or the logs.
+    console.error(
+      `Failed to get recently added ROMs (${error?.status ? `HTTP ${error.status}` : error?.name || "error"}):`,
+      error?.message || error,
+    );
+    throw error;
   }
 }
 
@@ -300,7 +429,118 @@ export async function isRommConfigured() {
   if (browser) throw new Error("isRommConfigured is server-only");
 
   await loadEnvironmentVariables();
-  return !!(ROMM_SERVER_URL && ROMM_USERNAME && ROMM_PASSWORD);
+  // Either credential style is sufficient: a Client API Token (preferred), or
+  // a username/password pair for the legacy password grant.
+  return !!(
+    ROMM_SERVER_URL &&
+    (ROMM_API_TOKEN || (ROMM_USERNAME && ROMM_PASSWORD))
+  );
+}
+
+/**
+ * Last known ROMM reachability, refreshed in the background.
+ *
+ * `checkedAt === 0` means we have never probed. Callers on a render path read
+ * this snapshot synchronously and never wait for the network.
+ */
+const availabilityState = {
+  ok: null,
+  status: null,
+  reason: null,
+  checkedAt: 0,
+  inFlight: null,
+};
+
+const AVAILABILITY_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Probe ROMM and record the result. Never throws.
+ * @returns {Promise<Object>} - The refreshed snapshot
+ */
+async function refreshRommAvailability() {
+  if (availabilityState.inFlight) return availabilityState.inFlight;
+
+  availabilityState.inFlight = (async () => {
+    try {
+      if (!(await isRommConfigured())) {
+        Object.assign(availabilityState, {
+          ok: false,
+          status: null,
+          reason: "not_configured",
+        });
+        return availabilityState;
+      }
+
+      await rommRequest("/roms?group_by_meta_id=false&limit=1&offset=0");
+      Object.assign(availabilityState, {
+        ok: true,
+        status: 200,
+        reason: null,
+      });
+    } catch (error) {
+      const status = error?.status ?? null;
+      const reason = status
+        ? `http_${status}`
+        : isTimeoutOrNetworkError(error)
+          ? "unreachable"
+          : "error";
+
+      // Log it. A silent `return false` here is why the library could vanish
+      // with nothing in the logs to explain it.
+      console.warn(
+        `⚠️ ROMM availability probe failed (${reason}): ${error?.message || error}`,
+      );
+      Object.assign(availabilityState, { ok: false, status, reason });
+    } finally {
+      availabilityState.checkedAt = Date.now();
+      availabilityState.inFlight = null;
+    }
+
+    return availabilityState;
+  })();
+
+  return availabilityState.inFlight;
+}
+
+/**
+ * Read ROMM availability without ever touching the network.
+ *
+ * Returns the last known result and triggers a background refresh when stale.
+ * This is what render paths must use — awaiting a live probe in the root layout
+ * is what previously blocked every page render, including `/login`.
+ *
+ * @returns {Object} - `{ ok, status, reason, checkedAt, stale }`
+ */
+export function getRommAvailabilitySnapshot() {
+  if (browser) throw new Error("getRommAvailabilitySnapshot is server-only");
+
+  const age = Date.now() - availabilityState.checkedAt;
+  const stale = availabilityState.checkedAt === 0 || age > AVAILABILITY_TTL_MS;
+
+  if (stale) {
+    // Fire and forget — the caller gets the previous value immediately.
+    refreshRommAvailability().catch(() => {});
+  }
+
+  return {
+    ok: availabilityState.ok,
+    status: availabilityState.status,
+    reason: availabilityState.reason,
+    checkedAt: availabilityState.checkedAt,
+    stale,
+  };
+}
+
+/**
+ * Force a fresh availability probe. For admin "test connection" flows and
+ * startup warm-up — never for a render path.
+ * @returns {Promise<Object>} - Fresh snapshot
+ */
+export async function probeRommAvailability() {
+  if (browser) throw new Error("probeRommAvailability is server-only");
+  availabilityState.checkedAt = 0;
+  const state = await refreshRommAvailability();
+  return { ...state, inFlight: undefined };
 }
 
 /**
@@ -323,8 +563,78 @@ export async function isRommAvailable(cookies = null) {
     );
     return true;
   } catch (error) {
+    // Always log. Returning a bare `false` here made a 403, a DNS failure, a
+    // timeout, and an empty library indistinguishable from one another.
+    console.warn(
+      `⚠️ ROMM unavailable (${error?.status ? `HTTP ${error.status}` : error?.name || "error"}): ${error?.message || error}`,
+    );
     return false;
   }
+}
+
+/**
+ * Turn a ROMM failure into something that can be shown to a user and acted on
+ * by an administrator.
+ *
+ * @param {Error} error - Error thrown by a ROMM call
+ * @returns {{reason: string, status: number|null, message: string, hint: string|null}}
+ */
+export function describeRommError(error) {
+  const status = error?.status ?? null;
+
+  if (status === 401) {
+    return {
+      reason: "unauthorized",
+      status,
+      message: "ROMM rejected the credentials.",
+      hint: "Check ROMM_API_TOKEN, or ROMM_USERNAME / ROMM_PASSWORD.",
+    };
+  }
+
+  if (status === 403) {
+    return {
+      reason: "forbidden",
+      status,
+      message:
+        "ROMM accepted the credentials but denied access to the library.",
+      // This is the RomM 5.0 failure mode: login succeeds, scopes are empty.
+      hint: "The ROMM account is missing the 'roms.read' scope. In the ROMM admin UI grant its group library read access, or issue a Client API Token with roms.read and set ROMM_API_TOKEN.",
+    };
+  }
+
+  if (status === 404) {
+    return {
+      reason: "not_found",
+      status,
+      message: "The ROMM API endpoint was not found.",
+      hint: "Check ROMM_SERVER_URL, and whether this ROMM version still exposes /api/roms.",
+    };
+  }
+
+  if (status && status >= 500) {
+    return {
+      reason: "server_error",
+      status,
+      message: `ROMM returned a server error (${status}).`,
+      hint: "Check the ROMM server logs.",
+    };
+  }
+
+  if (isTimeoutOrNetworkError(error)) {
+    return {
+      reason: "unreachable",
+      status,
+      message: "Could not reach the ROMM server.",
+      hint: "Check ROMM_SERVER_URL and that ROMM is reachable from this container. An internal hostname is faster and more reliable than a public URL.",
+    };
+  }
+
+  return {
+    reason: "error",
+    status,
+    message: error?.message || "Unknown ROMM error.",
+    hint: null,
+  };
 }
 
 /**
@@ -378,26 +688,42 @@ async function batchFormatROMData(roms) {
         }
       }
 
+      // Field mapping follows RomM's RomSchema. Several of these were
+      // previously read from properties RomM has never returned — there is no
+      // nested `rom.platform` object, and genres/release date/rating live
+      // under `metadatum`, not at the top level. Those fields silently came
+      // back empty. Fallbacks to the old names are kept so an older RomM (or a
+      // fork) still works.
+      const meta = rom.metadatum || {};
+      const platformName =
+        rom.platform_custom_name ||
+        rom.platform_display_name ||
+        rom.platform_name ||
+        rom.platform?.name ||
+        null;
+      const rating = meta.average_rating ?? rom.rating ?? null;
+
       return {
         id: rom.id,
         igdb_id: rom.igdb_id?.toString() || rom.id.toString(),
-        title: rom.name || "Unknown Game",
+        title: rom.name || rom.fs_name_no_tags || "Unknown Game",
         summary: rom.summary || "",
         cover_url,
-        platforms: rom.platform ? [rom.platform.name] : [],
-        genres: rom.genres || [],
-        rating: rom.rating || null,
-        release_date: rom.first_release_date || null,
-        popularity_score: rom.rating || 0,
+        platforms: platformName ? [platformName] : [],
+        genres: meta.genres || rom.genres || [],
+        rating,
+        release_date: meta.first_release_date ?? rom.first_release_date ?? null,
+        popularity_score: rating || 0,
         status: "available", // All ROMM games are available to play
         romm_id: rom.id,
         romm_url: `${ROMM_SERVER_URL}/rom/${rom.id}`,
-        platform_id: rom.platform?.id,
-        platform_name: rom.platform?.name,
+        platform_id: rom.platform_id ?? rom.platform?.id,
+        platform_name: platformName,
+        platform_slug: rom.platform_slug || null,
         created_at: rom.created_at,
         updated_at: rom.updated_at,
-        file_name: rom.file_name,
-        file_size: rom.file_size,
+        file_name: rom.fs_name || rom.file_name,
+        file_size: rom.fs_size_bytes ?? rom.file_size,
         // Flag to identify this as a ROMM game
         is_romm_game: true,
       };
