@@ -215,33 +215,46 @@ async function initializeDatabase() {
 async function warmCaches() {
   console.log("🔥 Warming application caches...");
 
+  // Issue #9: this used to hardcode `http://localhost:3000`, which fails for
+  // two reasons. `localhost` resolves to ::1 ahead of 127.0.0.1 inside the
+  // container while the Node server binds IPv4 only, and the port is not
+  // always 3000. Address the loopback interface explicitly.
+  //
+  // Deliberately NOT using PUBLIC_SITE_URL: that would route the warm-up out
+  // through DNS, TLS and the reverse proxy and back, which is the hairpin this
+  // release exists to remove.
+  const port = process.env.PORT || "3000";
+  const baseUrl = `http://127.0.0.1:${port}`;
+
   try {
-    // Create a simple cache warming script
     await runCommand("node", [
       "-e",
       `
+      const baseUrl = ${JSON.stringify(baseUrl)};
+
       async function warmUp() {
         try {
           console.log('📦 Pre-warming caches for faster initial load...');
-          
-          // Warm popular games cache
-          const popularResp = await fetch('http://localhost:3000/api/games/popular?page=1&limit=8');
-          if (popularResp.ok) {
-            console.log('✅ Popular games cache warmed');
+
+          for (const path of ['/api/games/popular?page=1&limit=8', '/api/games/recent?page=1&limit=8']) {
+            try {
+              const resp = await fetch(baseUrl + path, { signal: AbortSignal.timeout(15000) });
+              if (resp.ok) {
+                console.log('✅ Warmed ' + path);
+              } else {
+                console.log('⚠️ Warm-up got HTTP ' + resp.status + ' for ' + path);
+              }
+            } catch (error) {
+              console.log('⚠️ Warm-up request failed for ' + path + ': ' + error.message);
+            }
           }
-          
-          // Warm recent games cache  
-          const recentResp = await fetch('http://localhost:3000/api/games/recent?page=1&limit=8');
-          if (recentResp.ok) {
-            console.log('✅ Recent games cache warmed');
-          }
-          
+
           console.log('🔥 Cache warming complete');
         } catch (error) {
           console.log('⚠️ Cache warming failed (non-critical):', error.message);
         }
       }
-      
+
       // Wait for app to be ready then warm caches
       setTimeout(warmUp, 5000);
       `,

@@ -8,8 +8,10 @@
 const http = require("http");
 
 const options = {
+  // 127.0.0.1 rather than "localhost": localhost resolves to ::1 ahead of
+  // 127.0.0.1 in this container, and the Node server binds IPv4 only.
   hostname: "127.0.0.1",
-  port: 3000,
+  port: Number(process.env.PORT) || 3000,
   path: "/api/health",
   method: "GET",
   timeout: 5000,
