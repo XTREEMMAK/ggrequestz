@@ -30,6 +30,23 @@ services:
 
       # Authentication
       AUTH_METHOD: ${AUTH_METHOD}
+      # Generic OIDC (any standards-compliant provider)
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-}
+      OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-}
+      OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-}
+      OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
+      # Manual endpoints for providers without a discovery document
+      OIDC_AUTH_URL: ${OIDC_AUTH_URL:-}
+      OIDC_TOKEN_URL: ${OIDC_TOKEN_URL:-}
+      OIDC_USERINFO_URL: ${OIDC_USERINFO_URL:-}
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:-}
+      OIDC_END_SESSION_URL: ${OIDC_END_SESSION_URL:-}
+      # Legacy aliases, still honoured for existing Authentik installs
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID:-}
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:-}
       AUTHENTIK_ISSUER: ${AUTHENTIK_ISSUER:-}
