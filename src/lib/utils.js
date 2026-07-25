@@ -180,12 +180,15 @@ export function withTimeout(
   timeoutMs = 5000,
   timeoutMessage = "Operation timed out",
 ) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs),
-    ),
-  ]);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+
+  // Clearing the timer matters: without it every call leaves a pending timer
+  // holding the event loop open for the full timeoutMs even after the promise
+  // has already settled.
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -221,12 +224,18 @@ export async function retryWithBackoff(fn, options = {}) {
 }
 
 /**
- * Safely execute an async function with timeout and error handling
+ * Safely execute an async function with timeout and error handling.
+ *
+ * Always logs the failure. Returning a fallback without a log makes a timeout,
+ * a 403, and a genuinely empty result indistinguishable from each other, which
+ * is exactly how the ROMM integration went dark without a trace.
+ *
  * @param {Function} fn - Async function to execute
  * @param {Object} options - Execution options
  * @param {number} options.timeout - Timeout in milliseconds (default: 5000)
  * @param {any} options.fallback - Fallback value on error (default: null)
  * @param {string} options.errorContext - Context for error logging
+ * @param {Function} options.onError - Optional callback receiving the error
  * @returns {Promise} - Result or fallback value
  */
 export async function safeAsync(fn, options = {}) {
@@ -234,6 +243,7 @@ export async function safeAsync(fn, options = {}) {
     timeout = 5000,
     fallback = null,
     errorContext = "Operation",
+    onError = null,
   } = options;
 
   try {
@@ -243,8 +253,82 @@ export async function safeAsync(fn, options = {}) {
       `${errorContext} timed out after ${timeout}ms`,
     );
   } catch (error) {
+    console.warn(
+      `⚠️ ${errorContext} failed (${error?.name || "Error"}): ${error?.message || error} — using fallback`,
+    );
+    if (onError) {
+      try {
+        onError(error);
+      } catch {
+        // never let an error handler mask the original failure
+      }
+    }
     return fallback;
   }
+}
+
+/**
+ * `fetch` with a hard deadline.
+ *
+ * Nothing on a render path may block unbounded. Note that `AbortSignal.timeout`
+ * rejects with a `TimeoutError`, not an `AbortError` — code branching on the
+ * error name must check for the former.
+ *
+ * @param {string} url - Request URL
+ * @param {Object} options - Standard fetch options
+ * @param {number} timeoutMs - Deadline in milliseconds (default: 5000)
+ * @returns {Promise<Response>}
+ */
+export async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+  const deadline = AbortSignal.timeout(timeoutMs);
+
+  if (!options.signal) {
+    return fetch(url, { ...options, signal: deadline });
+  }
+
+  // Combine the caller's signal with the deadline. AbortSignal.any() is only
+  // available from Node 20.3, and the runtime image is still node:18-alpine.
+  if (typeof AbortSignal.any === "function") {
+    return fetch(url, {
+      ...options,
+      signal: AbortSignal.any([options.signal, deadline]),
+    });
+  }
+
+  const controller = new AbortController();
+  const forward = (signal) => {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener("abort", () => controller.abort(signal.reason), {
+        once: true,
+      });
+    }
+  };
+  forward(options.signal);
+  forward(deadline);
+
+  return fetch(url, { ...options, signal: controller.signal });
+}
+
+/**
+ * Whether an error represents a request that ran out of time or failed to
+ * reach the host, as opposed to the server returning an error response.
+ * @param {Error} error
+ * @returns {boolean}
+ */
+export function isTimeoutOrNetworkError(error) {
+  if (!error) return false;
+  // AbortSignal.timeout() -> TimeoutError; manual abort -> AbortError;
+  // undici connection failures -> TypeError with a `cause`.
+  return (
+    error.name === "TimeoutError" ||
+    error.name === "AbortError" ||
+    error.name === "TypeError" ||
+    error.code === "UND_ERR_CONNECT_TIMEOUT" ||
+    error.code === "ENOTFOUND" ||
+    error.code === "ECONNREFUSED"
+  );
 }
 
 /**
