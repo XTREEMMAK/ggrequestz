@@ -8,7 +8,10 @@ import {
   getUserPermissions,
 } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
-import { isRommAvailable } from "$lib/romm.server.js";
+import {
+  isRommConfigured,
+  getRommAvailabilitySnapshot,
+} from "$lib/romm.server.js";
 import { query, customNavigation } from "$lib/database.js";
 import {
   needsInitialSetup,
@@ -161,21 +164,27 @@ export async function load({ request, cookies }) {
       }
     }
 
-    // Check ROMM availability and get server URL (with extended caching for performance)
+    // ROMM availability is read from a background-refreshed snapshot, never
+    // probed here. This load function runs on EVERY route including the
+    // unauthenticated /login, so any awaited outbound HTTP blocks the first
+    // byte of every page. A live probe here was the cause of the multi-second
+    // cold-start hang.
     let rommServerUrl = null;
     try {
-      rommAvailable = await withCache(
-        `romm-availability-${cookieHeader ? "authenticated" : "anonymous"}`,
-        () => isRommAvailable(cookieHeader),
-        15 * 60 * 1000, // Extended to 15 minute cache for better navigation performance
-      );
+      const rommConfigured = await isRommConfigured();
+      const snapshot = rommConfigured ? getRommAvailabilitySnapshot() : null;
+
+      // Optimistic until proven otherwise: show the library link while the
+      // first background probe is still in flight, and hide it only once a
+      // probe has actually failed.
+      rommAvailable = rommConfigured && snapshot.ok !== false;
+
       if (rommAvailable) {
-        // Get ROMM server URL from environment
         const { ROMM_SERVER_URL } = process.env;
         rommServerUrl = ROMM_SERVER_URL || "http://localhost:8080";
       }
     } catch (rommError) {
-      console.warn("Failed to check ROMM availability:", rommError);
+      console.warn("Failed to read ROMM availability:", rommError);
     }
 
     // Get active custom navigation items with caching
