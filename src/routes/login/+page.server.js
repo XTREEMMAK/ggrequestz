@@ -5,6 +5,11 @@
 import { redirect } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { query } from "$lib/database.js";
+import { withCache } from "$lib/cache.js";
+
+// Short enough that toggling registration or completing setup shows up
+// promptly, long enough to keep the login page off the database.
+const LOGIN_SETTINGS_TTL = 60 * 1000;
 
 export async function load({ parent }) {
   const { user, needsSetup, authMethod } = await parent();
@@ -34,37 +39,50 @@ export async function load({ parent }) {
     authMethod !== "basic"
   );
 
-  // Check if basic auth is enabled (by checking if initial admin exists)
-  let isBasicAuthEnabled = false;
-  if (authMethod === "basic") {
-    try {
-      const { needsInitialSetup } = await import("$lib/basicAuth.js");
-      isBasicAuthEnabled = !(await needsInitialSetup());
-    } catch (error) {
-      console.error("Error checking basic auth status:", error);
-      isBasicAuthEnabled = false;
-    }
-  } else if (authMethod === "authentik") {
-    // If using Authentik as primary method, still allow basic auth as fallback if configured
-    try {
-      const { needsInitialSetup } = await import("$lib/basicAuth.js");
-      isBasicAuthEnabled = !(await needsInitialSetup());
-    } catch (error) {
-      isBasicAuthEnabled = false;
-    }
-  }
+  // Both lookups below hit the database and both used to run uncached on every
+  // single render of this public page. They change rarely, so a short cache
+  // keeps the login page responsive without making setup changes feel stuck.
+  // They are also independent, so run them concurrently.
+  const [isBasicAuthEnabled, registrationEnabled] = await Promise.all([
+    (async () => {
+      // Basic auth is offered as a fallback under Authentik too, so this is
+      // not exclusive to AUTH_METHOD=basic.
+      try {
+        return await withCache(
+          "login-basic-auth-enabled",
+          async () => {
+            const { needsInitialSetup } = await import("$lib/basicAuth.js");
+            return !(await needsInitialSetup());
+          },
+          LOGIN_SETTINGS_TTL,
+        );
+      } catch (error) {
+        console.error("Error checking basic auth status:", error);
+        return false;
+      }
+    })(),
 
-  // Check if registration is enabled
-  let registrationEnabled = false;
-  try {
-    const settingResult = await query(
-      "SELECT value FROM ggr_system_settings WHERE key = 'system.registration_enabled'",
-    );
-    registrationEnabled =
-      settingResult.rows.length > 0 && settingResult.rows[0].value === "true";
-  } catch (error) {
-    console.warn("Could not check registration setting:", error);
-  }
+    (async () => {
+      try {
+        return await withCache(
+          "login-registration-enabled",
+          async () => {
+            const settingResult = await query(
+              "SELECT value FROM ggr_system_settings WHERE key = 'system.registration_enabled'",
+            );
+            return (
+              settingResult.rows.length > 0 &&
+              settingResult.rows[0].value === "true"
+            );
+          },
+          LOGIN_SETTINGS_TTL,
+        );
+      } catch (error) {
+        console.warn("Could not check registration setting:", error);
+        return false;
+      }
+    })(),
+  ]);
 
   return {
     user: null,
