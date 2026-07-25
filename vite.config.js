@@ -46,7 +46,15 @@ export default defineConfig({
     ...(process.env.NODE_ENV === "production" && {
       terserOptions: {
         compress: {
-          drop_console: true,
+          // Deliberately NOT dropping console calls.
+          //
+          // This previously used `drop_console: true`, which Vite applies to
+          // the SSR bundle as well as the client one. Every console.log/warn/
+          // error in the server code was therefore removed at build time, so
+          // production installs saw "no errors in the logs whatsoever" while
+          // integrations were silently failing. For a self-hosted app whose
+          // operators debug from container logs, that tradeoff is backwards:
+          // the bytes saved are negligible, the diagnostics are not.
           drop_debugger: true,
         },
       },
