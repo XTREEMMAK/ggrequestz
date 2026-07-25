@@ -23,6 +23,11 @@ import {
   cacheUserPermissions,
   cacheAuthCredentials,
 } from "./cache.js";
+import { fetchWithTimeout } from "./utils.js";
+
+// Deadline for every outbound call to the identity provider. The auth callback
+// previously issued two untimed fetches, which is why it could hang ~14s.
+const IDP_TIMEOUT_MS = 8000;
 
 // Use dynamic environment variables for runtime configuration
 const AUTHENTIK_CLIENT_ID =
@@ -97,13 +102,17 @@ export async function exchangeCodeForTokens(code, redirectUri) {
     redirect_uri: redirectUri,
   });
 
-  const response = await fetch(tokenEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+  const response = await fetchWithTimeout(
+    tokenEndpoint,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
     },
-    body: params.toString(),
-  });
+    IDP_TIMEOUT_MS,
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -123,11 +132,15 @@ export async function getUserInfo(accessToken) {
   const baseUrl = getBaseUrl();
   const userinfoEndpoint = `${baseUrl}/application/o/userinfo/`;
 
-  const response = await fetch(userinfoEndpoint, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetchWithTimeout(
+    userinfoEndpoint,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+    IDP_TIMEOUT_MS,
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to get user info: ${response.status}`);
