@@ -15,8 +15,14 @@ const config = {
       },
     },
     csrf: {
-      // Disable CSRF protection for setup routes during initial setup
-      checkOrigin: false,
+      // Origin checking is enabled. The comment here used to say this was
+      // "for setup routes during initial setup", but `false` disabled it for
+      // the entire application, on every form action and POST.
+      //
+      // If a genuine setup-time exemption is needed, scope it in
+      // hooks.server.js for the specific /api/setup/ paths rather than
+      // switching it off globally.
+      checkOrigin: true,
     },
     csp: {
       // 'nonce', not 'hash'. Streamed promises returned from `load` emit their
