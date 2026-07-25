@@ -37,9 +37,19 @@ const AUTHENTIK_CLIENT_SECRET =
 const AUTHENTIK_ISSUER = env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_ISSUER;
 const SESSION_SECRET = env.SESSION_SECRET || process.env.SESSION_SECRET;
 
-// JWT Secret
-const JWT_SECRET = SESSION_SECRET || "your-secret-key";
-const secret = new TextEncoder().encode(JWT_SECRET);
+// JWT Secret.
+//
+// Fails closed. This previously fell back to the literal string
+// "your-secret-key", so an install that forgot SESSION_SECRET signed every
+// session JWT with a value published in this repository — anyone could mint a
+// valid session for any user.
+if (!SESSION_SECRET || SESSION_SECRET === "your-secret-key") {
+  throw new Error(
+    "SESSION_SECRET is required and must not be the example value. " +
+      "Generate one with: openssl rand -hex 32",
+  );
+}
+const secret = new TextEncoder().encode(SESSION_SECRET);
 
 /**
  * Get the base URL for Authentik OAuth endpoints
