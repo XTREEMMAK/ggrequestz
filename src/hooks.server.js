@@ -7,23 +7,43 @@ import { redirect } from "@sveltejs/kit";
 import { getSession } from "$lib/auth.server.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { warmUpCache } from "$lib/gameCache.js";
+import { warmPool } from "$lib/database.js";
+import { probeRommAvailability } from "$lib/romm.server.js";
 
-// Initialize cache warming on server startup
-let cacheWarmed = false;
-const startCacheWarming = async () => {
-  if (!cacheWarmed) {
-    cacheWarmed = true;
-    try {
-      console.log("🔥 Starting cache warm-up...");
-      await warmUpCache();
-      console.log("✅ Cache warm-up completed");
-    } catch (error) {
-      console.error("❌ Cache warm-up failed:", error);
-      // Reset flag to allow retry on next request
-      cacheWarmed = false;
-    }
-  }
-};
+/**
+ * Server startup hook — runs once at boot, before the first request.
+ *
+ * Everything expensive belongs here rather than on the request path. Cache
+ * warming used to be triggered by the first request, so whoever arrived after
+ * a restart paid for a full-table DELETE plus IGDB round trips — and because
+ * the "already warmed" flag was reset on failure, a failing warm-up re-ran on
+ * *every* subsequent request.
+ */
+export async function init() {
+  console.log("🚀 Server starting: warming database pool...");
+
+  // Awaited: opening one connection is fast and it means the first request
+  // does not pay for the pg import, TCP handshake and authentication.
+  const pooled = await warmPool();
+  console.log(
+    pooled
+      ? "✅ Database pool ready"
+      : "⚠️ Database pool not ready — will connect on first query",
+  );
+
+  // Not awaited: these reach external services, and a slow or unreachable
+  // dependency must never delay the server becoming ready.
+  warmUpCache()
+    .then(() => console.log("✅ Cache warm-up completed"))
+    .catch((error) => {
+      // Log and move on. The cache fills lazily on demand regardless.
+      console.error("❌ Cache warm-up failed (non-fatal):", error?.message);
+    });
+
+  // Populates the availability snapshot the root layout reads, so the first
+  // page render already has a real answer instead of an optimistic guess.
+  probeRommAvailability().catch(() => {});
+}
 
 // HTTP Cache headers hook
 const cacheHeaders = async ({ event, resolve }) => {
@@ -74,14 +94,9 @@ const cacheHeaders = async ({ event, resolve }) => {
   });
 };
 
-// Performance timing hook with cache warming
+// Performance timing hook
 const performanceTiming = async ({ event, resolve }) => {
   const start = Date.now();
-
-  // Start cache warming on first request (non-blocking)
-  startCacheWarming().catch((error) => {
-    console.error("Cache warming failed:", error);
-  });
 
   const response = await resolve(event);
   const duration = Date.now() - start;
@@ -89,10 +104,9 @@ const performanceTiming = async ({ event, resolve }) => {
   // Clone headers to make them mutable
   const headers = new Headers(response.headers);
 
-  // Add performance timing header for debugging
-  if (event.url.pathname.startsWith("/api/")) {
-    headers.set("X-Response-Time", `${duration}ms`);
-  }
+  // Emitted for every response, not just /api/*. Page renders are exactly what
+  // needed measuring during the cold-start investigation.
+  headers.set("X-Response-Time", `${duration}ms`);
 
   // Log slow responses
   if (duration > 1000) {
@@ -223,3 +237,26 @@ const authGuard = async ({ event, resolve }) => {
 };
 
 export const handle = sequence(authGuard, performanceTiming, cacheHeaders);
+
+/**
+ * Server-side error hook.
+ *
+ * There was no `handleError` export at all, so unexpected server errors were
+ * reported to the client as a bare 500 with nothing written to the logs.
+ */
+export function handleError({ error, event, status, message }) {
+  // 404s are routine; don't bury real failures in that noise.
+  if (status !== 404) {
+    console.error(
+      `❌ ${status} ${event.request.method} ${event.url.pathname}: ${error?.message || message}`,
+      error?.stack || "",
+    );
+  }
+
+  return {
+    message:
+      status === 404
+        ? "Not found"
+        : "An unexpected error occurred. Please try again.",
+  };
+}
