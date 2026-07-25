@@ -3,9 +3,9 @@
  */
 
 import { redirect } from "@sveltejs/kit";
-import { env } from "$env/dynamic/private";
 import { query } from "$lib/database.js";
 import { withCache } from "$lib/cache.js";
+import { getOidcConfig, isOidcConfigured } from "$lib/server/oidc.js";
 
 // Short enough that toggling registration or completing setup shows up
 // promptly, long enough to keep the login page off the database.
@@ -24,20 +24,17 @@ export async function load({ parent }) {
     throw redirect(302, "/");
   }
 
-  // Check what authentication methods are available - hybrid approach for npm and Docker compatibility
-  const AUTHENTIK_CLIENT_ID =
-    env.AUTHENTIK_CLIENT_ID || process.env.AUTHENTIK_CLIENT_ID;
-  const AUTHENTIK_CLIENT_SECRET =
-    env.AUTHENTIK_CLIENT_SECRET || process.env.AUTHENTIK_CLIENT_SECRET;
-  const AUTHENTIK_ISSUER = env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_ISSUER;
-
-  // Only enable Authentik if credentials are present AND auth method is not set to 'basic' only
-  const isAuthentikEnabled = !!(
-    AUTHENTIK_CLIENT_ID &&
-    AUTHENTIK_CLIENT_SECRET &&
-    AUTHENTIK_ISSUER &&
-    authMethod !== "basic"
-  );
+  // Which SSO provider is configured, under either the OIDC_* names or the
+  // legacy AUTHENTIK_* ones.
+  //
+  // This gate is the bug behind issues #4 and #7: it required AUTHENTIK_*
+  // specifically, so AUTH_METHOD=oidc_generic with OIDC_* variables satisfied
+  // neither this branch nor the basic-auth branch, and the page rendered
+  // "No authentication methods are configured".
+  const oidcConfig = getOidcConfig();
+  const isOidcEnabled = isOidcConfigured() && authMethod !== "basic";
+  // Retained for the existing template binding.
+  const isAuthentikEnabled = isOidcEnabled;
 
   // Both lookups below hit the database and both used to run uncached on every
   // single render of this public page. They change rarely, so a short cache
@@ -86,11 +83,16 @@ export async function load({ parent }) {
 
   return {
     user: null,
+    isOidcEnabled,
+    // Legacy alias, kept so nothing referencing the old name breaks.
     isAuthentikEnabled,
+    // Label for the SSO button. Defaults to "SSO" rather than the previously
+    // hardcoded "Authentik"; override with OIDC_PROVIDER_NAME.
+    oidcProviderName: oidcConfig.providerName,
     isBasicAuthEnabled,
     registrationEnabled,
-    hasAuthentikId: !!AUTHENTIK_CLIENT_ID,
-    hasAuthentikSecret: !!AUTHENTIK_CLIENT_SECRET,
-    hasAuthentikIssuer: !!AUTHENTIK_ISSUER,
+    hasOidcClientId: !!oidcConfig.clientId,
+    hasOidcClientSecret: !!oidcConfig.clientSecret,
+    hasOidcIssuer: !!oidcConfig.issuer,
   };
 }

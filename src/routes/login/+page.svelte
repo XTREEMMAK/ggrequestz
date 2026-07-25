@@ -129,8 +129,8 @@
         
         <!-- Login Options -->
         <div class="space-y-4">
-          <!-- Authentik Button -->
-          {#if data?.isAuthentikEnabled}
+          <!-- SSO / OIDC Button -->
+          {#if data?.isOidcEnabled}
           <a
             href="/api/auth/login"
             class="auth-button primary-button"
@@ -141,7 +141,7 @@
               <path d="m21 2-9.6 9.6"/>
               <circle cx="7.5" cy="15.5" r="5.5"/>
             </svg>
-            <span>Login with Authentik</span>
+            <span>Login with {data?.oidcProviderName || 'SSO'}</span>
           </a>
           {/if}
           
@@ -178,7 +178,7 @@
           {/if}
 
           <!-- Error Message -->
-          {#if !data?.isAuthentikEnabled && !data?.isBasicAuthEnabled}
+          {#if !data?.isOidcEnabled && !data?.isBasicAuthEnabled}
           <div class="error-card">
             <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
