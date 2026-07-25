@@ -38,9 +38,15 @@ class SimpleCache {
         url: parsedRedisUrl,
         socket: {
           connectTimeout: 3000,
-          reconnectStrategy: (retries) =>
-            retries > 5 ? false : Math.min(retries * 200, 2000),
+          // Retry forever with a capped backoff. Returning `false` here (the
+          // previous behaviour after 5 attempts) permanently disabled Redis
+          // for the life of the worker: one transient blip silently downgraded
+          // the process to its in-memory cache until the next restart.
+          reconnectStrategy: (retries) => Math.min(retries * 200, 5000),
         },
+        // Keeps the socket alive so it is not silently dropped by NAT/conntrack
+        // idle timeouts and then discovered dead on the next command.
+        pingInterval: 30000,
       });
 
       this.redisClient.on("error", (err) => {
@@ -50,15 +56,32 @@ class SimpleCache {
         ) {
           console.error("Redis error:", err.message);
         }
+        if (this.redisConnected) {
+          console.warn(
+            "⚠️ Redis connection lost — falling back to in-memory cache",
+          );
+        }
         this.redisConnected = false;
       });
 
-      this.redisClient.on("connect", () => {
+      // `connect` fires before the client is ready to accept commands; a
+      // command issued in that window throws and flips the flag back off.
+      this.redisClient.on("ready", () => {
+        if (!this.redisConnected) {
+          console.log("✅ Redis connected");
+        }
         this.redisConnected = true;
+      });
+
+      this.redisClient.on("reconnecting", () => {
+        this.redisConnected = false;
       });
 
       await this.redisClient.connect();
     } catch (error) {
+      console.warn(
+        `⚠️ Redis unavailable (${error?.message}) — using in-memory cache`,
+      );
       this.redisConnected = false;
     }
   }
@@ -192,7 +215,20 @@ class SimpleCache {
 const cache = new SimpleCache();
 
 /**
- * Cache wrapper for async functions
+ * Rebuilds currently in progress, keyed by cache key.
+ *
+ * Without this, N concurrent requests arriving on a cold key each run the
+ * rebuild in full — so a burst of traffic after a cache expiry multiplied
+ * every expensive call (external probes, permission lookups) by the
+ * concurrency instead of sharing one result.
+ */
+const inFlight = new Map();
+
+/**
+ * Cache wrapper for async functions.
+ *
+ * Concurrent misses on the same key share a single rebuild.
+ *
  * @param {string} key - Cache key
  * @param {Function} fn - Function to execute if not cached
  * @param {number} ttl - Time to live in milliseconds
@@ -202,13 +238,76 @@ export async function withCache(key, fn, ttl = 5 * 60 * 1000) {
   const cached = await cache.get(key);
   if (cached !== null) return cached;
 
-  try {
-    const result = await fn();
-    await cache.set(key, result, ttl);
-    return result;
-  } catch (error) {
-    throw error;
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+
+  const rebuild = (async () => {
+    try {
+      const result = await fn();
+      await cache.set(key, result, ttl);
+      return result;
+    } finally {
+      inFlight.delete(key);
+    }
+  })();
+
+  inFlight.set(key, rebuild);
+  return rebuild;
+}
+
+/**
+ * Like `withCache`, but serves a stale value immediately and refreshes in the
+ * background once the entry passes `staleAfter`.
+ *
+ * Use this wherever a rebuild would otherwise land on a request path. A failed
+ * refresh keeps the previous value rather than propagating the error.
+ *
+ * @param {string} key - Cache key
+ * @param {Function} fn - Function to execute to (re)build the value
+ * @param {Object} options - Timing options
+ * @param {number} options.ttl - How long the entry is retained
+ * @param {number} options.staleAfter - Age at which a background refresh starts
+ * @returns {Promise<any>} - Cached (possibly stale) or fresh result
+ */
+export async function withStaleWhileRevalidate(key, fn, options = {}) {
+  const { ttl = 15 * 60 * 1000, staleAfter = 5 * 60 * 1000 } = options;
+  const metaKey = `${key}:builtAt`;
+
+  const [cached, builtAt] = await Promise.all([
+    cache.get(key),
+    cache.get(metaKey),
+  ]);
+
+  const refresh = async () => {
+    if (inFlight.has(key)) return inFlight.get(key);
+
+    const rebuild = (async () => {
+      try {
+        const result = await fn();
+        await cache.set(key, result, ttl);
+        await cache.set(metaKey, Date.now(), ttl);
+        return result;
+      } finally {
+        inFlight.delete(key);
+      }
+    })();
+
+    inFlight.set(key, rebuild);
+    return rebuild;
+  };
+
+  if (cached === null) return refresh();
+
+  if (!builtAt || Date.now() - builtAt > staleAfter) {
+    // Serve stale now, refresh behind the response.
+    refresh().catch((error) =>
+      console.warn(
+        `⚠️ Background refresh failed for "${key}": ${error?.message || error}`,
+      ),
+    );
   }
+
+  return cached;
 }
 
 // Simplified cache helpers with standard TTL
