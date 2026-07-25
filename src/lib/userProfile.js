@@ -66,7 +66,9 @@ export async function createUserFromAuthentik(userInfo) {
     // Assign roles based on Authentik groups (but skip admin flag update for first user)
     await assignRolesFromAuthentikGroups(
       user.id,
-      userInfo.groups || [],
+      // Pass through undefined rather than [] so an absent groups claim is
+      // distinguishable from empty membership.
+      userInfo.groups,
       isFirstUser,
     );
 
@@ -115,7 +117,7 @@ export async function updateUserFromAuthentik(
     // Update roles based on current Authentik groups
     // Skip role sync if preserveRoles is true (when linking existing basic auth account)
     if (!preserveRoles) {
-      await assignRolesFromAuthentikGroups(user.id, userInfo.groups || []);
+      await assignRolesFromAuthentikGroups(user.id, userInfo.groups);
     } else {
       console.log(
         `ℹ️ Preserving existing roles for user ${user.id} (linked from basic auth)`,
@@ -130,9 +132,39 @@ export async function updateUserFromAuthentik(
 }
 
 /**
- * Assign roles to user based on Authentik groups
+ * Parse the group -> role mapping from configuration.
+ *
+ * @param {string} roleMapEnv - "group:role,group:role" pairs
+ * @param {string} adminGroupEnv - Convenience override for the admin group name
+ * @returns {Object} - Map of group name to internal role
+ */
+function parseRoleMap(roleMapEnv, adminGroupEnv) {
+  const mapping = roleMapEnv
+    ? Object.fromEntries(
+        roleMapEnv
+          .split(",")
+          .map((pair) => pair.split(":").map((part) => part.trim()))
+          .filter(([group, role]) => group && role),
+      )
+    : {
+        // Historical defaults, kept so existing Authentik installs are unaffected.
+        "gg-requestz-admins": "admin",
+        "gg-requestz-managers": "manager",
+        "gg-requestz-users": "viewer",
+      };
+
+  if (adminGroupEnv) {
+    mapping[adminGroupEnv] = "admin";
+  }
+
+  return mapping;
+}
+
+/**
+ * Assign roles to a user based on their identity provider groups
  * @param {number} userId - Local user ID
- * @param {Array} authentikGroups - Array of Authentik group names
+ * @param {Array|undefined} authentikGroups - Group names, or undefined if the
+ *   provider emitted no groups claim at all
  * @param {boolean} isFirstUser - Whether this is the first user (skip admin flag update)
  * @returns {Promise<void>}
  */
@@ -142,40 +174,55 @@ async function assignRolesFromAuthentikGroups(
   isFirstUser = false,
 ) {
   try {
-    // Mapping of Authentik groups to internal roles
-    const groupRoleMapping = {
-      "gg-requestz-admins": "admin",
-      "gg-requestz-managers": "manager",
-      "gg-requestz-users": "viewer",
-    };
-
-    // Check if user has admin group for direct is_admin flag
-    const hasAdminGroup = authentikGroups.includes("gg-requestz-admins");
-
-    console.log(
-      `🔍 AUTH DEBUG: assignRolesFromAuthentikGroups - userId: ${userId}, groups: ${JSON.stringify(authentikGroups)}, hasAdminGroup: ${hasAdminGroup}, isFirstUser: ${isFirstUser}`,
+    // Group -> role mapping. Defaults preserve the previous hardcoded names;
+    // override with OIDC_ROLE_MAP, e.g.
+    //   OIDC_ROLE_MAP="my-admins:admin,my-staff:manager"
+    const groupRoleMapping = parseRoleMap(
+      process.env.OIDC_ROLE_MAP,
+      process.env.OIDC_ADMIN_GROUP,
     );
 
-    // Update the direct is_admin flag based on group membership
-    // Skip this for first user - they already have is_admin=true from INSERT
-    if (!isFirstUser) {
+    const adminGroups = Object.entries(groupRoleMapping)
+      .filter(([, role]) => role === "admin")
+      .map(([group]) => group);
+
+    // `undefined` means the provider did not emit a groups claim at all, which
+    // is different from emitting an empty list. Many OIDC providers do not send
+    // groups without extra configuration, and treating that as "member of
+    // nothing" used to silently clear is_admin on every single login.
+    const groupsUnknown =
+      authentikGroups === undefined || authentikGroups === null;
+    const groups = Array.isArray(authentikGroups) ? authentikGroups : [];
+    const hasAdminGroup = groups.some((g) => adminGroups.includes(g));
+
+    // Update the direct is_admin flag based on group membership.
+    // Skipped for the first user (already is_admin=true from INSERT) and
+    // whenever the provider sent no groups claim.
+    if (isFirstUser) {
+      // First user keeps the admin flag granted at creation.
+    } else if (groupsUnknown) {
+      console.warn(
+        `⚠️ Identity provider sent no '${process.env.OIDC_GROUPS_CLAIM || "groups"}' claim for user ${userId}; ` +
+          "leaving admin status unchanged. Configure the provider to emit group " +
+          "membership, or set OIDC_GROUPS_CLAIM to the correct claim name.",
+      );
+    } else {
       await query(
         "UPDATE ggr_users SET is_admin = $1, updated_at = NOW() WHERE id = $2",
         [hasAdminGroup, userId],
       );
+    }
 
-      console.log(
-        `✅ AUTH DEBUG: Updated is_admin to ${hasAdminGroup} for user ${userId}`,
-      );
-    } else {
-      console.log(
-        `ℹ️ AUTH DEBUG: Skipping is_admin update for first user ${userId}`,
-      );
+    // Without a groups claim there is nothing to synchronise; leave whatever
+    // roles an administrator assigned locally alone rather than resetting the
+    // user to "viewer" on every login.
+    if (groupsUnknown) {
+      return;
     }
 
     // Find which roles to assign
     const rolesToAssign = [];
-    for (const group of authentikGroups) {
+    for (const group of groups) {
       if (groupRoleMapping[group]) {
         rolesToAssign.push(groupRoleMapping[group]);
       }
