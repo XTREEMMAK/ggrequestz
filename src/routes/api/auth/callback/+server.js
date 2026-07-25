@@ -3,13 +3,14 @@
  */
 
 import { redirect } from "@sveltejs/kit";
+import { createSessionToken } from "$lib/auth.server.js";
 import {
   exchangeCodeForTokens,
-  getUserInfo,
-  createSessionToken,
-  createSessionCookie,
-} from "$lib/auth.server.js";
+  resolveIdentity,
+  resolveRedirectUri,
+} from "$lib/server/oidc.js";
 import { upsertUserFromAuthentik } from "$lib/userProfile.js";
+import crypto from "crypto";
 
 export async function GET({ url, cookies, getClientAddress, request, locals }) {
   try {
@@ -29,39 +30,42 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
       throw redirect(302, `/?error=${errorParam}`);
     }
 
-    // Verify state parameter
-    if (!state || !storedState || state !== storedState) {
+    // Verify state parameter. Compared in constant time — a plain !== leaks
+    // timing information about a CSRF-relevant secret.
+    if (!state || !storedState || !timingSafeEqual(state, storedState)) {
       console.error("❌ Invalid state parameter");
-      console.error(
-        `📊 State comparison: received="${state}", stored="${storedState}"`,
-      );
       throw redirect(302, "/?error=invalid_state");
     }
 
-    // Clear state cookie
+    const nonce = cookies.get("auth_nonce");
+
+    // Clear single-use cookies
     cookies.delete("auth_state", { path: "/" });
+    cookies.delete("auth_nonce", { path: "/" });
 
     if (!code) {
       console.error("❌ No authorization code received");
       throw redirect(302, "/?error=no_code");
     }
 
-    // Build redirect URI
-    const redirectUri = `${url.origin}/api/auth/callback`;
+    // Must be byte-identical to the value sent in the auth request.
+    const redirectUri = resolveRedirectUri(url);
 
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, redirectUri);
 
-    if (!tokens.access_token) {
-      console.error("❌ No access token received in response");
+    if (!tokens.access_token && !tokens.id_token) {
+      console.error("❌ No access_token or id_token received in response");
       throw redirect(302, "/?error=no_token");
     }
 
-    // Get user information
-    const userInfo = await getUserInfo(tokens.access_token);
+    // Identity comes from the verified id_token where possible, merged with
+    // /userinfo. Previously the id_token was ignored entirely and identity was
+    // taken from an unverified userinfo response.
+    const userInfo = await resolveIdentity(tokens, nonce);
 
     if (!userInfo) {
-      console.error("❌ Failed to get user info");
+      console.error("❌ Failed to resolve user identity from the provider");
       throw redirect(302, "/?error=no_user_info");
     }
 
@@ -107,4 +111,17 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
     const errorParam = encodeURIComponent(error.message || "callback_failed");
     throw redirect(302, `/?error=${errorParam}`);
   }
+}
+
+/**
+ * Constant-time string comparison for equal-length secrets.
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+function timingSafeEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }

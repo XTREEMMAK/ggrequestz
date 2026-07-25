@@ -3,28 +3,31 @@
  */
 
 import { redirect } from "@sveltejs/kit";
-import { getAuthorizationUrl } from "$lib/auth.server.js";
+import { getAuthorizationUrl, resolveRedirectUri } from "$lib/server/oidc.js";
 import { generateId } from "$lib/utils.js";
 
 export async function GET({ url, cookies }) {
   try {
-    // Generate state parameter for security
+    // CSRF state, plus a nonce so the id_token can be checked for replay.
     const state = generateId();
+    const nonce = generateId();
 
-    // Store state in cookie for verification
-    cookies.set("auth_state", state, {
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 600, // 10 minutes
       path: "/",
-    });
+    };
 
-    // Build redirect URI
-    const redirectUri = `${url.origin}/api/auth/callback`;
+    cookies.set("auth_state", state, cookieOptions);
+    cookies.set("auth_nonce", nonce, cookieOptions);
+
+    // Must match what is registered at the provider.
+    const redirectUri = resolveRedirectUri(url);
 
     // Get authorization URL
-    const authUrl = getAuthorizationUrl(redirectUri, state);
+    const authUrl = await getAuthorizationUrl(redirectUri, state, nonce);
 
     throw redirect(302, authUrl);
   } catch (error) {
