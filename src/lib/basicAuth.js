@@ -4,6 +4,7 @@
  */
 
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { query } from "$lib/database.js";
 import { generateId } from "$lib/utils.js";
 import { assignAdminRole } from "$lib/userProfile.js";
@@ -196,7 +197,50 @@ export async function needsInitialSetup() {
 }
 
 /**
- * Create a basic auth session token (simple JWT alternative)
+ * Signing key for basic-auth session tokens.
+ *
+ * Deliberately fails closed. These tokens carry `is_admin`, so an absent or
+ * placeholder secret must stop the process rather than silently produce
+ * forgeable admin credentials.
+ *
+ * @returns {Buffer} - HMAC key
+ */
+function getSigningKey() {
+  const secret = process.env.SESSION_SECRET;
+
+  if (!secret || secret === "your-secret-key") {
+    throw new Error(
+      "SESSION_SECRET is not set (or is still the example value). It is required " +
+        "to sign session tokens; refusing to issue unsigned credentials.",
+    );
+  }
+
+  return Buffer.from(secret, "utf8");
+}
+
+/**
+ * HMAC-SHA256 over the encoded payload.
+ * @param {string} encodedPayload - base64url payload
+ * @returns {string} - base64url signature
+ */
+function signPayload(encodedPayload) {
+  return crypto
+    .createHmac("sha256", getSigningKey())
+    .update(encodedPayload)
+    .digest("base64url");
+}
+
+/**
+ * Create a signed basic auth session token.
+ *
+ * Previously this was unsigned base64 JSON, "verified" by decoding it and
+ * checking `exp`. Any unauthenticated client could mint themselves an admin
+ * session with
+ *   btoa('{"id":1,"is_admin":true,"auth_type":"basic","exp":9999999999999,...}')
+ * and set it as the `basic_auth_session` cookie. Tokens are now HMAC-signed.
+ *
+ * Uses node:crypto rather than `jose` so verification stays synchronous —
+ * `getBasicAuthUser()` is called synchronously from hooks and layout loads.
  */
 export function createBasicAuthToken(user) {
   const payload = {
@@ -210,16 +254,41 @@ export function createBasicAuthToken(user) {
     exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
   };
 
-  // Simple token encoding (in production, use proper JWT)
-  return Buffer.from(JSON.stringify(payload)).toString("base64");
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
+    "base64url",
+  );
+
+  return `${encodedPayload}.${signPayload(encodedPayload)}`;
 }
 
 /**
- * Verify and decode a basic auth token
+ * Verify and decode a basic auth token.
+ *
+ * Unsigned legacy tokens are rejected — that is the whole point of the change,
+ * so existing basic-auth sessions are invalidated and users re-login once.
  */
 export function verifyBasicAuthToken(token) {
   try {
-    const payload = JSON.parse(Buffer.from(token, "base64").toString());
+    const [encodedPayload, signature] = String(token).split(".");
+
+    if (!encodedPayload || !signature) {
+      return null; // Legacy unsigned token, or malformed
+    }
+
+    const expected = signPayload(encodedPayload);
+    const providedBuf = Buffer.from(signature);
+    const expectedBuf = Buffer.from(expected);
+
+    if (
+      providedBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(providedBuf, expectedBuf)
+    ) {
+      return null; // Bad signature
+    }
+
+    const payload = JSON.parse(
+      Buffer.from(encodedPayload, "base64url").toString("utf8"),
+    );
 
     // Check expiration
     if (payload.exp < Date.now()) {
