@@ -86,7 +86,7 @@ Server-only modules end in `.server.js` or live under `src/lib/server/`.
 
 ## Server-side performance rules
 
-These exist because v1.3 fixed a 9-second cold-start hang caused by breaking them. See `tmp/1.3-phase-A-cold-start.md`.
+These exist because v1.3 fixed a 9-second cold-start hang caused by breaking them. See `docs/dev-notes/V1.3_FINDINGS.md`.
 
 1. **No outbound HTTP on the root layout.** `src/routes/+layout.server.js` runs on _every_ route, including the unauthenticated `/login`. Anything awaited there blocks the first byte of every page. Use config checks and background-refreshed values instead.
 2. **Every outbound call gets a hard timeout.** `AbortSignal.timeout(...)` on every `fetch`, no exceptions. Nothing on a render path may block unbounded.
@@ -138,4 +138,6 @@ Prefer reading env through `$env/dynamic/private`. Note that `src/lib/auth.serve
 
 ## Planning records
 
-Multi-phase work is tracked in `tmp/` — one document per workstream, with evidence and a task checklist. See `tmp/1.3 Update and bugs.md` and the `tmp/1.3-phase-*.md` records for the format.
+Multi-phase work is tracked in `tmp/` — one document per workstream, with evidence and a task checklist. `tmp/` is **not** tracked in git, so these records are local to whoever did the work.
+
+When a workstream finishes, the durable findings move into `docs/dev-notes/` and the working record stays behind. `docs/dev-notes/V1.3_FINDINGS.md` is the worked example, distilled from six `tmp/1.3-*.md` records.
