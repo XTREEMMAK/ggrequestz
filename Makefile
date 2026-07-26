@@ -20,7 +20,7 @@ help:
 	@echo ""
 	@echo "🧪 Local test stack (docker-compose.test.yml):"
 	@echo "  test-up     Build and start the test stack + fixtures"
-	@echo "  test-seed   Seed RomM and Keycloak into known states"
+	@echo "  test-seed   Seed the admin login, RomM and Keycloak into known states"
 	@echo "  test-logs   Follow test stack logs"
 	@echo "  test-shell  Shell into the test app container"
 	@echo "  test-down   Stop the test stack and delete its volumes"
@@ -187,8 +187,11 @@ test-up:
 	@echo ""
 	@echo "Next: make test-seed"
 
-# Provision the fixtures and print the env vars to configure the app with
+# Provision the admin and fixtures, and print the env vars to configure the app
+# with. seed-app.sh runs first so there is an account to sign in with before the
+# integration config is printed.
 test-seed:
+	./scripts/testing/seed-app.sh
 	./scripts/testing/seed-romm.sh
 	./scripts/testing/seed-keycloak.sh
 

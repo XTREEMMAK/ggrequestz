@@ -42,6 +42,44 @@ make test-seed    # provision fixtures, print config to paste back
 Everything binds to `127.0.0.1` only, on ports chosen to avoid the defaults in
 `docker-compose.yml`, so this can run alongside a normal deployment.
 
+### Signing in
+
+The default `AUTH_METHOD=basic` login is:
+
+| Username | Password         |
+| -------- | ---------------- |
+| `admin`  | `ggr-test-admin` |
+
+`make test-seed` creates it, via `scripts/testing/seed-app.sh`. That script posts
+to the app's own first-run endpoint (`POST /api/auth/basic/setup`) rather than
+inserting a row, so the password is hashed and the `admin` role assigned exactly
+the way a real installation does it — a direct `INSERT` sets `is_admin` but
+leaves `ggr_user_roles` empty. Re-running it is safe: the endpoint refuses a
+second admin, and the script treats that as success.
+
+Run it on its own against a stack that is already up:
+
+```bash
+./scripts/testing/seed-app.sh
+```
+
+Pass a base URL as the first argument if the app's `ORIGIN` is not the loopback
+default — `checkOrigin: true` in `svelte.config.js` rejects a POST whose `Origin`
+disagrees, and the script reports that case explicitly rather than looking like a
+bad password.
+
+Passwords are bcrypt cost-12 and cannot be read back, so if you change it and
+lose it, hash a new one and update the row directly:
+
+```bash
+docker exec -w /app ggr-test-app-1 node -e \
+  "import('bcrypt').then(async b => console.log(await b.default.hash('NEW-PASSWORD', 12)))"
+docker exec ggr-test-postgres-1 psql -U ggrequestz -d ggrequestz \
+  -c "UPDATE ggr_users SET password_hash = '<hash>' WHERE username = 'admin';"
+```
+
+`hashPassword` rejects anything shorter than 8 characters.
+
 ### Reaching the stack from another machine
 
 The published ports are loopback-only by default. To test from a browser on a
