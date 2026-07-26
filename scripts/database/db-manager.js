@@ -16,8 +16,11 @@ const { Client } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Database Manager Version
-const DB_MANAGER_VERSION = "1.1.3";
+// Read from package.json rather than a second hand-maintained constant, which
+// had drifted to 1.1.3 and made log output misleading about what was running.
+const DB_MANAGER_VERSION = JSON.parse(
+  readFileSync(join(__dirname, "..", "..", "package.json"), "utf8"),
+).version;
 
 // Load environment variables - use .env.development in development mode (Vite convention)
 const configPath =
@@ -28,10 +31,17 @@ console.log("🗄️  G.G Requestz Database Manager v" + DB_MANAGER_VERSION);
 console.log("==================================");
 
 // Configuration
+//
+// Migrations are tracked by filename presence in ggr_migrations, ordered
+// lexicographically. There is no version-delta upgrade path: the
+// ggr_schema_version and ggr_migration_lock tables are created by
+// 001_initial_schema.sql but nothing reads them, and the rollback_sql column is
+// stored and never executed. A `versionTable` key used to sit here pointing at
+// ggr_schema_version; it was never referenced, so it has been removed rather
+// than left implying a mechanism that does not exist.
 const CONFIG = {
   migrationsDir: join(__dirname, "..", "..", "migrations"),
   migrationTable: "ggr_migrations",
-  versionTable: "ggr_schema_version",
 };
 
 /**
@@ -497,15 +507,26 @@ async function verifySchemaIntegrity(client) {
       );
 
       if (errors.length > 0) {
-        console.log(`\n❌ Schema verification found ${errors.length} error(s)`);
-        console.log("   The application may not function correctly");
-        console.log(
-          "   Run 'node scripts/database/db-manager.js migrate' to fix",
+        // Deliberately does not throw. A self-hosted instance that refuses to
+        // boot on a schema mismatch is worse than one that boots degraded: the
+        // operator loses the admin UI they would use to fix it. The trade-off
+        // is that this MUST be loud, and on stderr — a schema error on stdout
+        // is indistinguishable from normal startup chatter in container logs.
+        console.error(
+          `\n❌ Schema verification found ${errors.length} error(s). ` +
+            `The application will start, but affected features will fail.`,
         );
-
-        // Don't throw an error, but log the issues
-        // This allows the app to start even with schema issues
-        // throw new Error(`Schema verification failed with ${errors.length} errors`);
+        for (const issue of errors) {
+          const missing = issue.missingColumns?.length
+            ? ` (missing: ${issue.missingColumns.join(", ")})`
+            : "";
+          console.error(
+            `   - ${issue.table || issue.type}: ${issue.description}${missing}`,
+          );
+        }
+        console.error(
+          "   Fix with: node scripts/database/db-manager.js migrate",
+        );
       }
 
       if (warnings.length > 0) {

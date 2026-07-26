@@ -24,20 +24,31 @@ The project uses automated GitHub releases that are triggered by version tags. W
 Add your new version section to `CHANGELOG.md` following the existing format:
 
 ```markdown
-## [1.0.3] - 2025-08-19
+## [1.3.0] - 2026-07-26
 
-### Added
+### ⚠️ Breaking Changes
 
-- New feature descriptions
+- Anything requiring operator action before upgrading
 
-### Changed
+### ✨ New Features
 
-- What was changed
+### 🐛 Bug Fixes
 
-### Fixed
+### ⚡ Performance
 
-- Bug fixes
+### 🔧 Technical Changes
+
+### 📚 Documentation
 ```
+
+Use the emoji headers — that is what `CHANGELOG.md` actually contains, and
+matching it keeps the file consistent. Include only the sections you need.
+
+**The `## [X.Y.Z]` heading is load-bearing.** `.github/workflows/release.yml`
+extracts the release notes by `awk`-ing between that heading and the next one,
+and `scripts/create-release.sh` refuses to run without a
+`grep -q "^## \[$version\]"` match. Do not reformat it, and keep the
+`## [Unreleased]` section directly above it.
 
 ### Step 2: Use the Release Helper Script
 

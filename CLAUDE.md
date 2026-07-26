@@ -111,9 +111,9 @@ npm run db:status
 
 Known limitations — do not rely on these working:
 
-- `ggr_schema_version` and `ggr_migration_lock` exist but are **never read by any code**. There is no version-delta upgrade path.
+- `ggr_schema_version` and `ggr_migration_lock` are created by `001_initial_schema.sql` but are **never read by any code**. There is no version-delta upgrade path, and no locking — concurrent migration runs are not serialised.
 - `rollback_sql` is stored but never executed.
-- `scripts/deployment/docker-entrypoint.js` will **drop and recreate** `ggr_migrations` if it detects an unexpected column shape, losing history.
+- `verifySchemaIntegrity()` in `db-manager.js` **does not throw**. A schema mismatch logs to stderr and the app boots anyway, on the grounds that an instance which refuses to start is harder to repair than one running degraded. Check container logs after upgrading.
 
 New migrations: `NNN_description.sql`, next number in sequence. Never edit a migration that has shipped.
 
