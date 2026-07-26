@@ -38,12 +38,15 @@ services:
     image: ggrequestz:test
     restart: "no"
     ports:
-      - "127.0.0.1:${GGR_TEST_PORT:-3100}:3000"
+      # GGR_TEST_HOST defaults to loopback. Set it to 0.0.0.0 to reach the test
+      # stack from another machine — it also rewrites ORIGIN below, which
+      # adapter-node checks on every POST.
+      - "${GGR_TEST_HOST:-127.0.0.1}:${GGR_TEST_PORT:-3100}:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
-      PUBLIC_SITE_URL: http://127.0.0.1:${GGR_TEST_PORT:-3100}
-      ORIGIN: http://127.0.0.1:${GGR_TEST_PORT:-3100}
+      PUBLIC_SITE_URL: http://${GGR_TEST_ORIGIN_HOST:-127.0.0.1}:${GGR_TEST_PORT:-3100}
+      ORIGIN: http://${GGR_TEST_ORIGIN_HOST:-127.0.0.1}:${GGR_TEST_PORT:-3100}
 
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -64,7 +67,7 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-}
-      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://127.0.0.1:${GGR_TEST_PORT:-3100}/api/auth/callback}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://${GGR_TEST_ORIGIN_HOST:-127.0.0.1}:${GGR_TEST_PORT:-3100}/api/auth/callback}
       OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-}
       OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-}
 

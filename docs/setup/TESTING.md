@@ -42,6 +42,22 @@ make test-seed    # provision fixtures, print config to paste back
 Everything binds to `127.0.0.1` only, on ports chosen to avoid the defaults in
 `docker-compose.yml`, so this can run alongside a normal deployment.
 
+### Reaching the stack from another machine
+
+The published ports are loopback-only by default. To test from a browser on a
+different host, set the bind address **and** the origin host — `adapter-node`
+rejects POSTs whose `Origin` header does not match, so the login form fails with
+a 403 if only the bind address changes:
+
+```bash
+GGR_TEST_HOST=0.0.0.0 GGR_TEST_ORIGIN_HOST=<lan-ip> \
+  docker compose -f docker-compose.test.yml up -d app
+```
+
+Keycloak and Authentik stay on loopback, so OIDC logins need the same treatment
+plus a re-run of `scripts/testing/seed-keycloak.sh` to re-register the redirect
+URI.
+
 ```bash
 make test-logs              # follow everything
 make test-logs SERVICE=app  # just the app
