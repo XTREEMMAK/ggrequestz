@@ -64,6 +64,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   claim. Keycloak does not send one without an explicit mapper, so this hit
   immediately. An absent claim now leaves locally assigned roles untouched.
 - **The login page showed the wrong provider**, ignoring `OIDC_*` configuration.
+- **Returning from a game page reset the homepage.** Paging in more games, opening
+  one and pressing back landed at the top of the page with the extra content
+  gone. Three causes: the auth layouts set `height: 100%` on `html`/`body` via a
+  `:global` rule that survived navigation, making `window.scrollY` read 0
+  everywhere and silently disabling scroll restoration; the saved-state cache had
+  two different expiry windows (5 and 15 minutes) whose disagreement wiped the
+  snapshot before the section-expansion flags were restored; and the scroll
+  offset was read at a point in navigation where it had already been reset to 0.
 - **A request-coalescing cache optimisation deadlocked every authenticated
   page.** Reverted. Nested `withCache()` calls on the same key awaited their own
   outer promise forever; `/login` was unaffected, which is why it went unnoticed.
