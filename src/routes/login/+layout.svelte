@@ -15,8 +15,14 @@
 </div>
 
 <style>
+  /* Do NOT set height here. Svelte injects :global rules into the document when
+     this layout mounts, and they are not removed on unmount — so a height:100%
+     set for the login screen survives client-side navigation into the app,
+     pins <html> to the viewport height, and makes <body> the scroll container.
+     window.scrollY then reads 0 forever, which silently breaks scroll
+     restoration everywhere. The .login-layout wrapper below already provides
+     full height via min-height: 100vh. */
   :global(html, body) {
-    height: 100%;
     overflow-x: hidden;
   }
   
