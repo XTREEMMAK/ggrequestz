@@ -3,13 +3,16 @@
   Inspired by Skeleton.dev placeholders for better UX
 -->
 <script>
-  export let variant = "default"; // "default", "card", "list", "circle", "text", "image"
-  export let width = "100%";
-  export let height = "200px";
-  export let rounded = "md";
-  export let animate = true;
-  export let lines = 3; // For text variant
-  export let aspectRatio = "2/3"; // For card variant
+  // Migrated from Svelte 4 `export let` to runes, matching the rest of the app.
+  let {
+    variant = "default", // "default", "card", "list", "circle", "text", "image"
+    width = "100%",
+    height = "200px",
+    rounded = "md",
+    animate = true,
+    lines = 3, // For text variant
+    aspectRatio = "2/3", // For card variant
+  } = $props();
 </script>
 
 {#if variant === "card"}

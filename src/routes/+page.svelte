@@ -69,7 +69,40 @@
     return fallback.default;
   }
 
-  let newInLibrary = $state(initializeStateWithRestoration(data?.newInLibrary, { name: 'newInLibrary', default: [] }));
+  // The ROMM library is streamed from the server rather than awaited, so the
+  // page shell renders immediately and this section fills in when ROMM answers.
+  // The array stays plain mutable state because pagination, auto-load and
+  // session restoration all write to it; only the initial value arrives late.
+  let newInLibrary = $state(initializeStateWithRestoration(undefined, { name: 'newInLibrary', default: [] }));
+  let newInLibraryPending = $state(true);
+  let newInLibraryError = $state(null);
+
+  $effect(() => {
+    const stream = data?.newInLibraryStream;
+    if (!stream) {
+      newInLibraryPending = false;
+      return;
+    }
+
+    let cancelled = false;
+    Promise.resolve(stream)
+      .then((result) => {
+        if (cancelled) return;
+        // Don't clobber games the user has already paged in during navigation.
+        if (newInLibrary.length === 0) {
+          newInLibrary = result?.games ?? [];
+        }
+        newInLibraryError = result?.error ?? null;
+        newInLibraryPending = false;
+      })
+      .catch(() => {
+        if (cancelled) return;
+        newInLibraryPending = false;
+      });
+
+    return () => { cancelled = true; };
+  });
+
   let newReleases = $state(initializeStateWithRestoration(data?.newReleases, { name: 'newReleases', default: [] }));
   let popularGames = $state(initializeStateWithRestoration(data?.popularGames, { name: 'popularGames', default: [] }));
 
@@ -113,7 +146,6 @@
   // section is rendered. `rommAvailable` only controls what it shows, so a
   // broken ROMM reports an error instead of silently disappearing.
   let rommConfigured = $derived(data?.rommConfigured ?? data?.rommAvailable ?? false);
-  let rommError = $derived(data?.rommError || null);
 
   let genres = $state(data?.genres || []);
   let publishers = $state(data?.publishers || []);
@@ -1861,7 +1893,17 @@
           {/each}
         </div>
       {/if}
-    {:else if rommError}
+    {:else if newInLibraryPending}
+      <!--
+        Streaming: the shell is already on screen and ROMM has not answered yet.
+        This is the only branch that should ever show skeletons.
+      -->
+      <div class="responsive-grid gap-3 sm:gap-4 xl:gap-6 {$sidebarCollapsed ? 'sidebar-collapsed' : ''}">
+        {#each Array(getSkeletonCount()) as _, i}
+          <SkeletonLoader variant="card" rounded="lg" />
+        {/each}
+      </div>
+    {:else if newInLibraryError}
       <!--
         ROMM failed. Previously this branch rendered skeletons forever, so a
         403 or an unreachable server looked identical to "still loading".
@@ -1879,25 +1921,18 @@
               Couldn't load your ROMM library
             </p>
             <p class="text-red-300/90 mt-1">
-              {rommError.message}
-              {#if rommError.status}
-                <span class="text-red-400/70">(HTTP {rommError.status})</span>
+              {newInLibraryError.message}
+              {#if newInLibraryError.status}
+                <span class="text-red-400/70">(HTTP {newInLibraryError.status})</span>
               {/if}
             </p>
-            {#if rommError.hint && userPermissions?.isAdmin}
+            {#if newInLibraryError.hint && userPermissions?.isAdmin}
               <p class="text-red-300/70 mt-2 text-xs leading-relaxed">
-                {rommError.hint}
+                {newInLibraryError.hint}
               </p>
             {/if}
           </div>
         </div>
-      </div>
-    {:else if loadingNewInLibrary}
-      <!-- Genuinely in flight -->
-      <div class="responsive-grid gap-3 sm:gap-4 xl:gap-6 {$sidebarCollapsed ? 'sidebar-collapsed' : ''}">
-        {#each Array(getSkeletonCount()) as _, i}
-          <SkeletonLoader variant="card" rounded="lg" />
-        {/each}
       </div>
     {:else}
       <!-- Reached ROMM successfully; there is simply nothing in the library -->

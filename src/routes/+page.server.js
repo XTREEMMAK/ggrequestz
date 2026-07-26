@@ -90,7 +90,6 @@ export async function load({ parent, cookies, url, depends }) {
         );
       }
     }
-
     // Get user preferences and merge with global filters
     let userPreferences = null;
     try {
@@ -174,7 +173,6 @@ export async function load({ parent, cookies, url, depends }) {
             : "Check ROMM_SERVER_URL and that ROMM is reachable from this container.",
       };
     }
-
     // Prioritize critical data first - load games with enhanced caching
     const criticalDataPromise = Promise.all([
       // Get new releases from IGDB (restored to 24 games with enhanced caching)
@@ -253,34 +251,30 @@ export async function load({ parent, cookies, url, depends }) {
     // Secondary data - ROMM integration (optimized with enhanced caching).
     // A failure here is recorded rather than flattened into an empty array, so
     // the page can tell "your library is empty" apart from "ROMM is broken".
-    const secondaryDataPromise = rommAvailable
-      ? Promise.all([
-          // Get newest ROMs from ROMM library (20 initial for new simplified loading strategy)
-          safeAsync(
-            () =>
-              cacheRommGames(
-                () => getRecentlyAddedROMs(20, 0, cookieHeader),
-                "0-v20", // Changed cache key to force fresh fetch with 20 games
-              ),
-            {
-              timeout: 4000 * timeoutMultiplier,
-              fallback: [],
-              errorContext: "ROMM library loading",
-              onError: (error) => {
-                rommError = describeRommError(error);
-              },
-            },
-          ),
-          // ROMM cross-reference for critical games (will be done client-side for better UX)
-        ])
-      : Promise.resolve([[], []]);
-
+    // Streamed, not awaited. SvelteKit flushes the HTML shell immediately and
+    // sends this down the same response when it settles, so a slow or hanging
+    // ROMM shows skeletons on a rendered page instead of an empty browser.
+    // Resolves to a shape the page can branch on for loading / empty / error.
+    const newInLibraryStream = rommAvailable
+      ? (async () => {
+          try {
+            const games = await cacheRommGames(
+              () => getRecentlyAddedROMs(20, 0, cookieHeader),
+              "0-v20",
+            );
+            return { games, error: null };
+          } catch (error) {
+            const details = describeRommError(error);
+            console.warn(
+              `⚠️ ROMM library loading failed (${details.reason}): ${details.message}`,
+            );
+            return { games: [], error: details };
+          }
+        })()
+      : Promise.resolve({ games: [], error: rommError });
     // Wait for critical data first
     const [newReleases, popularGames, recentRequests, userWatchlist] =
       await criticalDataPromise;
-
-    // Get secondary data
-    const [newInLibrary] = await secondaryDataPromise;
 
     // If no games were loaded, start cache warming in background
     if (newReleases.length === 0 && popularGames.length === 0) {
@@ -288,17 +282,15 @@ export async function load({ parent, cookies, url, depends }) {
         console.error("❌ Failed to warm up cache:", error);
       });
     }
-
     return {
-      newInLibrary,
+      // Deliberately an unawaited promise — this is what makes it stream.
+      newInLibraryStream,
       newReleases,
       popularGames,
       recentRequests,
       userWatchlist,
       rommAvailable,
       rommConfigured,
-      // null when ROMM is healthy; otherwise { reason, status, message, hint }
-      rommError,
       loading: false,
       // Flag to indicate ROMM cross-reference should be done client-side
       needsRommCrossReference:
@@ -311,14 +303,13 @@ export async function load({ parent, cookies, url, depends }) {
   } catch (error) {
     console.error("Homepage load error:", error);
     return {
-      newInLibrary: [],
+      newInLibraryStream: Promise.resolve({ games: [], error: null }),
       newReleases: [],
       popularGames: [],
       recentRequests: [],
       userWatchlist: [],
       rommAvailable: false,
       rommConfigured: false,
-      rommError: null,
       loading: false,
       needsRommCrossReference: false,
       error: error.message,
