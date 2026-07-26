@@ -43,6 +43,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       PUBLIC_SITE_URL: http://127.0.0.1:${GGR_TEST_PORT:-3100}
+      ORIGIN: http://127.0.0.1:${GGR_TEST_PORT:-3100}
 
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432

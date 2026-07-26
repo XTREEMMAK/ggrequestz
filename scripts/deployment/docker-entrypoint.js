@@ -264,9 +264,49 @@ async function warmCaches() {
   }
 }
 
+/**
+ * Tell adapter-node what the application's public URL is.
+ *
+ * Without ORIGIN, adapter-node infers its own origin from the request and
+ * assumes **https**. Two things then break on any deployment that is actually
+ * served over http:
+ *
+ *   - CSRF origin checking rejects every form POST, including login, with
+ *     "Cross-site POST form submissions are forbidden".
+ *   - The OIDC redirect_uri is advertised as https and the identity provider
+ *     rejects it as a mismatch.
+ *
+ * PUBLIC_SITE_URL already carries exactly this information, so derive ORIGIN
+ * from it rather than making operators configure the same value twice.
+ */
+function deriveOrigin() {
+  if (process.env.ORIGIN) return;
+
+  const siteUrl = process.env.PUBLIC_SITE_URL;
+  if (!siteUrl) {
+    console.warn(
+      "⚠️ Neither ORIGIN nor PUBLIC_SITE_URL is set. adapter-node will assume " +
+        "https, which breaks form submissions and OIDC redirects on http-only " +
+        "deployments. Set PUBLIC_SITE_URL to this instance's public URL.",
+    );
+    return;
+  }
+
+  try {
+    process.env.ORIGIN = new URL(siteUrl).origin;
+    console.log(
+      `🌐 ORIGIN set to ${process.env.ORIGIN} (from PUBLIC_SITE_URL)`,
+    );
+  } catch {
+    console.warn(`⚠️ PUBLIC_SITE_URL is not a valid URL: ${siteUrl}`);
+  }
+}
+
 async function startApplication() {
   console.log("🚀 Starting G.G Requestz application...");
   console.log("================================");
+
+  deriveOrigin();
 
   // Start PM2 with ecosystem config
   const pm2Args = ["start", "ecosystem.config.cjs"];

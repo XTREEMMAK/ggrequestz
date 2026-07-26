@@ -75,6 +75,10 @@ services:
       NODE_ENV: production
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
+      # Tells adapter-node the app's public URL. Without it adapter-node assumes
+      # https, which breaks CSRF origin checks and OIDC redirect URIs on http
+      # deployments. Derived from PUBLIC_SITE_URL by the entrypoint if unset.
+      ORIGIN: ${ORIGIN:-}
     volumes:
       - ggrequestz-logs:/app/logs
     depends_on:

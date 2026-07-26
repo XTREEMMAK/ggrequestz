@@ -12,15 +12,21 @@ module.exports = {
       exec_mode: "cluster",
 
       // Environment configuration
+      //
+      // ORIGIN tells adapter-node the app's public URL. Without it, it assumes
+      // https, which breaks CSRF origin checks and OIDC redirect URIs on any
+      // http deployment. The entrypoint derives it from PUBLIC_SITE_URL.
       env: {
         NODE_ENV: "production",
         PORT: 3000,
+        ORIGIN: process.env.ORIGIN,
       },
 
       // Production environment overrides
       env_production: {
         NODE_ENV: "production",
         PORT: 3000,
+        ORIGIN: process.env.ORIGIN,
       },
 
       // Monitoring and health
