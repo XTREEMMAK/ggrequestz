@@ -62,6 +62,7 @@ export async function POST({ request, cookies }) {
       "show_content_warnings",
       "safe_mode_enabled",
       "require_confirmation_for_mature",
+      "animated_background",
     ];
 
     // Filter out invalid keys
@@ -90,6 +91,10 @@ export async function POST({ request, cookies }) {
       // Invalidate any user-specific caches
       invalidateCache(`user-session-${userId}`),
       invalidateCache(`user-permissions-${userId}`),
+      // The root layout caches this to avoid a query per authenticated page
+      // view; without invalidation the toggle would appear not to work until
+      // the TTL expired.
+      invalidateCache(`ambient-background-${userId}`),
     ]);
 
     return json({

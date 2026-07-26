@@ -315,7 +315,8 @@
         apply_to_search: true,
         show_content_warnings: true,
         safe_mode_enabled: false,
-        require_confirmation_for_mature: false
+        require_confirmation_for_mature: false,
+        animated_background: false
       };
     }
   });
@@ -865,6 +866,28 @@
                   </label>
                 </div>
               </div>
+            </div>
+
+            <!-- Appearance Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Appearance</h3>
+
+              <label class="flex items-start">
+                <input
+                  type="checkbox"
+                  checked={userPreferences.animated_background}
+                  onchange={(e) => updatePreference('animated_background', e.target.checked)}
+                  class="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span class="ml-2">
+                  <span class="block text-sm text-gray-700 dark:text-gray-300">Animated background</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Drifting particles behind the page. Off by default. Runs an animation
+                    for as long as a page is open, so leave it off on low-powered devices.
+                    Respects your system's reduced-motion setting.
+                  </span>
+                </span>
+              </label>
             </div>
 
             <!-- Custom Content Blocks Section -->

@@ -24,6 +24,7 @@ export const DEFAULT_PREFERENCES = {
   show_content_warnings: true,
   safe_mode_enabled: false,
   require_confirmation_for_mature: false,
+  animated_background: false,
 };
 
 /**
@@ -70,6 +71,7 @@ export async function getUserPreferences(userId) {
       safe_mode_enabled: prefs.safe_mode_enabled || false,
       require_confirmation_for_mature:
         prefs.require_confirmation_for_mature || false,
+      animated_background: prefs.animated_background || false,
       created_at: prefs.created_at,
       updated_at: prefs.updated_at,
     };
@@ -102,9 +104,9 @@ export async function saveUserPreferences(userId, preferences) {
         max_esrb_rating, custom_content_blocks, preferred_genres, excluded_genres,
         apply_to_homepage, apply_to_popular, apply_to_recent, apply_to_search,
         show_content_warnings, safe_mode_enabled, require_confirmation_for_mature,
-        updated_at
+        animated_background, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()
       )
       ON CONFLICT (user_id) DO UPDATE SET
         content_filter_level = EXCLUDED.content_filter_level,
@@ -121,6 +123,7 @@ export async function saveUserPreferences(userId, preferences) {
         show_content_warnings = EXCLUDED.show_content_warnings,
         safe_mode_enabled = EXCLUDED.safe_mode_enabled,
         require_confirmation_for_mature = EXCLUDED.require_confirmation_for_mature,
+        animated_background = EXCLUDED.animated_background,
         updated_at = NOW()
     `,
       [
@@ -139,6 +142,7 @@ export async function saveUserPreferences(userId, preferences) {
         preferences.show_content_warnings !== false, // Default to true
         preferences.safe_mode_enabled || false,
         preferences.require_confirmation_for_mature || false,
+        preferences.animated_background || false,
       ],
     );
 

@@ -8,6 +8,7 @@
 	import { slide, scale, fly } from 'svelte/transition';
 	import { cubicOut, quintOut } from 'svelte/easing';
 	import Toast from '../components/Toast.svelte';
+	import AmbientBackground from '../components/AmbientBackground.svelte';
 	import { sidebarCollapsed as sidebarCollapsedStore } from '$lib/stores/sidebar.js';
 	
 	let { data, children } = $props();
@@ -20,6 +21,7 @@
 	let authMethod = $derived(data?.authMethod || 'authentik');
 	let needsSetup = $derived(data?.needsSetup || false);
 	let basicAuthEnabled = $derived(data?.basicAuthEnabled || false);
+	let ambientBackground = $derived(data?.ambientBackground || false);
 	
 	// Check for URL parameters that indicate we should refresh user state
 	onMount(() => {
@@ -239,7 +241,14 @@
 	}
 </script>
 
-<div class="min-h-screen" style="background-color: var(--bg-primary);" onclick={handleClickOutside}>
+<!-- This wrapper is opaque by default. With the ambient background enabled it
+	 must be transparent, or it paints straight over the fixed canvas behind it
+	 no matter what z-index that canvas uses. -->
+<div
+	class="min-h-screen"
+	style={ambientBackground ? '' : 'background-color: var(--bg-primary);'}
+	onclick={handleClickOutside}
+>
 	<!-- Mobile sidebar overlay (hidden on login, setup, register, and admin pages) -->
 	{#if !currentPath.startsWith('/admin') && !currentPath.startsWith('/login') && !currentPath.startsWith('/setup') && !currentPath.startsWith('/register')}
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -751,6 +760,12 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+<!-- Opt-in ambient background. Rendered last so it never delays content,
+     and only for users who turned it on in their profile. -->
+{#if ambientBackground}
+	<AmbientBackground />
 {/if}
 
 <!-- Toast notifications -->

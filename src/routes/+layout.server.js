@@ -20,6 +20,10 @@ import {
 } from "$lib/basicAuth.js";
 import { withCache } from "$lib/cache.js";
 
+// Short enough that toggling the setting feels immediate on the next
+// navigation, long enough that it is not a query per page view.
+const PREFERENCE_CACHE_TTL_MS = 60 * 1000;
+
 /**
  * Filter navigation items based on user roles and visibility settings (with caching)
  * @param {Array} navItems - Array of navigation items
@@ -114,6 +118,7 @@ export async function load({ request, cookies }) {
         rommAvailable: false,
         rommServerUrl: null,
         customNavItems: [],
+        ambientBackground: false,
         authMethod,
         needsSetup: true,
         basicAuthEnabled: false,
@@ -147,6 +152,7 @@ export async function load({ request, cookies }) {
     };
 
     let rommAvailable = false;
+    let ambientBackground = false;
 
     // Get additional data if user is authenticated
     if (user) {
@@ -160,6 +166,36 @@ export async function load({ request, cookies }) {
       } catch (permError) {
         console.warn("Failed to get user permissions:", permError);
         userPermissions = { isAdmin: false };
+      }
+
+      // Opt-in ambient background. Read here because it has to apply to every
+      // authenticated page, and cached because this load runs on all of them.
+      // Deliberately inside the `if (user)` branch: the unauthenticated /login
+      // must not gain a database round-trip for a decorative preference.
+      try {
+        const { getUserIdFromAuth } = await import("$lib/getUserId.js");
+        const { query } = await import("$lib/database.js");
+        const userId = await getUserIdFromAuth(user, query);
+
+        ambientBackground = await withCache(
+          `ambient-background-${userId}`,
+          async () => {
+            const result = await query(
+              "SELECT animated_background FROM ggr_user_preferences WHERE user_id = $1",
+              [userId],
+            );
+            return result.rows[0]?.animated_background === true;
+          },
+          PREFERENCE_CACHE_TTL_MS,
+        );
+      } catch (prefError) {
+        // Never fatal — the background is cosmetic. Log the reason so an
+        // upgrade that skipped migration 008 is diagnosable rather than just
+        // silently never showing the effect.
+        console.warn(
+          "Failed to read animated_background preference:",
+          prefError?.message || prefError,
+        );
       }
     }
 
@@ -217,6 +253,7 @@ export async function load({ request, cookies }) {
       userPermissions,
       rommAvailable,
       rommServerUrl,
+      ambientBackground,
       customNavItems,
       authMethod,
       needsSetup,
@@ -230,6 +267,7 @@ export async function load({ request, cookies }) {
       userPermissions: { isAdmin: false },
       rommAvailable: false,
       rommServerUrl: null,
+      ambientBackground: false,
       customNavItems: [],
       authMethod,
       needsSetup: authMethod === "basic" ? true : false, // Force setup for basic auth on errors
