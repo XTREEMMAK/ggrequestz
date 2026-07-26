@@ -6,12 +6,13 @@
 import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getCacheStats } from "$lib/cache.js";
+import pkg from "../../../../package.json" assert { type: "json" };
 
 export async function GET() {
   const health = {
     status: "ok",
     timestamp: new Date().toISOString(),
-    version: "1.1.4",
+    version: pkg.version,
     services: {
       database: "unknown",
       cache: "unknown",

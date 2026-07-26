@@ -9,11 +9,15 @@ The OpenAPI specification is dynamically generated at `/api/openapi.json` and au
 ## Base URL
 
 ```
-http://localhost:5173/api  # Development
-https://your-domain.com/api  # Production
+http://localhost:5174  # Development
+https://your-domain.com  # Production
 ```
 
 The base URL is automatically configured via the `PUBLIC_SITE_URL` environment variable.
+
+Note the base has no `/api` suffix. Most endpoints live under `/api`, but the
+admin endpoints are served at `/admin/api/...`, so every path in this document
+and in the OpenAPI spec is written as a complete URL path.
 
 ## Authentication
 
@@ -79,10 +83,10 @@ Returns application version and feature information.
 
 ```json
 {
-  "version": "1.2.2",
+  "version": "1.3.0",
   "name": "gg-requestz",
   "environment": "production",
-  "buildTime": "2025-09-29T12:00:00Z",
+  "buildTime": "2026-07-26T12:00:00Z",
   "features": {
     "oidc": true,
     "basicAuth": true,
@@ -95,7 +99,7 @@ Returns application version and feature information.
     "endpoints": [
       "/api/games",
       "/api/auth",
-      "/api/search",
+      "/api/requests",
       "/api/watchlist",
       "/api/admin"
     ]
@@ -112,9 +116,9 @@ Health check endpoint for monitoring.
 ```json
 {
   "status": "ok",
-  "timestamp": "2025-09-29T12:00:00Z",
+  "timestamp": "2026-07-26T12:00:00Z",
   "uptime": 3600,
-  "version": "1.2.2"
+  "version": "1.3.0"
 }
 ```
 
@@ -777,9 +781,367 @@ Clean up expired cache entries.
 
 ### Admin Endpoints
 
+All admin endpoints require authentication via session cookie and appropriate permissions.
+
+#### Settings Management
+
+##### POST /admin/api/settings/update
+
+Update system settings. Requires `system.settings` permission.
+
+**Request:**
+
+```json
+{
+  "settings": {
+    "setting_key": "value",
+    "another_setting": "value"
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "updated_settings": ["setting_key", "another_setting"],
+  "updated_count": 2
+}
+```
+
+##### POST /admin/api/settings/content-filters
+
+Configure global content filters. Requires `system.settings` permission.
+
+**Request:**
+
+```json
+{
+  "max_esrb_rating": "T",
+  "custom_content_blocks": ["violence", "gambling"],
+  "excluded_genres": ["Horror"],
+  "banned_games": [12345, 67890]
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Global content filters saved successfully",
+  "filters": { ... }
+}
+```
+
+##### POST /admin/api/settings/test-gotify
+
+Test Gotify notification connection. Requires `system.settings` permission.
+
+**Request:**
+
+```json
+{
+  "url": "https://gotify.example.com",
+  "token": "your-gotify-app-token"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Test notification sent successfully",
+  "gotify_message_id": 123
+}
+```
+
+##### POST /admin/api/settings/test-romm
+
+Test ROMM server connection. Requires `system.settings` permission.
+
+**Request:**
+
+```json
+{
+  "server_url": "https://romm.example.com",
+  "username": "admin",
+  "password": "password"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "ROMM connection successful",
+  "total_games": 1500,
+  "server_info": {
+    "url": "https://romm.example.com",
+    "authenticated": true
+  }
+}
+```
+
+#### User Management
+
+##### POST /admin/api/users/update
+
+Update individual user. Permission required varies by action.
+
+**Request:**
+
+```json
+{
+  "user_id": 123,
+  "action": "toggle_active",
+  "value": 1
+}
+```
+
+**Actions:**
+
+- `toggle_active` - Toggle user active status (requires `user.edit`)
+- `assign_role` - Assign role to user (requires `user.edit`, value = role_id)
+- `remove_role` - Remove role from user (requires `user.edit`, value = role_id)
+- `ban` / `unban` - Ban or unban user (requires `user.ban`)
+- `delete` - Delete user (requires `user.delete`)
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "action": "toggle_active",
+  "user_id": 123
+}
+```
+
+##### POST /admin/api/users/bulk-update
+
+Bulk update multiple users. Limited to 100 users per request.
+
+**Request:**
+
+```json
+{
+  "user_ids": [1, 2, 3, 4, 5],
+  "action": "deactivate",
+  "value": null
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "action": "deactivate",
+  "updated_count": 5,
+  "updated_users": [{ "id": 1, "email": "user1@example.com", "name": "User 1" }]
+}
+```
+
+#### API Key Management
+
+##### POST /admin/api/keys/create
+
+Create a new API key. Requires `apikey.create` permission.
+
+**Request:**
+
+```json
+{
+  "name": "My Integration",
+  "scopes": ["games:read", "requests:write"],
+  "expires_at": "2025-12-31T23:59:59Z"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "API key created successfully. Save this key securely - you won't see it again!",
+  "key": "ggr_abc123...",
+  "id": 1,
+  "prefix": "ggr_abc",
+  "created_at": "2025-01-05T12:00:00Z"
+}
+```
+
+##### POST /admin/api/keys/delete
+
+Delete an API key. Requires `apikey.delete` permission.
+
+**Request:**
+
+```json
+{
+  "key_id": 1
+}
+```
+
+##### POST /admin/api/keys/revoke
+
+Revoke an API key. Requires `apikey.revoke` permission.
+
+**Request:**
+
+```json
+{
+  "key_id": 1
+}
+```
+
+#### Request Management
+
+##### POST /admin/api/requests/update
+
+Update game request status. Requires `request.approve` or `request.edit` permission.
+
+**Request:**
+
+```json
+{
+  "request_id": 123,
+  "status": "approved",
+  "admin_notes": "Added to library"
+}
+```
+
+**Valid statuses:** `pending`, `approved`, `rejected`, `fulfilled`, `cancelled`
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "request": {
+    "id": 123,
+    "status": "approved",
+    "admin_notes": "Added to library",
+    "updated_at": "2025-01-05T12:00:00Z"
+  }
+}
+```
+
+##### POST /admin/api/requests/bulk-update
+
+Bulk update requests. Limited to 100 per operation.
+
+**Request:**
+
+```json
+{
+  "request_ids": [1, 2, 3],
+  "status": "approved",
+  "admin_notes": "Batch approved"
+}
+```
+
+##### DELETE /admin/api/requests/delete
+
+Delete game requests. Requires `request.delete` permission.
+
+**Request:**
+
+```json
+{
+  "requestIds": [1, 2, 3],
+  "reason": "Duplicate requests"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Successfully deleted 3 request(s)",
+  "deleted_count": 3,
+  "deleted_requests": [{ "id": 1, "title": "Game Title" }]
+}
+```
+
+#### Navigation Management
+
+##### GET /admin/api/navigation
+
+Get all navigation items. Requires `navigation.manage` permission.
+
+##### POST /admin/api/navigation
+
+Create navigation item.
+
+**Request:**
+
+```json
+{
+  "name": "Discord",
+  "href": "https://discord.gg/example",
+  "icon": "heroicons:chat-bubble-left-right",
+  "position": 50,
+  "is_external": true,
+  "is_active": true,
+  "visible_to_all": true,
+  "visible_to_guests": false,
+  "minimum_role": "user"
+}
+```
+
+##### PUT /admin/api/navigation
+
+Update navigation item.
+
+**Request:**
+
+```json
+{
+  "id": 1,
+  "name": "Updated Name",
+  "href": "/new-path",
+  "position": 10
+}
+```
+
+##### DELETE /admin/api/navigation
+
+Delete navigation item.
+
+**Request:**
+
+```json
+{
+  "id": 1
+}
+```
+
+#### Cache Management
+
+##### POST /admin/api/cache/clear
+
+Clear specific cache key.
+
+**Request:**
+
+```json
+{
+  "cacheKey": "game-requests"
+}
+```
+
+##### DELETE /admin/api/cache/clear
+
+Clear all cache.
+
 #### POST /api/admin/clear-cache
 
-Admin cache management.
+Admin cache management for game data.
 
 **Request:**
 
