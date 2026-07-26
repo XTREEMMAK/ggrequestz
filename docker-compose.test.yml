@@ -79,6 +79,9 @@ services:
       # Populated by scripts/testing/seed-romm.sh. Note the INTERNAL hostname:
       # a public URL here would hairpin out and back, which is what v1.3 removed.
       ROMM_SERVER_URL: ${ROMM_SERVER_URL:-}
+      # Exercises the internal/public split from issue #2: the app talks to
+      # romm:8080 while links and covers must point somewhere browsable.
+      ROMM_SERVER_URL_PUBLIC: ${ROMM_SERVER_URL_PUBLIC:-}
       ROMM_API_TOKEN: ${ROMM_API_TOKEN:-}
       ROMM_USERNAME: ${ROMM_USERNAME:-}
       ROMM_PASSWORD: ${ROMM_PASSWORD:-}

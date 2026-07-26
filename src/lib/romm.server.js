@@ -16,7 +16,8 @@ const REQUEST_TIMEOUT_MS = 5000;
 const TOTAL_BUDGET_MS = 12000;
 
 // Configuration variables
-let ROMM_SERVER_URL, ROMM_USERNAME, ROMM_PASSWORD, ROMM_API_TOKEN;
+let ROMM_SERVER_URL, ROMM_SERVER_URL_PUBLIC;
+let ROMM_USERNAME, ROMM_PASSWORD, ROMM_API_TOKEN;
 
 // Lazy load environment variables only when needed on server
 async function loadEnvironmentVariables() {
@@ -30,6 +31,14 @@ async function loadEnvironmentVariables() {
 
   const { env } = await import("$env/dynamic/private");
   ROMM_SERVER_URL = env.ROMM_SERVER_URL || process.env.ROMM_SERVER_URL;
+  // Browser-facing base for "Play in ROMM" links and cover images. On
+  // Kubernetes or any split-network setup, ROMM_SERVER_URL is an internal
+  // service address the browser cannot resolve. Falls back to ROMM_SERVER_URL,
+  // so single-network deployments need no new configuration. Issue #2.
+  ROMM_SERVER_URL_PUBLIC =
+    env.ROMM_SERVER_URL_PUBLIC ||
+    process.env.ROMM_SERVER_URL_PUBLIC ||
+    ROMM_SERVER_URL;
   ROMM_USERNAME = env.ROMM_USERNAME || process.env.ROMM_USERNAME;
   ROMM_PASSWORD = env.ROMM_PASSWORD || process.env.ROMM_PASSWORD;
   // RomM 5.0+ Client API Token ("rmm_"-prefixed). Preferred over the password
@@ -665,8 +674,11 @@ async function batchFormatROMData(roms) {
     const batchPromises = batch.map(async (rom) => {
       if (!rom) return null;
 
+      // Public base: this URL is rendered as an <img src> in the browser.
+      // ROMM covers are not routed through /api/images/proxy — that only
+      // rewrites igdb.com URLs — so the browser fetches this directly.
       let cover_url = rom.url_cover
-        ? `${ROMM_SERVER_URL}${rom.url_cover}`
+        ? `${ROMM_SERVER_URL_PUBLIC}${rom.url_cover}`
         : null;
 
       // Try to get IGDB cover if IGDB ID is available
@@ -716,7 +728,7 @@ async function batchFormatROMData(roms) {
         popularity_score: rating || 0,
         status: "available", // All ROMM games are available to play
         romm_id: rom.id,
-        romm_url: `${ROMM_SERVER_URL}/rom/${rom.id}`,
+        romm_url: `${ROMM_SERVER_URL_PUBLIC}/rom/${rom.id}`,
         platform_id: rom.platform_id ?? rom.platform?.id,
         platform_name: platformName,
         platform_slug: rom.platform_slug || null,
@@ -796,7 +808,7 @@ export async function crossReferenceWithROMM(igdbGames, cookies = null) {
           ...game,
           is_in_romm: true,
           romm_id: rommGame.id,
-          romm_url: `${ROMM_SERVER_URL}/rom/${rommGame.id}`,
+          romm_url: `${ROMM_SERVER_URL_PUBLIC}/rom/${rommGame.id}`,
           platform_name: rommGame.platform?.name,
         };
       }

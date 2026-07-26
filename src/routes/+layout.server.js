@@ -179,8 +179,11 @@ export async function load({ request, cookies }) {
       rommAvailable = rommConfigured && snapshot.ok !== false;
 
       if (rommAvailable) {
-        const { ROMM_SERVER_URL } = process.env;
-        rommServerUrl = ROMM_SERVER_URL || "http://localhost:8080";
+        // Public base — this becomes an href in the nav, so it must be a URL
+        // the browser can resolve, not an internal service address.
+        const { ROMM_SERVER_URL_PUBLIC, ROMM_SERVER_URL } = process.env;
+        rommServerUrl =
+          ROMM_SERVER_URL_PUBLIC || ROMM_SERVER_URL || "http://localhost:8080";
       }
     } catch (rommError) {
       console.warn("Failed to read ROMM availability:", rommError);

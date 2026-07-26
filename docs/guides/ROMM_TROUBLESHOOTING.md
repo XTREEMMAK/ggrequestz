@@ -78,6 +78,28 @@ curl -X POST http://your-ggrequestz-server/api/setup/check \
 # Should return {"success": true}
 ```
 
+### Issue 3: Library loads, but "Play in ROMM" links and covers are broken
+
+The library section renders and the game list is correct, but clicking through
+to ROMM fails and cover images do not load. This means the app can reach ROMM
+but the browser cannot — the two are on different networks.
+
+It happens whenever `ROMM_SERVER_URL` is an address only the server can resolve:
+a Kubernetes service name (`http://romm.media.svc:8080`), a Docker network alias
+(`http://romm:8080`), or a private IP behind a VPN. Those are the _right_ values
+for the API calls — an internal hostname avoids a hairpin out through DNS, TLS
+and your reverse proxy — but they are not usable as links.
+
+Set the browser-facing URL separately:
+
+```env
+ROMM_SERVER_URL=http://romm.media.svc:8080     # server-side API calls
+ROMM_SERVER_URL_PUBLIC=https://romm.example.com # links and cover images
+```
+
+`ROMM_SERVER_URL_PUBLIC` defaults to `ROMM_SERVER_URL`, so leave it unset if
+both the app and your users reach ROMM at the same address.
+
 ## Why This Happens
 
 ROMM implements role-based access control where:

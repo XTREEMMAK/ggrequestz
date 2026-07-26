@@ -65,6 +65,9 @@ services:
       GOTIFY_URL: ${GOTIFY_URL:-}
       GOTIFY_TOKEN: ${GOTIFY_TOKEN:-}
       ROMM_SERVER_URL: ${ROMM_SERVER_URL:-}
+      # Browser-facing base for links and covers, when the above is an internal
+      # address the browser cannot resolve. Defaults to ROMM_SERVER_URL.
+      ROMM_SERVER_URL_PUBLIC: ${ROMM_SERVER_URL_PUBLIC:-}
       # RomM 5.0+ Client API Token (preferred; needs the roms.read scope)
       ROMM_API_TOKEN: ${ROMM_API_TOKEN:-}
       # Password-grant fallback for RomM 4.x

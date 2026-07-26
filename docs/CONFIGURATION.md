@@ -101,12 +101,24 @@ If not configured, falls back to in-memory caching.
 
 #### ROMM Integration
 
-| Variable          | Description                                                              | Default |
-| ----------------- | ------------------------------------------------------------------------ | ------- |
-| `ROMM_SERVER_URL` | ROMM server URL. Prefer an internal hostname                             | -       |
-| `ROMM_API_TOKEN`  | Client API Token with the `roms.read` scope (RomM 5.0+, **recommended**) | -       |
-| `ROMM_USERNAME`   | ROMM username (fallback for RomM 4.x)                                    | -       |
-| `ROMM_PASSWORD`   | ROMM password (fallback for RomM 4.x)                                    | -       |
+| Variable                 | Description                                                              | Default           |
+| ------------------------ | ------------------------------------------------------------------------ | ----------------- |
+| `ROMM_SERVER_URL`        | ROMM server URL for server-side API calls. Prefer an internal hostname   | -                 |
+| `ROMM_SERVER_URL_PUBLIC` | Browser-facing ROMM URL for links and cover images                       | `ROMM_SERVER_URL` |
+| `ROMM_API_TOKEN`         | Client API Token with the `roms.read` scope (RomM 5.0+, **recommended**) | -                 |
+| `ROMM_USERNAME`          | ROMM username (fallback for RomM 4.x)                                    | -                 |
+| `ROMM_PASSWORD`          | ROMM password (fallback for RomM 4.x)                                    | -                 |
+
+Set `ROMM_SERVER_URL_PUBLIC` only when the two differ. On Kubernetes, or any
+setup where the app reaches ROMM over an internal network the browser cannot,
+`ROMM_SERVER_URL` is a service address like `http://romm.media.svc:8080` while
+users need `https://romm.example.com`. Without the split, "Play in ROMM" links
+and ROMM cover images point at an address the browser cannot resolve:
+
+```env
+ROMM_SERVER_URL=http://romm.media.svc:8080
+ROMM_SERVER_URL_PUBLIC=https://romm.example.com
+```
 
 `ROMM_API_TOKEN` is preferred: it does not expire, and it avoids storing a
 password. The account behind either method must hold the `roms.read` scope —
