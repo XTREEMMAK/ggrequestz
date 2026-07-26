@@ -7,6 +7,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-26
+
+### ⚠️ Breaking Changes
+
+- **`SESSION_SECRET` is now required.** The app previously fell back to a
+  hardcoded `"your-secret-key"` when the variable was unset, which meant session
+  tokens on those installs were signed with a value published in this
+  repository. That fallback is gone and the app now refuses to start without a
+  real secret. **Set `SESSION_SECRET` before upgrading** — generate one with
+  `openssl rand -hex 32`.
+- **Basic-auth session tokens are now signed.** Existing `basic_auth_session`
+  cookies are invalidated, so basic-auth users must log in again after upgrading.
+- **CSRF origin checking is enabled.** If you run behind a reverse proxy, set
+  `ORIGIN` to the URL users actually type or form submissions will be rejected as
+  cross-site. Logins fail while GET requests keep working, which makes this look
+  stranger than it is.
+
+### ✨ New Features
+
+- **Generic OIDC support.** Works with any standards-compliant provider —
+  Keycloak, Pocket ID, Auth0, Okta, Entra ID — with endpoints resolved from the
+  provider's discovery document and `id_token` validation via JWKS. Manual
+  endpoint overrides are available for providers without discovery. `AUTH_METHOD`
+  accepts `oidc`, `oidc_generic` and `authentik` as equivalents, and the existing
+  `AUTHENTIK_*` variables continue to work unchanged. Fixes #4 and #7, where
+  `oidc_generic` never actually worked.
+- **Configurable claim mapping** via `OIDC_GROUPS_CLAIM`, `OIDC_ROLE_MAP` and
+  `OIDC_ADMIN_GROUP`, replacing hardcoded Authentik-shaped claim handling.
+- **Configurable login button label** via `OIDC_PROVIDER_NAME`, defaulting to
+  "Login with SSO". Authentik-only configs keep their original label.
+- **ROMM Client API Tokens** (`ROMM_API_TOKEN`), the recommended path on RomM
+  5.0+. Unlike the password grant it does not expire and does not require storing
+  a password.
+- **Real error and empty states for the ROMM library**, instead of a silently
+  blank section.
+- **Local Docker test stack** (`docker-compose.test.yml`) building a real
+  installation from the working tree, with live RomM, Keycloak and Authentik
+  fixtures. `make test-up` / `test-seed` / `test-down`; see
+  [docs/setup/TESTING.md](docs/setup/TESTING.md).
+
+### 🐛 Bug Fixes
+
+- **Admins were demoted on every login** by any IdP that does not send a `groups`
+  claim. Keycloak does not send one without an explicit mapper, so this hit
+  immediately. An absent claim now leaves locally assigned roles untouched.
+- **The login page showed the wrong provider**, ignoring `OIDC_*` configuration.
+- **A request-coalescing cache optimisation deadlocked every authenticated
+  page.** Reverted. Nested `withCache()` calls on the same key awaited their own
+  outer promise forever; `/login` was unaffected, which is why it went unnoticed.
+- ROMM failures reported real status codes instead of being swallowed into an
+  empty list — a 403 from an under-privileged account is now distinguishable
+  from a timeout.
+- The basic-auth fallback no longer logs as an error when it is working normally.
+- The startup cache warm-up no longer makes an HTTP call that always returned 401.
+- Admin API endpoints now require authentication and the appropriate permission.
+- The OpenAPI spec served at `/api/openapi.json` now includes the 14 admin
+  endpoints. They had been added to a second, unserved copy of the spec, so they
+  never reached `/api/docs`. Path definitions were also relative to a `/api`
+  server base that does not apply to `/admin/api/...` routes, so "Try it out"
+  would have called the wrong URL.
+
+### ⚡ Performance
+
+- **Cold start went from roughly 9 seconds to milliseconds.** The root layout
+  awaited an outbound ROMM call on _every_ route, including the unauthenticated
+  `/login`, with no timeout — so when ROMM was unreachable, the first byte of
+  every page waited for a TCP timeout.
+- Every outbound call now has a hard deadline via `AbortSignal.timeout()`.
+- Database pool construction and cache warming moved to boot rather than the
+  first request; pooled connections are kept warm.
+- The ROMM library section streams instead of blocking server-side rendering.
+- The two per-render queries on `/login` are cached and run concurrently.
+- Redis keeps reconnecting rather than giving up after a transient failure.
+
+### 🔧 Technical Changes
+
+- Runtime image moved from `node:18-alpine` to `node:22-alpine`.
+- Server-side `console` output is no longer stripped from production bundles.
+  `drop_console` had been removing every server log, which is how integration
+  failures became invisible to self-hosters reading container logs.
+- CSP set to `nonce` mode, required for streamed rendering.
+- `.dockerignore` is now tracked in git. It had been listed in `.gitignore`, so
+  the GHCR build — which runs from a fresh checkout — was building with no
+  `.dockerignore` at all. Tests, fixtures and seed scripts no longer ship inside
+  the published image.
+- `Makefile`: migrated to Compose v2, and repaired `dev`, `prod`, `setup` and
+  `dev-setup`, which referenced `.env.dev` and `.env.docker` — neither of which
+  exists in the repo. Removed `prod-full`, which enabled two Compose profiles
+  that are not defined anywhere and was therefore identical to `prod`.
+
+### 📚 Documentation
+
+- `docs/setup/OIDC_SETUP.md` rewritten against the shipped implementation. It had
+  documented eight `OIDC_*` variables that no code read.
+- Documented six variables the code reads but `.env.example` omitted: `ORIGIN`,
+  `AUTO_MIGRATE`, `OIDC_ADMIN_GROUP`, `OIDC_END_SESSION_URL`,
+  `POSTGRES_POOL_MAX` and `PM2_CRON_RESTART`.
+- Corrected `OIDC_SCOPE` to `OIDC_SCOPES` in the configuration guide; the
+  documented name was never read, so anyone following it silently got the
+  default scopes.
+- Removed `GOTIFY_EXTERNAL_PORT` and `ACME_EMAIL` from `.env.example`, along with
+  the `gotify-data` and `traefik-letsencrypt` volumes. No code read the
+  variables and no service or profile existed for either.
+- Added `docs/dev-notes/V1.3_FINDINGS.md` recording the root causes above and the
+  work still outstanding.
+- `CONTRIBUTING.md` no longer claims ESLint, `npm run lint:fix` or
+  `npm run test:integration`, none of which exist.
+
+## [1.2.6] - 2026-01-05
+
+### 📚 Documentation
+
+- **Comprehensive Admin API Documentation**
+  - Added complete documentation for all admin API endpoints to OpenAPI specification
+  - Documented 14+ admin endpoints across 6 categories in interactive API docs
+  - Added detailed request/response schemas for all admin operations
+
+- **Admin Endpoint Categories Documented**
+  - **Settings Management**: System settings, global content filters, Gotify/ROMM connection testing
+  - **User Management**: Individual and bulk user updates, role assignment, ban/unban/delete
+  - **API Key Management**: Create, delete, and revoke API keys with scopes
+  - **Request Management**: Update status, bulk operations, delete requests
+  - **Navigation Management**: Full CRUD operations for navigation items
+  - **Cache Management**: Clear specific keys or all cache
+
+- **Enhanced API.md Documentation**
+  - Expanded Admin Endpoints section with request/response examples
+  - Added permission requirements for each endpoint
+  - Documented all available actions and their parameters
+  - Added valid status values and bulk operation limits
+
+### 🔧 Technical Changes
+
+- Updated OpenAPI specification version to 1.2.6
+- Added new component schemas: GlobalContentFilters, NavigationItem, ApiKey
+- Added "Admin" tag to OpenAPI spec grouping all admin endpoints
+
 ## [1.2.5] - 2025-10-06
 
 ### ✨ New Features
@@ -1084,10 +1221,40 @@ When upgrading from v1.0.2:
 - **v1.0.2** (2025-08-18): Docker-specific fixes and mobile improvements
 - **v1.0.3** (2025-09-23): Pre-built Docker images and authentication improvements
 - **v1.1.0** (2025-09-24): Security features, 404 protection, watchlist improvements
-- **v1.2.0** (Planned): Enhanced admin features and analytics
+- **v1.2.0** (2025-09-27): Content filtering, user registration, API utilities
+- **v1.2.5** (2025-10-06): Global content filtering system
+- **v1.2.6** (2026-01-05): Comprehensive Admin API documentation
+- **v1.3.0** (2026-07-26): Generic OIDC, ROMM API tokens, cold-start fix. **Requires `SESSION_SECRET`**
 - **v2.0.0** (Planned): Major UI/UX improvements and new integrations
 
 ## Migration Guides
+
+### Upgrading to v1.3.0
+
+**This release will not start without `SESSION_SECRET`.** Set it before you
+upgrade, not after:
+
+```bash
+openssl rand -hex 32
+```
+
+Add the result to your `.env` as `SESSION_SECRET=`, then upgrade. If the app
+exits immediately on start, this is why — check the container logs.
+
+Also:
+
+1. **Behind a reverse proxy, set `ORIGIN`** to the URL your users type
+   (e.g. `https://requests.example.com`). Without it, logins fail with
+   "Cross-site POST form submissions are forbidden" while every GET request
+   keeps working normally.
+2. **Basic-auth users will be logged out once.** Session tokens are now signed,
+   which invalidates existing cookies. No action needed.
+3. **Authentik users need no configuration changes.** The `AUTHENTIK_*`
+   variables still work. To move to the generic names, rename them to `OIDC_*`
+   and set `OIDC_ISSUER_URL` to your issuer.
+4. If you previously set `OIDC_SCOPE`, rename it to `OIDC_SCOPES` — the singular
+   form was documented but never read.
+5. Run database migrations: `npm run db:migrate` (or leave `AUTO_MIGRATE=true`).
 
 ### Upgrading to v1.0.2
 
