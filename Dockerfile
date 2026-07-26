@@ -1,5 +1,5 @@
 # Multi-stage build for GameRequest application
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -20,7 +20,7 @@ COPY .env.docker-build .env
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:22-alpine AS production
 
 # Build arguments for user/group IDs
 ARG PUID=1000
