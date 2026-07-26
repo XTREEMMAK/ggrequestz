@@ -6,33 +6,44 @@ Complete reference for all GG Requestz configuration options.
 
 ### System Configuration
 
-| Variable          | Description                                | Default                 | Required |
-| ----------------- | ------------------------------------------ | ----------------------- | -------- |
-| `PUID`            | User ID for file permissions               | `1000`                  | No       |
-| `PGID`            | Group ID for file permissions              | `1000`                  | No       |
-| `TZ`              | Timezone                                   | `UTC`                   | No       |
-| `APP_PORT`        | Application port                           | `3000`                  | No       |
-| `NODE_ENV`        | Environment mode                           | `production`            | No       |
-| `PM2_INSTANCES`   | PM2 worker instances                       | `max`                   | No       |
-| `PUBLIC_SITE_URL` | Public URL for API docs and external links | `http://localhost:3000` | No       |
+| Variable           | Description                                   | Default                 | Required       |
+| ------------------ | --------------------------------------------- | ----------------------- | -------------- |
+| `PUID`             | User ID for file permissions                  | `1000`                  | No             |
+| `PGID`             | Group ID for file permissions                 | `1000`                  | No             |
+| `TZ`               | Timezone                                      | `UTC`                   | No             |
+| `APP_PORT`         | Application port                              | `3000`                  | No             |
+| `NODE_ENV`         | Environment mode                              | `production`            | No             |
+| `PM2_INSTANCES`    | PM2 worker instances                          | `max`                   | No             |
+| `PM2_CRON_RESTART` | Cron expression for scheduled worker restarts | -                       | No             |
+| `PUBLIC_SITE_URL`  | Public URL for API docs and external links    | `http://localhost:3000` | No             |
+| `ORIGIN`           | Canonical origin for CSRF and OIDC redirects  | `PUBLIC_SITE_URL`       | Behind a proxy |
+
+`ORIGIN` matters more than it looks. `adapter-node` rejects any form submission
+whose `Origin` header disagrees with it, so a wrong value makes logins fail with
+"Cross-site POST form submissions are forbidden" while GET requests work fine.
 
 ### Database Configuration
 
-| Variable            | Description         | Default      | Required |
-| ------------------- | ------------------- | ------------ | -------- |
-| `POSTGRES_HOST`     | PostgreSQL host     | `postgres`   | Yes      |
-| `POSTGRES_PORT`     | PostgreSQL port     | `5432`       | Yes      |
-| `POSTGRES_DB`       | Database name       | `ggrequestz` | Yes      |
-| `POSTGRES_USER`     | Database user       | `postgres`   | Yes      |
-| `POSTGRES_PASSWORD` | Database password   | -            | **Yes**  |
-| `AUTO_MIGRATE`      | Auto-run migrations | `true`       | No       |
+| Variable            | Description                              | Default      | Required |
+| ------------------- | ---------------------------------------- | ------------ | -------- |
+| `POSTGRES_HOST`     | PostgreSQL host                          | `postgres`   | Yes      |
+| `POSTGRES_PORT`     | PostgreSQL port                          | `5432`       | Yes      |
+| `POSTGRES_DB`       | Database name                            | `ggrequestz` | Yes      |
+| `POSTGRES_USER`     | Database user                            | `postgres`   | Yes      |
+| `POSTGRES_PASSWORD` | Database password                        | -            | **Yes**  |
+| `AUTO_MIGRATE`      | Auto-run migrations                      | `true`       | No       |
+| `POSTGRES_POOL_MAX` | Max pool connections, **per PM2 worker** | `10`         | No       |
+
+With `PM2_INSTANCES=max`, the real connection ceiling is `POSTGRES_POOL_MAX`
+multiplied by your core count. Raise Postgres's `max_connections` to match
+before increasing it.
 
 ### Authentication
 
-| Variable         | Description                                                  | Default | Required |
-| ---------------- | ------------------------------------------------------------ | ------- | -------- |
-| `AUTH_METHOD`    | Authentication method (`basic`, `authentik`, `oidc_generic`) | `basic` | Yes      |
-| `SESSION_SECRET` | Session encryption key (32+ chars)                           | -       | **Yes**  |
+| Variable         | Description                                                          | Default | Required |
+| ---------------- | -------------------------------------------------------------------- | ------- | -------- |
+| `AUTH_METHOD`    | Authentication method (`basic`, `oidc`, `oidc_generic`, `authentik`) | `basic` | Yes      |
+| `SESSION_SECRET` | Session encryption key (32+ chars)                                   | -       | **Yes**  |
 
 #### Basic Auth
 
@@ -48,13 +59,22 @@ No additional configuration needed. Admin account created on first visit. New us
 
 #### Generic OIDC Configuration
 
-| Variable             | Description        | Required                             |
-| -------------------- | ------------------ | ------------------------------------ |
-| `OIDC_CLIENT_ID`     | OIDC client ID     | Yes (if using OIDC)                  |
-| `OIDC_CLIENT_SECRET` | OIDC client secret | Yes (if using OIDC)                  |
-| `OIDC_ISSUER_URL`    | OIDC provider URL  | Yes (if using OIDC)                  |
-| `OIDC_REDIRECT_URI`  | OAuth callback URL | Yes (if using OIDC)                  |
-| `OIDC_SCOPE`         | OAuth scopes       | No (default: `openid profile email`) |
+| Variable             | Description                                                    | Required                             |
+| -------------------- | -------------------------------------------------------------- | ------------------------------------ |
+| `OIDC_CLIENT_ID`     | OIDC client ID                                                 | Yes (if using OIDC)                  |
+| `OIDC_CLIENT_SECRET` | OIDC client secret                                             | Yes (if using OIDC)                  |
+| `OIDC_ISSUER_URL`    | OIDC provider URL                                              | Yes (if using OIDC)                  |
+| `OIDC_REDIRECT_URI`  | OAuth callback URL                                             | Yes (if using OIDC)                  |
+| `OIDC_SCOPES`        | OAuth scopes, space-separated                                  | No (default: `openid profile email`) |
+| `OIDC_PROVIDER_NAME` | Login button label, rendered as "Login with &lt;name&gt;"      | No (default: `SSO`)                  |
+| `OIDC_GROUPS_CLAIM`  | Name of the claim carrying group membership                    | No (default: `groups`)               |
+| `OIDC_ROLE_MAP`      | Group-to-role mapping, e.g. `my-admins:admin,my-staff:manager` | No                                   |
+| `OIDC_ADMIN_GROUP`   | Members of this group are granted admin                        | No                                   |
+
+Endpoints are discovered from `<OIDC_ISSUER_URL>/.well-known/openid-configuration`.
+For providers without a discovery document, set them manually with
+`OIDC_AUTH_URL`, `OIDC_TOKEN_URL`, `OIDC_USERINFO_URL`, `OIDC_JWKS_URI` and
+`OIDC_END_SESSION_URL`.
 
 ### IGDB API (Required)
 
@@ -81,11 +101,18 @@ If not configured, falls back to in-memory caching.
 
 #### ROMM Integration
 
-| Variable          | Description     | Default |
-| ----------------- | --------------- | ------- |
-| `ROMM_SERVER_URL` | ROMM server URL | -       |
-| `ROMM_USERNAME`   | ROMM username   | -       |
-| `ROMM_PASSWORD`   | ROMM password   | -       |
+| Variable          | Description                                                              | Default |
+| ----------------- | ------------------------------------------------------------------------ | ------- |
+| `ROMM_SERVER_URL` | ROMM server URL. Prefer an internal hostname                             | -       |
+| `ROMM_API_TOKEN`  | Client API Token with the `roms.read` scope (RomM 5.0+, **recommended**) | -       |
+| `ROMM_USERNAME`   | ROMM username (fallback for RomM 4.x)                                    | -       |
+| `ROMM_PASSWORD`   | ROMM password (fallback for RomM 4.x)                                    | -       |
+
+`ROMM_API_TOKEN` is preferred: it does not expire, and it avoids storing a
+password. The account behind either method must hold the `roms.read` scope —
+RomM issues a token containing only the scopes the account actually has, so an
+under-privileged account authenticates successfully and then gets a 403 on every
+library request.
 
 #### Gotify Notifications
 

@@ -27,6 +27,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Per PM2 worker — the real ceiling is this times your core count
+      POSTGRES_POOL_MAX: ${POSTGRES_POOL_MAX:-10}
 
       # Authentication
       AUTH_METHOD: ${AUTH_METHOD}
@@ -72,6 +74,7 @@ services:
 
       # Application Configuration
       PM2_INSTANCES: ${PM2_INSTANCES:-max}
+      PM2_CRON_RESTART: ${PM2_CRON_RESTART:-}
       NODE_ENV: production
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
@@ -146,11 +149,7 @@ volumes:
     driver: local
   redis-data:
     driver: local
-  gotify-data:
-    driver: local
   ggrequestz-logs:
-    driver: local
-  traefik-letsencrypt:
     driver: local
 
 networks:
