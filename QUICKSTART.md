@@ -43,7 +43,8 @@ IGDB_CLIENT_SECRET=your_igdb_client_secret
 # Session security (generate a random 32+ character string)
 SESSION_SECRET=generate_random_32_character_string_here
 
-# Choose authentication method: basic, authentik, or oidc_generic
+# Choose authentication method: basic, oidc, oidc_generic, or authentik
+# (the last three are equivalent and all select OIDC/SSO)
 AUTH_METHOD=basic
 ```
 
@@ -131,8 +132,12 @@ Add these to `.env` if you want to enable them:
 ```bash
 # ROMM Integration
 ROMM_SERVER_URL=http://your-romm-server
-ROMM_USERNAME=your_username
-ROMM_PASSWORD=your_password
+# Recommended for RomM 5.0+: a Client API Token with the "roms.read" scope.
+# It does not expire and avoids storing your password.
+ROMM_API_TOKEN=your_client_api_token
+# Fallback for RomM 4.x:
+#ROMM_USERNAME=your_username
+#ROMM_PASSWORD=your_password
 
 # Gotify Notifications
 GOTIFY_URL=http://your-gotify-server
@@ -171,7 +176,7 @@ docker compose up -d
 ## Next Steps
 
 - [Full Configuration Guide](docs/CONFIGURATION.md) - All configuration options
-- [Production Deployment](docs/DEPLOYMENT.md) - SSL, reverse proxy, backups
+- [Production Deployment](docs/setup/DEPLOYMENT.md) - SSL, reverse proxy, backups
 - [Admin Guide](docs/setup/AUTHENTIK_ADMIN_SETUP.md) - User management
 - [API Documentation](docs/API.md) - REST API reference
 

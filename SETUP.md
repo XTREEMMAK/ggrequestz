@@ -2,7 +2,8 @@
 
 ## Quick Start
 
-The application is now ready to run! Dependencies have been installed and the development server is working.
+This guide covers running G.G Requestz from source for development. For a Docker
+deployment, see [QUICKSTART.md](QUICKSTART.md) instead.
 
 ### 1. Start Development Server
 
@@ -10,7 +11,9 @@ The application is now ready to run! Dependencies have been installed and the de
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173` (or the next available port).
+The app will be available at `http://localhost:5174`. The port is fixed —
+`vite.config.js` sets `strictPort: true`, so the dev server exits rather than
+falling through to another port if 5174 is taken.
 
 ### 2. Environment Configuration
 
@@ -47,7 +50,7 @@ IGDB_CLIENT_SECRET=your_igdb_client_secret
 **Getting IGDB Credentials:**
 
 1. Create a Twitch developer account at [dev.twitch.tv/console](https://dev.twitch.tv/console)
-2. Register your application with OAuth redirect URL: `http://localhost:5173`
+2. Register your application with OAuth redirect URL: `http://localhost:5174`
 3. Use the Client ID and Client Secret as your IGDB credentials
 4. For detailed instructions: https://api-docs.igdb.com/#getting-started
 
@@ -66,18 +69,17 @@ SESSION_SECRET=your_random_session_secret
 - Enables user login, watchlists, and requests
 - Can use other OIDC providers by modifying auth.js
 
-#### **Level 3: Search Engine (Optional)**
+#### **Level 3: Redis Cache (Optional)**
 
 ```bash
-# Typesense (Self-hosted search)
-TYPESENSE_API_KEY=your_typesense_key
-TYPESENSE_HOST=your_typesense_host
-TYPESENSE_PORT=443
-TYPESENSE_PROTOCOL=https
+REDIS_URL=redis://localhost:6379
 ```
 
-- Enables advanced search and filtering
-- Falls back to IGDB API search if not configured
+- Speeds up repeated game lookups and permission checks
+- Falls back to an in-memory cache if not configured
+
+> Typesense was removed in v1.1.4. Search now goes directly to the IGDB API;
+> there is no separate search engine to configure.
 
 #### **Level 4: Data Persistence (Optional)**
 
@@ -152,13 +154,13 @@ npm run format      # Format code
 
 ## 🚨 Common Issues
 
-**Port in Use**: The dev server will automatically find the next available port.
+**Port in Use**: The dev server exits if 5174 is taken (`strictPort: true`). Free the port or change it in `vite.config.js`.
 
 **Mock Data**: If you see "No games found", this is normal without IGDB API configured.
 
-**Authentication**: Login button will show an error without Authentik configured - this is expected.
+**Authentication**: With `AUTH_METHOD=basic` (the default) you create an admin on first visit. The SSO login button errors until an OIDC provider is configured - this is expected.
 
-**Search Results**: Without Typesense, search falls back to IGDB API or mock data.
+**Search Results**: Search requires IGDB credentials; without them you get mock data.
 
 ## 📚 Next Steps
 

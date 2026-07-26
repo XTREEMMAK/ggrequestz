@@ -31,7 +31,7 @@ This project is committed to providing a welcoming and inclusive environment for
 
 Before contributing, ensure you have:
 
-- **Node.js 18+** and npm installed
+- **Node.js 22+** and npm installed (the Docker image and CI both run Node 22)
 - **PostgreSQL 12+** running locally
 - **Docker and Docker Compose** (for containerized development)
 - **Git** configured with your name and email
@@ -153,7 +153,6 @@ npm test
 
 # Run specific test suites
 npm run test:unit
-npm run test:integration
 npm run test:e2e
 
 # Run tests with coverage
@@ -254,17 +253,18 @@ Brief description of changes
 
 ### Code Style
 
-We use **Prettier** and **ESLint** for consistent code formatting:
+We use **Prettier** for consistent code formatting. There is no ESLint config in
+this repo — `npm run lint` is `prettier --check .`, and CI gates on it.
 
 ```bash
-# Format code
+# Format code (this is also the "fix" command)
 npm run format
 
-# Check linting
+# Check formatting, as CI does
 npm run lint
 
-# Fix auto-fixable issues
-npm run lint:fix
+# Type-check Svelte components
+npm run check
 ```
 
 ### Svelte/JavaScript Guidelines

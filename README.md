@@ -6,7 +6,7 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.2.5-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
@@ -15,9 +15,9 @@ A modern game discovery and request management platform with IGDB integration, R
 - **🛡️ Content Filtering** - Comprehensive ESRB rating filters, custom content blocks, and global game banning
 - **🔒 Global Content Controls** - System-wide content filtering that supersedes user preferences for safe environments
 - **📚 ROMM Integration** - Seamless integration with your ROMM game library
-- **🔐 Flexible Authentication** - Support for OIDC providers (Authentik, Keycloak, Auth0) and basic auth with user registration
+- **🔐 Flexible Authentication** - Any standards-compliant OIDC provider (Keycloak, Pocket ID, Authentik, Auth0, Okta, Entra ID) via discovery, plus basic auth with user registration
 - **🔑 API Key Management** - Generate scoped API keys for programmatic access with Bearer token authentication
-- **📚 Interactive API Docs** - Complete OpenAPI 3.0 specification with dynamic server URLs at `/api/docs`
+- **📚 Interactive API Docs** - Complete OpenAPI 3.1 specification with dynamic server URLs at `/api/docs`
 - **⚡ High Performance** - Redis caching, hover preloading, and optimized data fetching
 - **🎨 Modern UI** - Responsive design with dark mode and smooth animations
 
@@ -71,7 +71,7 @@ docker compose up -d
 
 - [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, Basic Auth
 - [ROMM Integration](docs/guides/INTEGRATION_GUIDE.md) - Connect with ROMM
-- [Content Filtering](docs/guides/CONTENT_FILTERING.md) - User and global filtering options
+- [Content Filtering](#global-content-filtering) - User and global filtering options
 - [API Documentation](docs/API.md) - REST API reference
 - [Interactive API Docs](/api/docs) - OpenAPI specification with live examples
 
@@ -103,7 +103,7 @@ IGDB (Internet Game Database) provides the game data for G.G. Requestz. To get y
    - Click "Register Your Application"
    - Fill in the required details:
      - **Name**: G.G. Requestz (or your preferred name)
-     - **OAuth Redirect URLs**: `http://localhost:5173` (for development)
+     - **OAuth Redirect URLs**: `http://localhost:5174` (for development)
      - **Category**: Application Integration
 
 3. **Get Your Credentials**
@@ -126,10 +126,10 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:v1.2.3
+docker pull ghcr.io/xtreemmak/ggrequestz:v1.3.0
 ```
 
-> **📋 v1.2.3 Release Notes:** **CRITICAL SECURITY FIX** - Fixed API authentication bypass vulnerability. Added complete API Key Management System with scoped permissions, dynamic OpenAPI specification with environment-based URLs, admin UI improvements (sidebar fixes), and enhanced caching. All API endpoints now properly require authentication by default.
+> **📋 v1.3.0 Release Notes:** Generic OIDC support for any standards-compliant provider via discovery, ROMM Client API Tokens, and a large cold-start performance fix. **Breaking:** `SESSION_SECRET` is now required — the app will not start without it. See the [changelog](CHANGELOG.md) before upgrading.
 
 ## 🤝 Contributing
 
@@ -142,5 +142,5 @@ GPLv3 License - see [LICENSE](LICENSE) file for details.
 ## 🔗 Links
 
 - [Changelog](CHANGELOG.md) - Version history and updates
-- [Issues](https://github.com/yourusername/ggrequestz/issues) - Report bugs or request features
-- [Discord](https://discord.gg/yourdiscord) - Community support
+- [Issues](https://github.com/XTREEMMAK/ggrequestz/issues) - Report bugs or request features
+- [Discussions](https://github.com/XTREEMMAK/ggrequestz/discussions) - Questions and community support
