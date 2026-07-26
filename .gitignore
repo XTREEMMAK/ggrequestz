@@ -70,7 +70,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Docker
-.dockerignore
+# .dockerignore is deliberately NOT ignored: the GHCR build in
+# .github/workflows/docker-publish.yml builds from a fresh checkout, so an
+# untracked .dockerignore means the published image is built without one.
 docker-compose.override.yml
 
 # Database
@@ -113,3 +115,13 @@ backups/
 .vitest/
 vitest.config.js.timestamp-*
 vitest.config.ts.timestamp-*
+
+# Planning records and disposable test fixtures
+/tmp
+
+# curl cookie jars from manual API testing
+cookies.txt
+
+# Per-developer Claude Code settings. .claude/settings.json is the shared,
+# checked-in one; .local.json is personal and must not be.
+.claude/settings.local.json
