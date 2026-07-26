@@ -228,10 +228,21 @@ export async function verifySessionToken(token) {
     const { payload } = await jwtVerify(token, secret);
     return payload;
   } catch (error) {
-    console.error(
-      "❌ AUTH DEBUG: Session token verification failed:",
-      error.message,
-    );
+    // ERR_JWS_INVALID just means "this string isn't a JWT". That is an expected
+    // outcome, not a failure: getSession() tries JWT verification first and
+    // then falls back to the basic-auth token format, so a basic-auth cookie
+    // always lands here on the way to succeeding. Logging it as an error made
+    // every such request look broken — including ones that returned 200.
+    if (
+      error?.code === "ERR_JWS_INVALID" ||
+      error?.code === "ERR_JWT_INVALID"
+    ) {
+      return null;
+    }
+
+    // A well-formed token that fails verification is worth knowing about:
+    // it means an expired session, a rotated SESSION_SECRET, or tampering.
+    console.warn(`⚠️ Session token rejected: ${error.message}`);
     return null;
   }
 }
