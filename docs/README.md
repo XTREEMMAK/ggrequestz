@@ -6,7 +6,7 @@ Welcome to the comprehensive documentation for GG Requestz. This directory conta
 
 ### 🚀 Getting Started
 
-- [Setup Guide](../SETUP.md) - Quick start and environment configuration
+- [Quick Start Guide](../QUICKSTART.md) - Docker setup, running from source, environment configuration
 - [Architecture Overview](ARCHITECTURE.md) - System design and components
 
 ### ⚙️ Setup & Configuration
@@ -42,17 +42,24 @@ docs/
 ├── README.md                    # This index file
 ├── ARCHITECTURE.md              # System architecture overview
 ├── API.md                       # API documentation
+├── CONFIGURATION.md             # Full environment variable reference
 ├── setup/                       # Setup and configuration guides
 │   ├── DATABASE_SETUP.md        # Database configuration
 │   ├── DOCKER_SETUP.md          # Docker deployment
 │   ├── DOCKER_UPDATES.md        # Docker updates
 │   ├── DEPLOYMENT.md            # Production deployment
+│   ├── TESTING.md               # Local Docker test stack with live fixtures
 │   ├── AUTHENTIK_ADMIN_SETUP.md # Authentication setup
-│   ├── OIDC_SETUP.md           # OIDC configuration
+│   ├── OIDC_SETUP.md            # OIDC configuration
 │   └── NAVIGATION_SETUP.md      # Navigation configuration
-└── guides/                      # Integration and troubleshooting guides
-    ├── INTEGRATION_GUIDE.md     # Third-party integrations
-    └── ROMM_TROUBLESHOOTING.md  # ROMM troubleshooting
+├── guides/                      # Integration and troubleshooting guides
+│   ├── INTEGRATION_GUIDE.md     # Third-party integrations
+│   ├── ROMM_TROUBLESHOOTING.md  # ROMM troubleshooting
+│   ├── MIGRATION_v1.0.3.md      # Upgrade notes for v1.0.3
+│   └── RELEASE_GUIDE.md         # Cutting a release
+└── dev-notes/                   # Records of past investigations
+    ├── V1.3_FINDINGS.md         # v1.3 root causes and open items
+    └── ARCHIVE_LOGIN_ANIMATION.md
 ```
 
 ## 🆘 Getting Help
@@ -73,4 +80,4 @@ This documentation is maintained alongside the codebase. When making changes:
 
 ---
 
-**Need to get started quickly?** Jump to the [Setup Guide](../SETUP.md)!
+**Need to get started quickly?** Jump to the [Quick Start Guide](../QUICKSTART.md)!

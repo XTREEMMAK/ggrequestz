@@ -153,4 +153,4 @@ When adding new scripts:
 
 ---
 
-For additional help, see the [main documentation](../docs/README.md) or [setup guide](../SETUP.md).
+For additional help, see the [main documentation](../docs/README.md) or [quick start guide](../QUICKSTART.md).

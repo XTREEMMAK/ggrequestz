@@ -173,12 +173,74 @@ docker compose down -v  # Warning: Deletes all data!
 docker compose up -d
 ```
 
+## Running from Source (Development)
+
+The Docker flow above is the supported way to run G.G Requestz. To develop
+against it instead:
+
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
+
+The app serves on <http://localhost:5174>. The port is fixed — `vite.config.js`
+sets `strictPort: true`, so the dev server exits rather than falling through to
+another port if 5174 is taken.
+
+You still need a PostgreSQL instance; the app will not start without one. The
+quickest option is to run just the database from the compose file and point
+`.env` at it:
+
+```bash
+docker compose up -d postgres redis
+npm run db:migrate
+```
+
+### What each service gets you
+
+Nothing but PostgreSQL is strictly required, but the app is progressively more
+useful as you add:
+
+| Service        | Variables                              | Without it                                       |
+| -------------- | -------------------------------------- | ------------------------------------------------ |
+| **PostgreSQL** | `POSTGRES_*`                           | The app does not start                           |
+| **IGDB**       | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | No game data — search and browse return nothing  |
+| **Redis**      | `REDIS_URL`                            | Falls back to an in-memory cache, per PM2 worker |
+| **OIDC**       | `OIDC_*`                               | Basic auth only (which is the default anyway)    |
+| **ROMM**       | `ROMM_SERVER_URL` + `ROMM_API_TOKEN`   | No library section                               |
+| **Gotify/n8n** | `GOTIFY_*`, `N8N_WEBHOOK_URL`          | No outbound notifications                        |
+
+Get IGDB credentials from the [Twitch Developer Console](https://dev.twitch.tv/console)
+— register an application with OAuth redirect URL `http://localhost:5174`, then
+use its Client ID and Secret. See [api-docs.igdb.com](https://api-docs.igdb.com/#getting-started).
+
+### Development commands
+
+```bash
+npm run dev         # Dev server on :5174
+npm run build       # Production build
+npm run preview     # Preview the production build
+npm run check       # svelte-check
+npm run lint        # prettier --check (this is what CI gates on)
+npm run format      # prettier --write
+npm run test:unit   # vitest
+npm run test:e2e    # playwright
+```
+
+For integration testing against a real installation with live RomM and Keycloak
+fixtures, see [docs/setup/TESTING.md](docs/setup/TESTING.md).
+
 ## Next Steps
 
 - [Full Configuration Guide](docs/CONFIGURATION.md) - All configuration options
 - [Production Deployment](docs/setup/DEPLOYMENT.md) - SSL, reverse proxy, backups
-- [Admin Guide](docs/setup/AUTHENTIK_ADMIN_SETUP.md) - User management
+- [Database Setup](docs/setup/DATABASE_SETUP.md) - PostgreSQL and migrations
+- [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, basic auth
+- [Navigation Setup](docs/setup/NAVIGATION_SETUP.md) - Custom navigation
+- [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
 - [API Documentation](docs/API.md) - REST API reference
+- [Contributing Guide](CONTRIBUTING.md) - Development guidelines
 
 ## Getting Help
 
