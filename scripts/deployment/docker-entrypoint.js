@@ -212,58 +212,6 @@ async function initializeDatabase() {
   // Legacy init script disabled - migrations handle all table creation
 }
 
-async function warmCaches() {
-  console.log("🔥 Warming application caches...");
-
-  // Issue #9: this used to hardcode `http://localhost:3000`, which fails for
-  // two reasons. `localhost` resolves to ::1 ahead of 127.0.0.1 inside the
-  // container while the Node server binds IPv4 only, and the port is not
-  // always 3000. Address the loopback interface explicitly.
-  //
-  // Deliberately NOT using PUBLIC_SITE_URL: that would route the warm-up out
-  // through DNS, TLS and the reverse proxy and back, which is the hairpin this
-  // release exists to remove.
-  const port = process.env.PORT || "3000";
-  const baseUrl = `http://127.0.0.1:${port}`;
-
-  try {
-    await runCommand("node", [
-      "-e",
-      `
-      const baseUrl = ${JSON.stringify(baseUrl)};
-
-      async function warmUp() {
-        try {
-          console.log('📦 Pre-warming caches for faster initial load...');
-
-          for (const path of ['/api/games/popular?page=1&limit=8', '/api/games/recent?page=1&limit=8']) {
-            try {
-              const resp = await fetch(baseUrl + path, { signal: AbortSignal.timeout(15000) });
-              if (resp.ok) {
-                console.log('✅ Warmed ' + path);
-              } else {
-                console.log('⚠️ Warm-up got HTTP ' + resp.status + ' for ' + path);
-              }
-            } catch (error) {
-              console.log('⚠️ Warm-up request failed for ' + path + ': ' + error.message);
-            }
-          }
-
-          console.log('🔥 Cache warming complete');
-        } catch (error) {
-          console.log('⚠️ Cache warming failed (non-critical):', error.message);
-        }
-      }
-
-      // Wait for app to be ready then warm caches
-      setTimeout(warmUp, 5000);
-      `,
-    ]);
-  } catch (error) {
-    console.log("⚠️ Cache warming failed (non-critical):", error.message);
-  }
-}
-
 /**
  * Tell adapter-node what the application's public URL is.
  *
@@ -323,12 +271,14 @@ async function startApplication() {
       env: process.env,
     });
 
-    // Warm caches after a delay (non-blocking)
-    if (process.env.NODE_ENV === "production") {
-      setTimeout(() => {
-        warmCaches().catch(console.error);
-      }, 10000); // Wait 10 seconds for app to fully start
-    }
+    // Cache warming is handled in-process by the `init` hook in
+    // src/hooks.server.js, which runs once per worker at startup.
+    //
+    // There used to be a second warm-up here that curled /api/games/popular and
+    // /api/games/recent over HTTP. It could never work: those routes require
+    // authentication, so every request returned 401. The failure was invisible
+    // because the old code only logged on success and `drop_console` stripped
+    // server logs from production builds anyway.
 
     // Handle process events
     appProcess.on("close", (code) => {

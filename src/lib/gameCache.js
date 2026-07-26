@@ -409,7 +409,11 @@ export async function warmUpCache() {
 
     // Warm up recent games (reduced from 30 to 12)
     await getRecentGames(12);
-  } catch (error) {}
+  } catch (error) {
+    // Never silent: a warm-up that always fails should be visible, not guessed
+    // at. The cache still fills lazily on demand, so this is not fatal.
+    console.warn(`⚠️ Cache warm-up failed: ${error?.message || error}`);
+  }
 }
 
 /**
