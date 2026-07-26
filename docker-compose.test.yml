@@ -1,0 +1,237 @@
+# Local test stack.
+#
+# Brings up a real Docker install of G.G Requestz, built from this working tree
+# rather than pulled from GHCR, plus optional fixtures for the integrations that
+# are hard to reason about without a live instance.
+#
+#   docker compose -f docker-compose.test.yml up -d --build          # app only
+#   docker compose -f docker-compose.test.yml --profile romm up -d   # + RomM
+#   docker compose -f docker-compose.test.yml --profile oidc up -d   # + Keycloak
+#   docker compose -f docker-compose.test.yml --profile authentik up -d
+#   docker compose -f docker-compose.test.yml --profile all up -d --build
+#
+# Then seed the fixtures into known states:
+#   ./scripts/testing/seed-romm.sh
+#   ./scripts/testing/seed-keycloak.sh
+#
+# Tear down completely (volumes included):
+#   docker compose -f docker-compose.test.yml --profile all down -v
+#
+# Everything binds to 127.0.0.1 only, on ports chosen to avoid the defaults in
+# docker-compose.yml so this can run alongside a normal deployment.
+name: ggr-test
+
+volumes:
+  postgres_data:
+  redis_data:
+  romm_db_data:
+  romm_resources:
+  romm_redis_data:
+  authentik_db_data:
+
+services:
+  # ---------------------------------------------------------------- app ----
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ggrequestz:test
+    restart: "no"
+    ports:
+      - "127.0.0.1:${GGR_TEST_PORT:-3100}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      PUBLIC_SITE_URL: http://127.0.0.1:${GGR_TEST_PORT:-3100}
+
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ggrequestz
+      POSTGRES_USER: ggrequestz
+      POSTGRES_PASSWORD: testpass
+
+      REDIS_URL: redis://redis:6379
+
+      # Required since v1.3 — the app refuses to start without it.
+      # Test-only value; never reuse this anywhere real.
+      SESSION_SECRET: ${SESSION_SECRET:-test-only-session-secret-do-not-use-in-production}
+
+      AUTH_METHOD: ${AUTH_METHOD:-basic}
+
+      # Populated by scripts/testing/seed-keycloak.sh
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://127.0.0.1:${GGR_TEST_PORT:-3100}/api/auth/callback}
+      OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-}
+      OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-}
+
+      # Legacy aliases, for exercising the upgrade path
+      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID:-}
+      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:-}
+      AUTHENTIK_ISSUER: ${AUTHENTIK_ISSUER:-}
+
+      # Populated by scripts/testing/seed-romm.sh. Note the INTERNAL hostname:
+      # a public URL here would hairpin out and back, which is what v1.3 removed.
+      ROMM_SERVER_URL: ${ROMM_SERVER_URL:-}
+      ROMM_API_TOKEN: ${ROMM_API_TOKEN:-}
+      ROMM_USERNAME: ${ROMM_USERNAME:-}
+      ROMM_PASSWORD: ${ROMM_PASSWORD:-}
+
+      # Optional; the app runs without these, games just will not populate.
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
+      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: "no"
+    ports:
+      - "127.0.0.1:${GGR_TEST_PG_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ggrequestz
+      POSTGRES_USER: ggrequestz
+      POSTGRES_PASSWORD: testpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ggrequestz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: "no"
+    ports:
+      - "127.0.0.1:${GGR_TEST_REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # --------------------------------------------------------------- RomM ----
+  romm:
+    profiles: ["romm", "all"]
+    image: rommapp/romm:${ROMM_TEST_TAG:-5.0}
+    restart: "no"
+    ports:
+      - "127.0.0.1:${ROMM_TEST_PORT:-8090}:8080"
+    environment:
+      DB_HOST: romm-db
+      DB_NAME: romm
+      DB_USER: romm
+      DB_PASSWD: testpass
+      ROMM_AUTH_SECRET_KEY: 6f1a0c4de4b8a2f97c3e5d81b0a7e2f45c9d3a6b8e1f0c7d2a4b6e8f0a1c3d5e
+      HASHEOUS_API_ENABLED: "false"
+    volumes:
+      - romm_resources:/romm/resources
+      - romm_redis_data:/redis-data
+      - ./tmp/test-fixtures/romm-library:/romm/library
+      - ./tmp/test-fixtures/romm-assets:/romm/assets
+    depends_on:
+      romm-db:
+        condition: service_healthy
+
+  romm-db:
+    profiles: ["romm", "all"]
+    image: mariadb:11
+    restart: "no"
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: romm
+      MARIADB_USER: romm
+      MARIADB_PASSWORD: testpass
+    volumes:
+      - romm_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ----------------------------------------------------- Keycloak (OIDC) ----
+  keycloak:
+    profiles: ["oidc", "all"]
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_TEST_TAG:-26.0}
+    restart: "no"
+    command: start-dev
+    ports:
+      - "127.0.0.1:${KEYCLOAK_TEST_PORT:-8091}:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+
+  # ------------------------------------------- Authentik (legacy upgrade) ---
+  # Only needed to verify the pre-1.3 AUTHENTIK_* configuration path.
+  authentik-db:
+    profiles: ["authentik", "all"]
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: akpass
+    volumes:
+      - authentik_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  authentik-redis:
+    profiles: ["authentik", "all"]
+    image: redis:7-alpine
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  authentik:
+    profiles: ["authentik", "all"]
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TEST_TAG:-2025.8}
+    restart: "no"
+    command: server
+    ports:
+      - "127.0.0.1:${AUTHENTIK_TEST_PORT:-9000}:9000"
+    environment: &authentik_env
+      AUTHENTIK_SECRET_KEY: 0f4a1c9d2e6b8f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: akpass
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_BOOTSTRAP_PASSWORD: AkAdminPass123!
+      AUTHENTIK_BOOTSTRAP_TOKEN: ggr-bootstrap-token-for-testing
+      AUTHENTIK_BOOTSTRAP_EMAIL: akadmin@example.test
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+
+  authentik-worker:
+    profiles: ["authentik", "all"]
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TEST_TAG:-2025.8}
+    restart: "no"
+    command: worker
+    environment: *authentik_env
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy

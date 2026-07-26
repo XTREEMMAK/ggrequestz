@@ -1,6 +1,7 @@
 # GameRequest Docker Management Makefile
 
-.PHONY: help build up down logs clean dev prod backup restore health
+.PHONY: help build up down logs clean dev prod backup restore health \
+	test-up test-down test-logs test-seed test-shell
 
 # Default target
 help:
@@ -16,6 +17,13 @@ help:
 	@echo "🔧 Development:"
 	@echo "  dev       Start in development mode"
 	@echo "  dev-logs  Follow development logs"
+	@echo ""
+	@echo "🧪 Local test stack (docker-compose.test.yml):"
+	@echo "  test-up     Build and start the test stack + fixtures"
+	@echo "  test-seed   Seed RomM and Keycloak into known states"
+	@echo "  test-logs   Follow test stack logs"
+	@echo "  test-shell  Shell into the test app container"
+	@echo "  test-down   Stop the test stack and delete its volumes"
 	@echo ""
 	@echo "🚀 Production:"
 	@echo "  prod      Start production stack"
@@ -159,3 +167,41 @@ dev-setup:
 	@echo "🌐 Application: http://localhost:3000"
 	@echo "🔍 Typesense: http://localhost:8108"
 	@echo "🗄️ PostgreSQL: localhost:5432"
+
+# ---------------------------------------------------------------------------
+# Local test stack — a real Docker install built from this working tree, plus
+# RomM and Keycloak fixtures. See docs/setup/TESTING.md.
+# ---------------------------------------------------------------------------
+
+TEST_COMPOSE = docker compose -f docker-compose.test.yml
+TEST_PROFILES = --profile romm --profile oidc
+
+# Build and start the app, database, cache and integration fixtures
+test-up:
+	mkdir -p tmp/test-fixtures/romm-library/roms tmp/test-fixtures/romm-assets
+	$(TEST_COMPOSE) $(TEST_PROFILES) up -d --build
+	@echo ""
+	@echo "App:      http://127.0.0.1:$${GGR_TEST_PORT:-3100}"
+	@echo "RomM:     http://127.0.0.1:$${ROMM_TEST_PORT:-8090}"
+	@echo "Keycloak: http://127.0.0.1:$${KEYCLOAK_TEST_PORT:-8091}"
+	@echo ""
+	@echo "Next: make test-seed"
+
+# Provision the fixtures and print the env vars to configure the app with
+test-seed:
+	./scripts/testing/seed-romm.sh
+	./scripts/testing/seed-keycloak.sh
+
+test-logs:
+ifdef SERVICE
+	$(TEST_COMPOSE) logs -f $(SERVICE)
+else
+	$(TEST_COMPOSE) logs -f
+endif
+
+test-shell:
+	$(TEST_COMPOSE) exec app sh
+
+# Removes volumes too — the stack is disposable by design
+test-down:
+	$(TEST_COMPOSE) --profile all down -v
