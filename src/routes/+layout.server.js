@@ -151,13 +151,12 @@ export async function load({ request, cookies }) {
     // Get additional data if user is authenticated
     if (user) {
       try {
-        // Use cached permission lookup with extended cache for better navigation performance
-        const permissionsCacheKey = `user-permissions-${user.auth_type}-${user.id || user.sub}`;
-        userPermissions = await withCache(
-          permissionsCacheKey,
-          () => getUserPermissions(user),
-          10 * 60 * 1000, // 10 minute cache for permissions
-        );
+        // getUserPermissions() already caches internally under exactly this
+        // key, so wrapping it in another withCache() was pure duplication —
+        // and with request coalescing it deadlocked: the outer call registered
+        // the key as in-flight, then the inner call was handed the outer's own
+        // promise and awaited itself forever.
+        userPermissions = await getUserPermissions(user);
       } catch (permError) {
         console.warn("Failed to get user permissions:", permError);
         userPermissions = { isAdmin: false };

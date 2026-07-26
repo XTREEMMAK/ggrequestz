@@ -214,20 +214,27 @@ class SimpleCache {
 // Global cache instance
 const cache = new SimpleCache();
 
-/**
- * Rebuilds currently in progress, keyed by cache key.
- *
- * Without this, N concurrent requests arriving on a cold key each run the
- * rebuild in full — so a burst of traffic after a cache expiry multiplied
- * every expensive call (external probes, permission lookups) by the
- * concurrency instead of sharing one result.
- */
+/** Rebuilds currently in progress, keyed by cache key. */
 const inFlight = new Map();
 
 /**
  * Cache wrapper for async functions.
  *
- * Concurrent misses on the same key share a single rebuild.
+ * Deliberately does NOT coalesce concurrent rebuilds.
+ *
+ * An earlier version did, so that N concurrent misses on a cold key shared one
+ * rebuild. That is unsafe here: if `fn()` itself calls `withCache()` with the
+ * same key — which `getUserPermissions()` did, under a wrapper using an
+ * identical key — the nested call is handed the outer call's own in-flight
+ * promise and awaits itself. The result is a permanent deadlock, and because it
+ * only triggers for authenticated users it survived every unauthenticated
+ * smoke test.
+ *
+ * Making this safe needs async-context tracking (AsyncLocalStorage), which is
+ * not available here because this module is bundled for the browser as well.
+ * Duplicating a rebuild is cheap; deadlocking a request is not. If a specific
+ * call site genuinely needs single-flight behaviour, use
+ * `withStaleWhileRevalidate` and make sure `fn` never re-enters the same key.
  *
  * @param {string} key - Cache key
  * @param {Function} fn - Function to execute if not cached
@@ -238,21 +245,9 @@ export async function withCache(key, fn, ttl = 5 * 60 * 1000) {
   const cached = await cache.get(key);
   if (cached !== null) return cached;
 
-  const pending = inFlight.get(key);
-  if (pending) return pending;
-
-  const rebuild = (async () => {
-    try {
-      const result = await fn();
-      await cache.set(key, result, ttl);
-      return result;
-    } finally {
-      inFlight.delete(key);
-    }
-  })();
-
-  inFlight.set(key, rebuild);
-  return rebuild;
+  const result = await fn();
+  await cache.set(key, result, ttl);
+  return result;
 }
 
 /**
@@ -261,6 +256,10 @@ export async function withCache(key, fn, ttl = 5 * 60 * 1000) {
  *
  * Use this wherever a rebuild would otherwise land on a request path. A failed
  * refresh keeps the previous value rather than propagating the error.
+ *
+ * This one DOES single-flight, so `fn` must never call back into this function
+ * (or `withCache`) with the same key — it would await its own rebuild and
+ * deadlock. See the note on `withCache`.
  *
  * @param {string} key - Cache key
  * @param {Function} fn - Function to execute to (re)build the value
