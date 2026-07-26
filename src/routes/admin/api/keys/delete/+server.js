@@ -1,20 +1,38 @@
 /**
  * API endpoint for deleting API keys
  * POST /admin/api/keys/delete
+ * Requires cookie-based authentication (no API key support for security)
  */
 
 import { json } from "@sveltejs/kit";
 import { deleteApiKey } from "$lib/apiKeys.js";
-import { getAuthenticatedUser } from "$lib/auth.server.js";
+import { verifySessionToken } from "$lib/auth.server.js";
+import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { query } from "$lib/database.js";
 
 export async function POST({ request, cookies }) {
   try {
-    // Authenticate user
-    const user = await getAuthenticatedUser(cookies, request);
-    if (!user) {
+    // Authenticate user via cookie only (no API key support for admin endpoints)
+    const sessionCookie = cookies.get("session");
+    const basicAuthSessionCookie = cookies.get("basic_auth_session");
+
+    if (!sessionCookie && !basicAuthSessionCookie) {
       return json(
         { success: false, error: "Authentication required" },
+        { status: 401 },
+      );
+    }
+
+    let user = null;
+    if (sessionCookie) {
+      user = await verifySessionToken(sessionCookie);
+    } else if (basicAuthSessionCookie) {
+      user = getBasicAuthUser(basicAuthSessionCookie);
+    }
+
+    if (!user) {
+      return json(
+        { success: false, error: "Invalid session" },
         { status: 401 },
       );
     }

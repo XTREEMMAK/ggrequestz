@@ -1,22 +1,36 @@
 /**
  * Global Content Filters API Endpoint
  * Allows admins to configure system-wide content filtering
+ * Requires cookie-based authentication (no API key support for security)
  */
 
 import { json, error } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
-import { getAuthenticatedUser } from "$lib/auth.server.js";
+import { verifySessionToken } from "$lib/auth.server.js";
+import { getBasicAuthUser } from "$lib/basicAuth.js";
 import { getUserIdFromAuth } from "$lib/getUserId.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { saveGlobalFilters } from "$lib/globalFilters.js";
 
 export async function POST({ request, cookies }) {
   try {
-    // Verify authentication using standard method
-    const user = await getAuthenticatedUser(cookies, request);
+    // Authenticate user via cookie only (no API key support for admin endpoints)
+    const sessionCookie = cookies.get("session");
+    const basicAuthSessionCookie = cookies.get("basic_auth_session");
+
+    if (!sessionCookie && !basicAuthSessionCookie) {
+      throw error(401, "Authentication required");
+    }
+
+    let user = null;
+    if (sessionCookie) {
+      user = await verifySessionToken(sessionCookie);
+    } else if (basicAuthSessionCookie) {
+      user = getBasicAuthUser(basicAuthSessionCookie);
+    }
 
     if (!user) {
-      throw error(401, "Authentication required");
+      throw error(401, "Invalid session");
     }
 
     // Get user's database ID using standard utility (handles all auth types)
