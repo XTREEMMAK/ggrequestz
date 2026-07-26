@@ -42,10 +42,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a password.
 - **Real error and empty states for the ROMM library**, instead of a silently
   blank section.
+- **Separate internal and browser-facing ROMM URLs.** `ROMM_SERVER_URL_PUBLIC`
+  backs "Play in ROMM" links, the library nav link and cover images, while
+  `ROMM_SERVER_URL` stays on the internal address used for API calls. Needed on
+  Kubernetes and any split-network setup where the app reaches ROMM at a service
+  name the browser cannot resolve. Defaults to `ROMM_SERVER_URL`, so existing
+  deployments need no change. Closes #2.
+- **Opt-in ambient background**, a particle effect toggled per user under
+  Profile → Content Preferences → Appearance. Off by default. Honours
+  `prefers-reduced-motion`, caps at 30fps, reduces particle count on small
+  screens, and pauses entirely in a background tab.
 - **Local Docker test stack** (`docker-compose.test.yml`) building a real
   installation from the working tree, with live RomM, Keycloak and Authentik
   fixtures. `make test-up` / `test-seed` / `test-down`; see
-  [docs/setup/TESTING.md](docs/setup/TESTING.md).
+  [docs/setup/TESTING.md](docs/setup/TESTING.md). `make test-seed` also creates
+  the basic-auth admin, so a torn-down stack comes back with a usable login.
 
 ### 🐛 Bug Fixes
 
@@ -114,6 +125,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   work still outstanding.
 - `CONTRIBUTING.md` no longer claims ESLint, `npm run lint:fix` or
   `npm run test:integration`, none of which exist.
+- `SETUP.md` merged into `QUICKSTART.md`. It documented Supabase environment
+  variables for an app that uses raw `pg` — those names survive only as legacy
+  fallback aliases — and claimed other OIDC providers required editing
+  `auth.js`. `QUICKSTART.md` gains the running-from-source section it lacked.
+- `docs/guides/RELEASE_GUIDE.md` documented plain `### Added / Changed / Fixed`
+  changelog headers; the file has used emoji headers for several releases.
+- Removed the `node-fetch` dependency, which had no imports anywhere, and the
+  `CONFIG.versionTable` reference to a table no code reads.
+- `db-manager.js` reports the real package version instead of a hand-maintained
+  constant that had drifted to `1.1.3`, and schema-verification **errors** now
+  go to stderr naming the offending table and columns, rather than to stdout
+  where they were indistinguishable from normal startup output.
 
 ## [1.2.6] - 2026-01-05
 
