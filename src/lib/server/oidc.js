@@ -43,15 +43,24 @@ function cfg(...names) {
  * @returns {Object} - Resolved OIDC settings
  */
 export function getOidcConfig() {
+  // An install configured purely through the legacy AUTHENTIK_* names is an
+  // upgrade from a pre-1.3 version, so keep its login button reading
+  // "Login with Authentik" rather than silently relabelling it.
+  const usingLegacyNames =
+    !cfg("OIDC_CLIENT_ID") &&
+    !cfg("OIDC_ISSUER_URL", "OIDC_ISSUER") &&
+    !!cfg("AUTHENTIK_CLIENT_ID");
+
   return {
     clientId: cfg("OIDC_CLIENT_ID", "AUTHENTIK_CLIENT_ID"),
     clientSecret: cfg("OIDC_CLIENT_SECRET", "AUTHENTIK_CLIENT_SECRET"),
     issuer: cfg("OIDC_ISSUER_URL", "OIDC_ISSUER", "AUTHENTIK_ISSUER"),
     redirectUri: cfg("OIDC_REDIRECT_URI"),
     scopes: cfg("OIDC_SCOPES") || "openid email profile",
-    // Shown on the login button. Defaults to a provider-neutral label rather
-    // than the previously hardcoded "Login with Authentik".
-    providerName: cfg("OIDC_PROVIDER_NAME") || "SSO",
+    // Shown on the login button. Defaults to a provider-neutral label, except
+    // for legacy Authentik installs (above), which keep theirs.
+    providerName:
+      cfg("OIDC_PROVIDER_NAME") || (usingLegacyNames ? "Authentik" : "SSO"),
     // Manual endpoint overrides for providers without a discovery document.
     authUrl: cfg("OIDC_AUTH_URL", "OIDC_AUTHORIZATION_URL"),
     tokenUrl: cfg("OIDC_TOKEN_URL"),
