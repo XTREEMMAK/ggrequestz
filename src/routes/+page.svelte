@@ -37,6 +37,14 @@
   let userPermissions = $derived(data?.userPermissions || { isAdmin: false });
   let currentPath = $derived($page.url.pathname);
 
+  // How long a saved homepage snapshot stays usable when navigating back.
+  // This was previously two different numbers — 15 minutes here and 5 minutes in
+  // restoreHomepageState() — so between those bounds the two paths disagreed:
+  // restoreHomepageState() deleted the snapshot before it had restored the
+  // showMore/expanded flags, collapsing every section back to its initial card
+  // count even though the arrays had been repopulated.
+  const STATE_CACHE_MAX_AGE_MS = 15 * 60 * 1000;
+
   // Initialize state with potential restoration from navigation
   function initializeStateWithRestoration(serverData, fallback) {
     if (!browser) return serverData !== undefined ? serverData : fallback.default;
@@ -52,9 +60,8 @@
     if (savedState) {
       try {
         const cachedData = JSON.parse(savedState);
-        // Check if cache is still valid (15 minutes)
         const cacheAge = Date.now() - (cachedData.timestamp || 0);
-        if (cacheAge <= 15 * 60 * 1000) {
+        if (cacheAge <= STATE_CACHE_MAX_AGE_MS) {
           // If cached value exists for this field, use it
           if (cachedData.hasOwnProperty(fallback.name)) {
             return cachedData[fallback.name];
@@ -563,6 +570,12 @@
   let isNavigatingAway = $state(false); // Guard to prevent saving during navigation
   let lastSaveTime = 0; // Track last save to prevent rapid duplicates
   let scrollPositionLocked = false; // Lock to prevent any saves after initial save
+  // Last scroll offset actually observed from a scroll event. saveScrollPosition
+  // cannot rely on reading window.scrollY at save time: the only save that fires
+  // on the way to a game page happens inside beforeNavigate, by which point the
+  // offset has already been reset to 0, so every save recorded 0 and scroll
+  // restoration had nothing to restore.
+  let lastObservedScrollY = 0;
 
   // Modal state
   let modalOpen = $state(false);
@@ -649,7 +662,7 @@
       return;
     }
 
-    const currentScroll = window.scrollY;
+    const currentScroll = window.scrollY || lastObservedScrollY;
     const now = Date.now();
 
     // Prevent rapid duplicate saves (within 100ms)
@@ -761,11 +774,9 @@
     try {
       const cachedData = JSON.parse(savedState);
       
-      // Check if cache is still valid (5 minutes)
       const cacheAge = Date.now() - (cachedData.timestamp || 0);
-      const maxCacheAge = 5 * 60 * 1000; // 5 minutes
 
-      if (cacheAge > maxCacheAge) {
+      if (cacheAge > STATE_CACHE_MAX_AGE_MS) {
         sessionStorage.removeItem('homepage_content_state');
         return;
       }
@@ -1411,6 +1422,7 @@
   onMount(() => {
     if (browser) {
       const handleScroll = () => {
+        if (window.scrollY > 0) lastObservedScrollY = window.scrollY;
         // Show floating toggle after scrolling down 100px
         const newToggleState = window.scrollY > 100;
         if (newToggleState !== showFloatingToggle) {
