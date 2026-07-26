@@ -12,12 +12,13 @@ export default defineConfig({
     headers: {
       "Cache-Control": "no-cache", // Prevent caching issues during development
     },
+    // Add your own LAN hostname or IP via DOMAIN or GGREQUESTZ_HOST rather than
+    // hardcoding it here — this list ships to everyone who clones the repo.
     allowedHosts: [
       process.env.DOMAIN || "localhost",
       process.env.GGREQUESTZ_HOST || "localhost",
       "localhost",
       "127.0.0.1",
-      "192.168.10.54",
     ],
     fs: {
       // Allow serving files from the entire project

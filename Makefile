@@ -27,7 +27,6 @@ help:
 	@echo ""
 	@echo "🚀 Production:"
 	@echo "  prod      Start production stack"
-	@echo "  prod-full Start with all optional services"
 	@echo ""
 	@echo "📊 Monitoring:"
 	@echo "  health    Check application health"
@@ -46,43 +45,39 @@ help:
 
 # Build containers
 build:
-	docker-compose build
+	docker compose build
 
 # Start services
 up:
-	docker-compose up -d
+	docker compose up -d
 
 # Stop services  
 down:
-	docker-compose down
+	docker compose down
 
 # View logs
 logs:
 ifdef SERVICE
-	docker-compose logs -f $(SERVICE)
+	docker compose logs -f $(SERVICE)
 else
-	docker-compose logs -f
+	docker compose logs -f
 endif
 
 # Clean up everything
 clean:
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 	docker system prune -f
 
 # Development mode
 dev:
-	docker-compose --env-file .env.dev up -d
+	docker compose --env-file .env.development up -d
 
 dev-logs:
-	docker-compose --env-file .env.dev logs -f
+	docker compose --env-file .env.development logs -f
 
-# Production mode
+# Production mode. Compose reads .env from the working directory by default.
 prod:
-	docker-compose --env-file .env.docker -f docker-compose.yml -f docker-compose.production.yml up -d
-
-# Production with all services
-prod-full:
-	docker-compose --env-file .env.docker -f docker-compose.yml -f docker-compose.production.yml --profile notifications --profile proxy up -d
+	docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 
 # Health check
 health:
@@ -91,7 +86,7 @@ health:
 
 # Container status
 status:
-	docker-compose ps
+	docker compose ps
 
 # Resource usage
 stats:
@@ -101,7 +96,7 @@ stats:
 backup:
 	@echo "💾 Creating database backup..."
 	@mkdir -p backups
-	@docker-compose exec -T postgres pg_dump -U postgres ggrequestz > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@docker compose exec -T postgres pg_dump -U postgres ggrequestz > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "✅ Backup created in backups/ directory"
 
 # Restore database
@@ -111,31 +106,31 @@ ifndef BACKUP_FILE
 	@exit 1
 endif
 	@echo "🔄 Restoring database from $(BACKUP_FILE)..."
-	@cat $(BACKUP_FILE) | docker-compose exec -T postgres psql -U postgres -d ggrequestz
+	@cat $(BACKUP_FILE) | docker compose exec -T postgres psql -U postgres -d ggrequestz
 	@echo "✅ Database restored"
 
 # Initialize database schema
 init-db:
 	@echo "🗄️ Initializing database schema..."
-	docker-compose exec ggrequestz node scripts/database/db-manager.js init
+	docker compose exec ggrequestz node scripts/database/db-manager.js init
 	@echo "✅ Database schema initialized"
 
 # PM2 management
 pm2-status:
-	docker-compose exec ggrequestz pm2 status
+	docker compose exec ggrequestz pm2 status
 
 pm2-logs:
-	docker-compose exec ggrequestz pm2 logs
+	docker compose exec ggrequestz pm2 logs
 
 pm2-restart:
-	docker-compose exec ggrequestz pm2 restart ggrequestz
+	docker compose exec ggrequestz pm2 restart ggrequestz
 
 # Setup for first time
 setup:
 	@echo "🔧 Setting up GameRequest for first time..."
 	@if [ ! -f .env ]; then \
 		echo "📄 Copying environment template..."; \
-		cp .env.docker .env; \
+		cp .env.example .env; \
 		echo "⚠️  Please edit .env with your configuration before running 'make up'"; \
 	else \
 		echo "✅ .env already exists"; \
@@ -153,10 +148,9 @@ setup:
 dev-setup:
 	@echo "🔧 Setting up development environment..."
 	@if [ ! -f .env ]; then \
-		cp .env.docker .env; \
+		cp .env.example .env; \
 		echo "NODE_ENV=development" >> .env; \
 		echo "POSTGRES_PASSWORD=dev123" >> .env; \
-		echo "TYPESENSE_API_KEY=dev123" >> .env; \
 		echo "SESSION_SECRET=dev_session_secret_change_in_production" >> .env; \
 	fi
 	@$(MAKE) build
@@ -165,7 +159,6 @@ dev-setup:
 	@$(MAKE) init-db
 	@echo "🎉 Development setup complete!"
 	@echo "🌐 Application: http://localhost:3000"
-	@echo "🔍 Typesense: http://localhost:8108"
 	@echo "🗄️ PostgreSQL: localhost:5432"
 
 # ---------------------------------------------------------------------------
