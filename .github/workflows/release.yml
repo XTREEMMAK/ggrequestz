@@ -90,7 +90,7 @@ jobs:
             2. Follow the [Installation Guide](https://github.com/${{ github.repository }}/blob/main/README.md)
 
             ## Documentation
-            - [Quick Start Guide](https://github.com/${{ github.repository }}/blob/main/QUICKSTART.md)
+            - [Quick Start Guide](https://github.com/${{ github.repository }}/blob/main/docs/setup/QUICKSTART.md)
             - [Production Deployment](https://github.com/${{ github.repository }}/blob/main/docs/setup/DEPLOYMENT.md)
             - [Contributing Guide](https://github.com/${{ github.repository }}/blob/main/CONTRIBUTING.md)
             - [Migration Guide](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md#migration-guides)

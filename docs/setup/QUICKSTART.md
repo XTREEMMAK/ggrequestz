@@ -229,22 +229,22 @@ npm run test:e2e    # playwright
 ```
 
 For integration testing against a real installation with live RomM and Keycloak
-fixtures, see [docs/setup/TESTING.md](docs/setup/TESTING.md).
+fixtures, see [TESTING.md](TESTING.md).
 
 ## Next Steps
 
-- [Full Configuration Guide](docs/CONFIGURATION.md) - All configuration options
-- [Production Deployment](docs/setup/DEPLOYMENT.md) - SSL, reverse proxy, backups
-- [Database Setup](docs/setup/DATABASE_SETUP.md) - PostgreSQL and migrations
-- [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, basic auth
-- [Custom Navigation](docs/guides/NAVIGATION.md) - Role-based navigation links
-- [Integrations](docs/guides/INTEGRATIONS.md) - ROMM, Gotify, n8n
-- [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
-- [API Documentation](docs/API.md) - REST API reference
-- [Contributing Guide](CONTRIBUTING.md) - Development guidelines
+- [Full Configuration Guide](../CONFIGURATION.md) - All configuration options
+- [Production Deployment](DEPLOYMENT.md) - SSL, reverse proxy, backups
+- [Database Setup](DATABASE_SETUP.md) - PostgreSQL and migrations
+- [Authentication Setup](OIDC_SETUP.md) - OIDC, Authentik, basic auth
+- [Custom Navigation](../guides/NAVIGATION.md) - Role-based navigation links
+- [Integrations](../guides/INTEGRATIONS.md) - ROMM, Gotify, n8n
+- [Architecture Overview](../ARCHITECTURE.md) - System design and components
+- [API Documentation](../API.md) - REST API reference
+- [Contributing Guide](../../CONTRIBUTING.md) - Development guidelines
 
 ## Getting Help
 
-- 📖 [Documentation](README.md#-documentation)
+- 📖 [Documentation](../../README.md#-documentation)
 - 🐛 [Report Issues](https://github.com/XTREEMMAK/ggrequestz/issues)
 - 💬 [Discussions](https://github.com/XTREEMMAK/ggrequestz/discussions)

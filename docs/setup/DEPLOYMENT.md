@@ -1,7 +1,7 @@
 # Production Deployment
 
 Running G.G Requestz behind a reverse proxy, with the settings that are easy to
-get wrong. For a first install, start with [QUICKSTART.md](../../QUICKSTART.md)
+get wrong. For a first install, start with [QUICKSTART.md](QUICKSTART.md)
 — this guide covers what comes after it works on localhost.
 
 ## What the stack is

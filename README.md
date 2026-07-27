@@ -57,13 +57,13 @@ docker compose up -d
 # Visit http://localhost:3000
 ```
 
-📖 **[Full Quickstart Guide](QUICKSTART.md)** | 🔧 **[Configuration Options](docs/CONFIGURATION.md)**
+📖 **[Full Quickstart Guide](docs/setup/QUICKSTART.md)** | 🔧 **[Configuration Options](docs/CONFIGURATION.md)**
 
 ## 📖 Documentation
 
 ### Getting Started
 
-- **[Quickstart Guide](QUICKSTART.md)** — Docker setup, running from source, environment configuration
+- **[Quickstart Guide](docs/setup/QUICKSTART.md)** — Docker setup, running from source, environment configuration
 - **[Configuration Guide](docs/CONFIGURATION.md)** — every environment variable the code reads
 - **[Architecture Overview](docs/ARCHITECTURE.md)** — system design and components
 
