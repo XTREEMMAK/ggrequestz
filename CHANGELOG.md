@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 📚 Documentation
+
+- **Consolidated the documentation and removed guides that described software
+  that does not exist.** Several files documented environment variables no code
+  reads and commands that fail immediately — the same class of problem that
+  produced #4 and #7 on the OIDC side.
+  - **Deleted** `DOCKER_UPDATES.md` (every path in it — `docker-init.sql`,
+    `scripts/migrate.sh`, `migrations/deprecated/` — is absent from the repo),
+    `MIGRATION_v1.0.3.md` (a one-time note three minors stale), and
+    `DOCKER_SETUP.md` (duplicated QUICKSTART, and listed Typesense as required
+    two years after its removal).
+  - **`DATABASE_SETUP.md` rewritten.** It described a Supabase project and told
+    readers to set `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+    `SUPABASE_SERVICE_KEY`; none of the three is read anywhere. Now documents
+    the actual `POSTGRES_*` connection, the `npm run db:*` commands, and the
+    migration system's real limitations — no locking, no rollback, non-fatal
+    schema verification.
+  - **`DEPLOYMENT.md` rewritten.** It was titled "Docker Testing Guide" while
+    being linked as the production deployment guide, and referenced four Compose
+    profiles that do not exist. Now covers reverse proxy configuration, `ORIGIN`,
+    hardening, scaling and upgrades.
+  - **Merged** `INTEGRATION_GUIDE.md` and `ROMM_TROUBLESHOOTING.md` into
+    `guides/INTEGRATIONS.md`. The former configured everything through
+    `AUTH_PROVIDER` (the variable is `AUTH_METHOD`) and documented an
+    `/admin/integrations` screen and `/api/integrations/*` endpoints that were
+    never implemented.
+  - **Merged** `AUTHENTIK_ADMIN_SETUP.md` into `OIDC_SETUP.md`, which already
+    covered roles and groups generically.
+  - **`NAVIGATION_SETUP.md` → `guides/NAVIGATION.md`**, dropping a "Required
+    Database Changes" section whose SQL `001_initial_schema.sql` already applies.
+- Fixed two links that would 404 for users rather than for doc readers: the ROMM
+  "Setup Guide" link in the admin settings panel, and a `DOCKER_SETUP.md` link
+  emitted into every generated GitHub release page.
+- Corrected the Compose profiles section in `CONFIGURATION.md`; the project
+  defines no profiles, so `--profile notifications` and `--profile proxy` were
+  silently inert.
+
 ## [1.3.0] - 2026-07-26
 
 ### ⚠️ Breaking Changes
