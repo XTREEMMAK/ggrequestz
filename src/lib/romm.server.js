@@ -91,6 +91,20 @@ function hasUsableToken() {
 }
 
 /**
+ * Whether re-authenticating could plausibly yield a *different* credential.
+ *
+ * A Client API Token is a fixed string read from the environment, so asking for
+ * it again returns the same value. And when RomM has already told us this
+ * account lacks `roms.read`, a fresh token will lack it too — replaying would
+ * only double the load on a server that is answering correctly.
+ *
+ * @returns {boolean}
+ */
+function canRenewCredential() {
+  return !ROMM_API_TOKEN && !session.lacksReadScope;
+}
+
+/**
  * Return a usable bearer token, authenticating only when necessary.
  *
  * Concurrent callers share a single in-flight authentication rather than each
@@ -209,7 +223,7 @@ async function authenticateROMM() {
       return { token: null, expiresAt: 0 };
     }
 
-    warnIfMissingReadScope(token);
+    const lacksReadScope = warnIfMissingReadScope(token);
 
     // RomM reports the lifetime as `expires_in`; older builds use `expires`.
     // Both are seconds.
@@ -227,7 +241,7 @@ async function authenticateROMM() {
 
     const ttlMs = hasTtl ? ttlSeconds * 1000 : DEFAULT_TOKEN_TTL_MS;
 
-    return { token, expiresAt: Date.now() + ttlMs };
+    return { token, expiresAt: Date.now() + ttlMs, lacksReadScope };
   } catch (error) {
     // Propagate HTTP-level failures so callers can classify them (a 403 needs
     // a different message and a different fix than an unreachable host).
@@ -251,11 +265,12 @@ async function authenticateROMM() {
  * signature verification is required.
  *
  * @param {string} token - Access token returned by ROMM
+ * @returns {boolean} - True only when the token definitively lacks `roms.read`
  */
 function warnIfMissingReadScope(token) {
   try {
     const payload = token.split(".")[1];
-    if (!payload) return;
+    if (!payload) return false;
 
     const claims = JSON.parse(
       Buffer.from(payload, "base64url").toString("utf8"),
@@ -275,10 +290,13 @@ function warnIfMissingReadScope(token) {
           `read access in the ROMM admin UI (Settings → Users), or use a ` +
           `Client API Token via ROMM_API_TOKEN.`,
       );
+      return true;
     }
   } catch {
     // Non-JWT or unexpected shape — nothing to diagnose, carry on.
   }
+
+  return false;
 }
 
 /**
@@ -287,6 +305,10 @@ function warnIfMissingReadScope(token) {
  * @param {Object} options - Fetch options
  * @param {string} cookies - Optional cookies to forward (for same-domain auth)
  * @param {number} retryCount - Number of retries attempted (internal)
+ * @param {number|null} deadline - Absolute epoch-ms ceiling shared by all
+ *   attempts of one logical request (internal)
+ * @param {boolean} reauthorized - Whether this logical request has already
+ *   spent its single re-authentication (internal)
  * @returns {Promise<Object>} - API response
  */
 async function rommRequest(
@@ -295,6 +317,7 @@ async function rommRequest(
   cookies = null,
   retryCount = 0,
   deadline = null,
+  reauthorized = false,
 ) {
   await loadEnvironmentVariables();
 
@@ -348,18 +371,43 @@ async function rommRequest(
   try {
     let response = await fetchWithTimeout(url, fetchOptions, attemptTimeout);
 
-    // Expired token: re-authenticate once and replay the request. The replayed
-    // response replaces the original so error reporting below describes the
-    // attempt that actually failed.
-    if (response.status === 401) {
-      const refreshed = await getSessionToken(true);
+    // Stale credential: re-authenticate once and replay. The replayed response
+    // replaces the original so error reporting below describes the attempt that
+    // actually failed.
+    //
+    // 5xx is included deliberately. RomM answers a request bearing an expired
+    // JWT with 500, not 401, so restricting this to 401 meant the dead token
+    // was never discarded and the worker stayed poisoned for its whole
+    // lifetime. One re-authentication is cheap; if the replay fails the same
+    // way it is a real outage and the retry loop below takes over.
+    const authSuspect =
+      response.status === 401 ||
+      response.status === 403 ||
+      response.status >= 500;
 
-      if (refreshed && remaining() > 0) {
-        headers["Authorization"] = `Bearer ${refreshed}`;
-        response = await fetchWithTimeout(
-          url,
-          { ...fetchOptions, headers },
-          Math.min(REQUEST_TIMEOUT_MS, remaining()),
+    if (authSuspect && !reauthorized && canRenewCredential()) {
+      reauthorized = true;
+
+      try {
+        const refreshed = await getSessionToken(true);
+
+        if (refreshed && remaining() > 0) {
+          headers["Authorization"] = `Bearer ${refreshed}`;
+          response = await fetchWithTimeout(
+            url,
+            { ...fetchOptions, headers },
+            Math.min(REQUEST_TIMEOUT_MS, remaining()),
+          );
+        }
+      } catch (authError) {
+        // If /api/token is down too this is an outage, not a stale token. Keep
+        // the original response and let the retry loop below handle it, rather
+        // than replacing a transient 500 with an authentication error and
+        // skipping the retries that would have ridden it out.
+        console.warn(
+          `ROMM re-authentication after HTTP ${response.status} failed: ${
+            authError?.message || authError
+          }`,
         );
       }
     }
@@ -376,7 +424,14 @@ async function rommRequest(
         console.warn(
           `ROMM API error (attempt ${retryCount + 1}/${maxRetries}): ${response.status} ${url}`,
         );
-        return rommRequest(endpoint, options, cookies, retryCount + 1, budget);
+        return rommRequest(
+          endpoint,
+          options,
+          cookies,
+          retryCount + 1,
+          budget,
+          reauthorized,
+        );
       }
 
       console.error(
@@ -406,7 +461,14 @@ async function rommRequest(
       console.warn(
         `ROMM request ${error.name} (attempt ${retryCount + 1}/${maxRetries}): ${url}`,
       );
-      return rommRequest(endpoint, options, cookies, retryCount + 1, budget);
+      return rommRequest(
+        endpoint,
+        options,
+        cookies,
+        retryCount + 1,
+        budget,
+        reauthorized,
+      );
     }
     throw error;
   }
