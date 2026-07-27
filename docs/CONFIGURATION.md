@@ -160,17 +160,13 @@ POSTGRES_USER=your_user
 POSTGRES_PASSWORD=your_password
 ```
 
-### Profiles
+### Services
 
-Docker Compose profiles for optional components:
-
-```bash
-# Start with notifications
-docker compose --profile notifications up -d
-
-# Start with reverse proxy
-docker compose --profile proxy up -d
-```
+`docker-compose.yml` defines exactly three services — `ggrequestz`, `postgres`
+and `redis` — and **no Compose profiles**. Older documentation referred to
+`--profile notifications`, `--profile proxy`, `--profile search` and
+`--profile all`; those select nothing. Gotify, n8n and a reverse proxy are
+things you run yourself and point the app at.
 
 ## File Permissions
 
