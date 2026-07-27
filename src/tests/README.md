@@ -1,189 +1,77 @@
-# Testing Infrastructure
+# Unit tests
 
-This directory contains the testing setup for GG Requestz, including unit tests, integration tests, and end-to-end tests.
+The jsdom half of the Vitest setup. See [`docs/setup/TESTING.md`](../../docs/setup/TESTING.md)
+for the whole picture — the four layers, and how to bring up an instance to
+test against.
 
-## Test Structure
+## Layout
 
 ```
-src/tests/
-├── README.md           # This file
-├── setup.js           # Test environment setup
-├── mocks/             # Mock modules for testing
-│   └── env.js         # Environment variable mocks
-├── unit/              # Unit tests for individual functions/components
-│   ├── auth.test.js   # Authentication utilities tests
-│   ├── utils.test.js  # Utility functions tests
-│   ├── performance.test.js # Performance utilities tests
-│   └── GameCard.test.js    # Component tests
-└── integration/       # Integration tests (future)
+src/tests/                          # the "unit" Vitest project (jsdom)
+├── README.md
+├── setup.js                        # browser API mocks
+├── mocks/
+│   └── env.js                      # $env/dynamic/private stub
+└── unit/
+    ├── auth-utils.test.js          # isAuthenticated, display name, initials
+    ├── basic-auth-token.test.js    # session token signing
+    ├── performance.test.js         # prefetch, metrics, image/bundle helpers
+    └── utils-direct.test.js        # truncateText, formatDate, safeAsync, withTimeout
 
-tests/e2e/             # End-to-end tests (Playwright)
-├── homepage.spec.js   # Homepage functionality tests
-└── auth.spec.js       # Authentication flow tests
+tests/                              # everything outside src/
+├── integration/                    # the "integration" Vitest project (node)
+│   └── romm-token-lifecycle.test.js
+├── e2e/                            # Playwright
+│   ├── global-setup.js             # refuses to run without the test stack
+│   ├── helpers.js                  # signIn(), seeded credentials
+│   ├── auth.spec.js
+│   └── homepage.spec.js
+└── fixtures/
+    └── games.json                  # seed data for the Docker stack
 ```
 
-## Running Tests
+## Which project to add a test to
 
-### Unit Tests (Vitest)
+**`src/tests/unit/`** — pure functions and Svelte components. Runs under jsdom,
+so browser globals exist.
+
+**`tests/integration/`** — anything under `src/lib/*.server.js` or otherwise
+server-only. Runs under node, because that code branches on `browser` and takes
+the wrong path when a DOM is present. Mock `fetch`; these must not reach the
+network.
+
+**`tests/e2e/`** — real browser against a real installation. Needs
+`make test-seeded` first. Anything asserting on the application shell has to
+call `signIn()` from `helpers.js`: an unauthenticated visitor is redirected to
+`/login`, which drops the shell on hydration.
 
 ```bash
-# Run all unit tests
-npm run test:unit
+npm run test:unit          # jsdom project
+npm run test:integration   # node project
+npm run test:e2e           # Playwright, needs the stack up
+npm run test:all           # all three, in order
 
-# Run tests in watch mode
 npm run test:watch
-
-# Run tests with UI
 npm run test:ui
-
-# Run tests with coverage
 npm run test:coverage
 ```
 
-### End-to-End Tests (Playwright)
+## Mocks provided by `setup.js`
 
-```bash
-# Run all e2e tests
-npm run test:e2e
+IntersectionObserver, PerformanceObserver, `fetch`, localStorage,
+sessionStorage, the `Image` constructor and `matchMedia`.
 
-# Run tests with UI
-npm run test:e2e:ui
+`$env/dynamic/private` is aliased to `mocks/env.js` for both Vitest projects, so
+importing a server module in a test does not blow up on missing SvelteKit
+runtime environment.
 
-# Debug tests
-npm run test:e2e:debug
+## Conventions
 
-# Install browsers (first time only)
-npx playwright install
-```
-
-### All Tests
-
-```bash
-# Run both unit and e2e tests
-npm run test:all
-```
-
-## Test Configuration
-
-### Vitest Configuration
-
-- **Environment**: jsdom for browser-like testing
-- **Setup**: Automatic mocking of browser APIs
-- **Coverage**: Text, JSON, and HTML reports
-- **Mocks**: Server-only modules mocked to prevent import errors
-
-### Playwright Configuration
-
-- **Browsers**: Chrome, Firefox, Safari (desktop and mobile)
-- **Base URL**: http://127.0.0.1:5174 (dev server)
-- **Screenshots**: On failure only
-- **Traces**: On retry for debugging
-
-## Writing Tests
-
-### Unit Tests
-
-Use Vitest with Testing Library for component tests:
-
-```javascript
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/svelte";
-import MyComponent from "$lib/MyComponent.svelte";
-
-describe("MyComponent", () => {
-  it("should render correctly", () => {
-    render(MyComponent, { props: { title: "Test" } });
-    expect(screen.getByText("Test")).toBeInTheDocument();
-  });
-});
-```
-
-### E2E Tests
-
-Use Playwright for full user journey testing:
-
-```javascript
-import { test, expect } from "@playwright/test";
-
-test("user can complete workflow", async ({ page }) => {
-  await page.goto("/");
-  await page.click('button[name="action"]');
-  await expect(page.locator(".result")).toBeVisible();
-});
-```
-
-## Mocking Strategy
-
-### Browser APIs
-
-- IntersectionObserver, PerformanceObserver
-- fetch, localStorage, sessionStorage
-- Image constructor, matchMedia
-
-### Server Modules
-
-- Environment variables ($env/dynamic/private)
-- Database connections
-- External API clients
-
-## Performance Testing
-
-Unit tests include performance utility testing:
-
-- Resource prefetching
-- Lazy loading
-- Image optimization
-- Bundle optimization
-
-E2E tests include performance assertions:
-
-- Page load times
-- Lazy loading behavior
-- Navigation performance
-
-## Best Practices
-
-1. **Test Isolation**: Each test should be independent
-2. **Descriptive Names**: Test names should clearly describe what they test
-3. **Mock External Dependencies**: Don't rely on external services in tests
-4. **Test User Behavior**: E2E tests should simulate real user interactions
-5. **Performance Assertions**: Include performance checks where relevant
-
-## CI/CD Integration
-
-Tests are configured for CI environments:
-
-- Retry failed tests automatically
-- Generate HTML reports
-- Run in parallel when possible
-- Fail build on test failures
-
-## Debugging
-
-### Unit Tests
-
-- Use `npm run test:ui` for interactive debugging
-- Add `console.log` statements for debugging
-- Use VS Code debugger with Vitest extension
-
-### E2E Tests
-
-- Use `npm run test:e2e:debug` for step-by-step debugging
-- Check screenshots and traces in test results
-- Use `page.pause()` to pause execution
-
-## Coverage Goals
-
-Target coverage levels:
-
-- **Unit Tests**: 80%+ for utilities and components
-- **Integration Tests**: Key user workflows
-- **E2E Tests**: Critical user journeys
-
-## Future Enhancements
-
-- Visual regression testing
-- API integration tests
-- Database integration tests
-- Load testing
-- Accessibility testing
+- One behaviour per test, named for the behaviour rather than the function.
+- Reset module state between tests when the module under test holds any. The
+  ROMM client caches a token at module scope, so its tests re-import through
+  `vi.resetModules()` rather than sharing an instance.
+- Never reach the network, including in e2e — those run against the local stack,
+  never a remote one.
+- When a test needs a fixture user or game, use the seeded ones rather than
+  creating new state.

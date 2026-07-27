@@ -1,9 +1,46 @@
-# Local Test Environment
+# Testing
 
-A disposable Docker stack for testing a **real installation** of G.G Requestz —
-built from your working tree rather than pulled from GHCR — together with live
-fixtures for the integrations that are difficult to reason about from
-documentation alone.
+How this project is tested, and how to bring up an instance to test against.
+
+## The four layers
+
+| Layer           | Command                                 | Runner     | Needs                     |
+| --------------- | --------------------------------------- | ---------- | ------------------------- |
+| **Unit**        | `npm run test:unit`                     | Vitest     | nothing                   |
+| **Integration** | `npm run test:integration`              | Vitest     | nothing (fetch is mocked) |
+| **End-to-end**  | `npm run test:e2e`                      | Playwright | `make test-seeded`        |
+| **Manual**      | `make test-blank` / `-seeded` / `-live` | Docker     | Docker                    |
+
+`npm run test:all` runs the first three in order.
+
+**Unit** (`src/tests/unit/`) covers pure functions in a jsdom environment.
+**Integration** (`tests/integration/`) covers server-side modules in a node
+environment — server code branches on `browser`, so it cannot be exercised
+correctly under a DOM. Both are Vitest _projects_, declared in
+`vitest.config.js`; `--project unit` or `--project integration` selects one.
+
+Neither reaches the network. The ROMM client tests, for example, drive a mocked
+`fetch`, so the whole suite runs offline and in CI with no services.
+
+**End-to-end** drives a real browser against a real installation. Locally that
+is the Docker test stack, never `npm run dev` — the dev server loads
+`.env.development`, which usually points at a database you care about. A
+`globalSetup` refuses to run if the stack is not up. First run also needs the
+browsers:
+
+```bash
+npx playwright install     # once; CI does this itself
+make test-seeded
+npm run test:e2e
+```
+
+---
+
+## The disposable stack
+
+A **real installation** of G.G Requestz — built from your working tree rather
+than pulled from GHCR — together with live fixtures for the integrations that
+are difficult to reason about from documentation alone.
 
 ## Why this exists
 
@@ -24,12 +61,48 @@ Run the thing.
 
 ---
 
-## Quick start
+## Three modes
 
-```bash
-make test-up      # build + start app, postgres, redis, RomM, Keycloak
-make test-seed    # provision fixtures, print config to paste back
-```
+Pick by what you are testing. Each starts from a deleted volume, so switching
+between them is just running the other target.
+
+| Command            | State                                               | Lands on | For                                        |
+| ------------------ | --------------------------------------------------- | -------- | ------------------------------------------ |
+| `make test-blank`  | schema and system roles only — no admin, no data    | `/setup` | the first-run wizard, fresh-install checks |
+| `make test-seeded` | admin, 30 games, requests, watchlist, fixtures      | `/login` | everything else, and the e2e suite         |
+| `make test-live`   | seeded, plus real IGDB/ROMM credentials from `.env` | `/login` | exercising the live integrations           |
+
+**`test-blank` is the only way to see the setup wizard.** Creating an admin ends
+that state permanently for the volume, which is why seeding is a separate mode
+rather than a step. Do not run `make test-seed` against a blank stack unless you
+mean to end it.
+
+Two things about `test-blank` worth knowing:
+
+- It must run with `AUTH_METHOD=basic`. Under `authentik` the root layout
+  hardcodes `needsSetup = false` and the wizard never appears at all.
+- The stack runs `docker compose --env-file /dev/null`. Compose otherwise reads
+  the repo `.env` for `${VAR:-default}` interpolation, which silently gave the
+  "disposable" stack the production `AUTH_METHOD`, `SESSION_SECRET` and
+  `ROMM_SERVER_URL`. `test-live` opts back in deliberately, and
+  `docker-compose.test.live.yml` pins the database and session secret back to
+  the throwaway values.
+
+### What `test-seeded` puts in the database
+
+`scripts/testing/seed-data.js`, offline and idempotent:
+
+| Fixture             | Detail                                                            |
+| ------------------- | ----------------------------------------------------------------- |
+| 30 games            | `tests/fixtures/games.json`, synthetic `99xxxx` IGDB ids          |
+| 2 non-admin users   | `player` (user), `curator` (manager) — both `ggr-test-user`       |
+| 5 requests          | one per status: pending, approved, rejected, fulfilled, cancelled |
+| 8 watchlist entries | split across the two users                                        |
+| 1 custom nav link   | for the role-visibility logic in `guides/NAVIGATION.md`           |
+
+The ids are synthetic so fixtures can never be mistaken for real cached IGDB
+records. The script refuses to run against a database holding anything else,
+unless given `--force`, and it does not read the repo `.env`.
 
 | Service  | URL                     |
 | -------- | ----------------------- |
@@ -44,13 +117,17 @@ Everything binds to `127.0.0.1` only, on ports chosen to avoid the defaults in
 
 ### Signing in
 
-The default `AUTH_METHOD=basic` login is:
+The default `AUTH_METHOD=basic` logins are:
 
-| Username | Password         |
-| -------- | ---------------- |
-| `admin`  | `ggr-test-admin` |
+| Username  | Password         | Role    |
+| --------- | ---------------- | ------- |
+| `admin`   | `ggr-test-admin` | admin   |
+| `player`  | `ggr-test-user`  | user    |
+| `curator` | `ggr-test-user`  | manager |
 
-`make test-seed` creates it, via `scripts/testing/seed-app.sh`. That script posts
+The form field takes either the username or the email.
+
+`make test-seeded` creates the admin via `scripts/testing/seed-app.sh`. That script posts
 to the app's own first-run endpoint (`POST /api/auth/basic/setup`) rather than
 inserting a row, so the password is hashed and the `admin` role assigned exactly
 the way a real installation does it — a direct `INSERT` sets `is_admin` but
@@ -107,7 +184,7 @@ make test-down              # stop and delete volumes
 
 ## Reconfiguring the app
 
-`make test-seed` prints ready-to-use environment blocks. Export the ones you
+`make test-seeded` prints ready-to-use environment blocks. Export the ones you
 want and restart just the app:
 
 ```bash
@@ -206,10 +283,14 @@ would otherwise succeed return `403`.
 
 ## Notes
 
-- The stack is disposable. `make test-down` deletes its volumes; re-seed after.
+- The stack is disposable. `make test-down` deletes its volumes; the mode
+  targets do this for you before bringing a stack up.
 - `tmp/test-fixtures/` holds the RomM library and asset mounts. Drop ROM files
   into `tmp/test-fixtures/romm-library/roms/` and rescan in RomM to populate the
   library. `tmp/` is gitignored.
 - PM2 runs one worker per core, and each worker warms its own cache at boot, so
   the startup logs repeat per worker. That is expected — but note it means N
   parallel IGDB warm-ups on an N-core host.
+  Genuinely _identical_ duplicate lines are a different problem, and were caused
+  by `out_file: /dev/stdout` in `ecosystem.config.cjs` racing pm2-runtime's own
+  tail. If they come back, look there before counting workers.

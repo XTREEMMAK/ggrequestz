@@ -90,8 +90,8 @@ For a complete isolated environment — a real installation built from your
 working tree, with live RomM and Keycloak fixtures:
 
 ```bash
-make test-up      # build and start the stack
-make test-seed    # provision fixtures and print config to paste back
+make test-seeded  # admin, demo library and fixtures; lands on /login
+make test-blank   # empty instance; lands on the /setup wizard
 make test-logs    # follow the app logs
 make test-down    # stop and delete its volumes
 ```
@@ -150,44 +150,57 @@ git commit -m "test: add integration tests for auth"
 ### Running Tests
 
 ```bash
-# Run all tests
-npm test
+npm run test:unit          # jsdom project — pure functions, components
+npm run test:integration   # node project — server modules, mocked fetch
+npm run test:e2e           # Playwright; needs `make test-seeded` first
+npm run test:all           # all three, in order
 
-# Run specific test suites
-npm run test:unit
-npm run test:e2e
-
-# Run tests with coverage
 npm run test:coverage
 ```
 
+[docs/setup/TESTING.md](docs/setup/TESTING.md) describes the four layers and
+which one a given test belongs in.
+
 ### Writing Tests
 
-1. **Unit Tests** - Test individual components/functions
+1. **Unit tests** — pure functions and components, in `src/tests/unit/`. Runs
+   under jsdom.
 
    ```javascript
-   // src/lib/utils.test.js
-   import { formatDate } from "./utils.js";
+   // src/tests/unit/utils-direct.test.js
+   import { describe, expect, it } from "vitest";
+   import { formatDate } from "$lib/utils.js";
 
    describe("formatDate", () => {
-     test("formats date correctly", () => {
+     it("formats an ISO date for display", () => {
        expect(formatDate("2023-01-01")).toBe("Jan 1, 2023");
      });
    });
    ```
 
-2. **Integration Tests** - Test API endpoints and database operations
+2. **Integration tests** — server-only modules, in `tests/integration/`. Runs
+   under node, because server code branches on `browser` and takes the wrong
+   path when a DOM is present. Mock `fetch`; do not reach the network.
 
    ```javascript
-   // tests/integration/auth.test.js
-   import { test, expect } from "@playwright/test";
+   // tests/integration/romm-token-lifecycle.test.js
+   global.fetch = vi.fn().mockResolvedValue(response(500));
 
-   test("user can log in", async ({ page }) => {
-     await page.goto("/login");
-     await page.fill('[data-testid="username"]', "testuser");
-     await page.fill('[data-testid="password"]', "password");
-     await page.click('[data-testid="login-button"]');
-     await expect(page).toHaveURL("/dashboard");
+   const { isRommAvailable } = await freshRomm();
+   await expect(isRommAvailable()).resolves.toBe(false);
+   ```
+
+3. **End-to-end tests** — real browser against the seeded Docker stack, in
+   `tests/e2e/`. Anything touching the application shell must sign in first;
+   an unauthenticated visitor only ever sees `/login` or `/setup`.
+
+   ```javascript
+   // tests/e2e/homepage.spec.js
+   import { signIn } from "./helpers.js";
+
+   test("shows the library once signed in", async ({ page }) => {
+     test.skip(!(await signIn(page)), "instance has no admin yet");
+     await expect(page.locator('a[href^="/game/"]').first()).toBeVisible();
    });
    ```
 
