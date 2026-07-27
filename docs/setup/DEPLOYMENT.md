@@ -1,502 +1,225 @@
-# 🐳 G.G Requestz Docker Testing Guide
+# Production Deployment
 
-This guide provides comprehensive instructions for testing GameRequest with Docker in various configurations.
+Running G.G Requestz behind a reverse proxy, with the settings that are easy to
+get wrong. For a first install, start with [QUICKSTART.md](../../QUICKSTART.md)
+— this guide covers what comes after it works on localhost.
 
-## 📋 Prerequisites
+## What the stack is
 
-Before starting, ensure you have:
+`docker compose up -d` starts three containers and nothing else:
 
-- Docker and Docker Compose installed
-- At least 2GB of available RAM
-- 5GB of free disk space
-- Access to create environment files
+| Service      | Image                                 | Purpose                                |
+| ------------ | ------------------------------------- | -------------------------------------- |
+| `ggrequestz` | `ghcr.io/xtreemmak/ggrequestz:latest` | The app, under PM2 in cluster mode     |
+| `postgres`   | `postgres:15-alpine`                  | Required                               |
+| `redis`      | `redis:7-alpine`                      | Optional; in-memory fallback if absent |
 
-## 🚀 Quick Start (All Services Included)
+There is no bundled reverse proxy and no TLS termination. Compose defines no
+profiles — `--profile anything` is a no-op left over from an older layout.
 
-The fastest way to test GameRequest with all services running locally:
+## Set ORIGIN, or logins will fail
+
+This is the single most common production breakage.
+
+`adapter-node` rejects any form POST whose `Origin` header disagrees with the
+app's configured origin, and when nothing is configured it assumes `https`.
+Behind a proxy that terminates TLS and forwards plain HTTP, that assumption is
+wrong in both directions: GET requests work fine, so the site looks healthy,
+but every login and every form submission fails with **"Cross-site POST form
+submissions are forbidden"**.
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd ggrequestz
-
-# Copy and configure environment
-cp .env.example .env
-
-# Edit .env with your required values (see Configuration section below)
-nano .env
-
-# Start with all local services
-docker compose --profile database --profile cache --profile search up -d
-
-# Or use the convenience script
-docker compose --profile all up -d
+PUBLIC_SITE_URL=https://requests.example.com
+ORIGIN=https://requests.example.com
 ```
 
-## 🔧 Configuration Examples
+The entrypoint derives `ORIGIN` from `PUBLIC_SITE_URL` when it is unset, so
+setting `PUBLIC_SITE_URL` correctly is usually enough. Set both if you are
+unsure. The same value must match the redirect URI registered at your OIDC
+provider — see [OIDC_SETUP.md](OIDC_SETUP.md).
 
-### Minimal Required Configuration
+## Reverse proxy
 
-Create a `.env` file with these minimum required settings:
+Forward to the app's published port (`APP_PORT`, default `3000`) and pass the
+real protocol through.
 
-```bash
-# Database
-POSTGRES_PASSWORD=your_secure_db_password
+### Caddy
 
-# Authentication (choose one method)
-# Option 1: Authentik OIDC
-AUTHENTIK_CLIENT_ID=your_client_id
-AUTHENTIK_CLIENT_SECRET=your_client_secret
-AUTHENTIK_ISSUER=https://auth.yourdomain.com
-SESSION_SECRET=your_32_char_random_string
-
-# Option 2: Basic Auth (will prompt for admin creation)
-# Leave Authentik vars empty to use basic auth
-
-# IGDB API (required)
-IGDB_CLIENT_ID=your_igdb_client_id
-IGDB_CLIENT_SECRET=your_igdb_client_secret
+```caddyfile
+requests.example.com {
+    reverse_proxy localhost:3000
+}
 ```
 
-### Full Configuration Example
+Caddy sets `X-Forwarded-Proto` and obtains certificates automatically; nothing
+else is needed.
 
-```bash
-# Database Configuration
-POSTGRES_PASSWORD=secure_password_123
-POSTGRES_DB=ggrequestz
-POSTGRES_USER=postgres
+### nginx
 
-# Application
-APP_PORT=3000
-NODE_ENV=production
-SESSION_SECRET=your_very_long_random_secret_string_here
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name requests.example.com;
 
-# Authentication - Authentik OIDC
-AUTHENTIK_CLIENT_ID=your_authentik_client_id
-AUTHENTIK_CLIENT_SECRET=your_authentik_client_secret
-AUTHENTIK_ISSUER=https://auth.example.com
+    ssl_certificate     /etc/letsencrypt/live/requests.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/requests.example.com/privkey.pem;
 
-# IGDB API
-IGDB_CLIENT_ID=your_igdb_client_id
-IGDB_CLIENT_SECRET=your_igdb_client_secret
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
 
-# Search Engine
-TYPESENSE_API_KEY=secure_search_key_123
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
-# Cache
-REDIS_EXTERNAL_PORT=6379
-
-# Optional Services
-GOTIFY_URL=https://notifications.example.com
-GOTIFY_TOKEN=your_gotify_token
-ROMM_SERVER_URL=https://romm.example.com
-ROMM_USERNAME=your_romm_user
-ROMM_PASSWORD=your_romm_password
-N8N_WEBHOOK_URL=https://workflows.example.com/webhook
-
-# Public Site URL (for API documentation and external links)
-PUBLIC_SITE_URL=https://ggr.example.com
-
-# Optional: Proxy (Traefik - only if using proxy profile)
-DOMAIN=example.com
-ACME_EMAIL=admin@example.com
+        # Cover art and IGDB responses can be large
+        proxy_read_timeout 60s;
+    }
+}
 ```
 
-## 🏗️ Deployment Scenarios
+### Traefik
 
-### 1. Full Stack (Recommended for Testing)
+Earlier versions of this guide described a bundled Traefik service enabled with
+`--profile proxy`, plus `DOMAIN` and `ACME_EMAIL` variables. None of that
+exists. Run Traefik as your own stack and route to the container over an
+external network.
 
-Runs all services locally including database, cache, and search:
+## Hardening before you expose it
+
+**Generate real secrets.** The app refuses to start without `SESSION_SECRET` —
+that is deliberate, since it used to fall back to a placeholder committed to
+this repository, which made session cookies forgeable.
 
 ```bash
-# Start everything
-docker compose --profile database --profile cache --profile search up -d
-
-# Check status
-docker compose ps
-
-# View logs
-docker compose logs -f ggrequestz
+openssl rand -hex 32     # SESSION_SECRET
+openssl rand -base64 32  # POSTGRES_PASSWORD
 ```
 
-**Services included:**
+**Stop publishing the database port.** `docker-compose.yml` maps Postgres to
+the host so it is reachable during a first install. In production, delete the
+`ports:` block from the `postgres` service — the app reaches it over the
+Compose network regardless. Same for `redis`.
 
-- GameRequest application
-- PostgreSQL database
-- Redis cache
-- Typesense search engine
+**Check that a reverse proxy is the only public path.** With `APP_PORT` bound
+on `0.0.0.0`, port 3000 is reachable directly and bypasses whatever your proxy
+enforces. Bind it to loopback:
 
-### 2. Minimal Stack (App Only)
-
-Use when you have external services:
-
-```bash
-# Start only the application
-docker compose up ggrequestz -d
-
-# Or use external services override
-docker compose -f docker-compose.yml -f docker-compose.external.yml up -d
+```yaml
+ports:
+  - "127.0.0.1:${APP_PORT:-3000}:3000"
 ```
 
-**Services included:**
+## Scaling
 
-- GameRequest application only
-- Requires external PostgreSQL, Redis, and Typesense
-
-### 3. Partial Stack Examples
-
-#### With Database Only
+The app runs under PM2 in cluster mode. `PM2_INSTANCES` defaults to `max`, one
+worker per core.
 
 ```bash
-docker compose --profile database up -d
+PM2_INSTANCES=4          # pin the worker count
+PM2_CRON_RESTART=0 4 * * *   # optional nightly recycle
 ```
 
-#### With Database and Cache
+Watch the connection maths: `POSTGRES_POOL_MAX` is **per worker**, so `max` on
+a 16-core host with the default pool of 10 will try to open 160 connections
+against Postgres's default `max_connections` of 100. Either pin
+`PM2_INSTANCES`, lower `POSTGRES_POOL_MAX`, or raise `max_connections`.
+
+Redis is worth running for more than caching once you scale out: without it
+each PM2 worker keeps its own in-memory cache, so hit rates fall roughly in
+proportion to worker count.
 
 ```bash
-docker compose --profile database --profile cache up -d
+docker compose exec ggrequestz pm2 status
+docker compose exec ggrequestz pm2 monit
 ```
 
-#### With All Core Services
+## Health and logs
 
 ```bash
-docker compose --profile database --profile cache --profile search up -d
+curl -f http://localhost:3000/api/health
+docker compose ps                       # container health checks
+docker compose logs -f --tail=100 ggrequestz
 ```
 
-### 4. Development Stack
+The container health check runs `scripts/healthcheck.cjs` every 30s after a 30s
+start period.
 
-Includes additional services for development:
+Server-side `console` output is deliberately **not** stripped from the
+production bundle. Operators of a self-hosted app debug from container logs, so
+integration failures — a ROMM 403, an OIDC discovery timeout — are visible
+there and nowhere else. Read them after any upgrade.
+
+## Backups
 
 ```bash
-# Start with optional services
-docker compose --profile database --profile cache --profile search --profile notifications up -d
+docker compose exec -T postgres pg_dump -U postgres ggrequestz > "backup_$(date +%F).sql"
 ```
 
-## 🌐 External Services Configuration
+Weekly, with 30-day retention:
 
-### External PostgreSQL
-
-If you have an existing PostgreSQL server:
-
-```bash
-# In your .env file
-POSTGRES_HOST=your-db-host.com
-POSTGRES_PORT=5432
-POSTGRES_DB=ggrequestz
-POSTGRES_USER=your_user
-POSTGRES_PASSWORD=your_password
-
-# Start without local database
-docker compose up ggrequestz -d
+```cron
+0 2 * * 0 cd /srv/ggrequestz && docker compose exec -T postgres pg_dump -U postgres ggrequestz > "/backup/ggr_$(date +\%F).sql" && find /backup -name 'ggr_*.sql' -mtime +30 -delete
 ```
 
-### External Redis
+Postgres is the only stateful service worth backing up. Redis holds cache only,
+and the `ggrequestz-logs` volume holds logs.
 
-If you have an existing Redis server:
-
-```bash
-# In your .env file
-REDIS_URL=redis://your-redis-host:6379
-
-# Or with authentication
-REDIS_URL=redis://:password@your-redis-host:6379
-
-# Start without local cache
-docker compose --profile database --profile search up -d
-```
-
-### External Typesense
-
-If you have an existing Typesense server:
+## Upgrading
 
 ```bash
-# In your .env file
-TYPESENSE_HOST=your-search-host.com
-TYPESENSE_PORT=8108
-TYPESENSE_PROTOCOL=https
-TYPESENSE_API_KEY=your_api_key
-
-# Start without local search
-docker compose --profile database --profile cache up -d
-```
-
-## 🧪 Testing Procedures
-
-### 1. Health Checks
-
-Check if all services are healthy:
-
-```bash
-# Check container health
-docker compose ps
-
-# Test application health endpoint
-curl http://localhost:3000/api/health
-
-# Check individual service logs
-docker compose logs postgres
-docker compose logs redis
-docker compose logs typesense
-```
-
-### 2. Database Testing
-
-Verify database connection and data:
-
-```bash
-# Connect to PostgreSQL
-docker compose exec postgres psql -U postgres -d ggrequestz
-
-# Check tables
-\dt
-
-# Check migrations
-SELECT * FROM ggr_migrations;
-
-# Exit
-\q
-```
-
-### 3. Cache Testing
-
-Test Redis cache functionality:
-
-```bash
-# Connect to Redis
-docker compose exec redis redis-cli
-
-# Test cache
-PING
-INFO memory
-KEYS *
-
-# Exit
-exit
-```
-
-### 4. Search Testing
-
-Test Typesense search engine:
-
-```bash
-# Check Typesense status
-curl http://localhost:8108/health
-
-# Check collections
-curl http://localhost:8108/collections \
-  -H "X-TYPESENSE-API-KEY: xyz123"
-```
-
-### 5. Application Testing
-
-Test the application functionality:
-
-```bash
-# Test homepage (should redirect to login/setup)
-curl -I http://localhost:3000
-
-# Test API endpoints
-curl http://localhost:3000/api/health
-
-# Test setup flow (if using basic auth)
-curl http://localhost:3000/setup
-```
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### 1. Permission Denied Errors
-
-```bash
-# Fix Docker permissions (Linux)
-sudo usermod -aG docker $USER
-newgrp docker
-
-# Fix file permissions
-sudo chown -R $USER:$USER ./
-```
-
-#### 2. Port Conflicts
-
-```bash
-# Check what's using ports
-netstat -tulpn | grep :3000
-netstat -tulpn | grep :5432
-netstat -tulpn | grep :6379
-
-# Change ports in .env
-APP_PORT=3001
-POSTGRES_EXTERNAL_PORT=5433
-REDIS_EXTERNAL_PORT=6380
-```
-
-#### 3. Database Connection Issues
-
-```bash
-# Check database logs
-docker compose logs postgres
-
-# Test connection manually
-docker compose exec postgres pg_isready -U postgres
-
-# Reset database
-docker compose down postgres
-docker volume rm ggrequestz_postgres-data
-docker compose up postgres -d
-```
-
-#### 4. Memory Issues
-
-```bash
-# Check memory usage
-docker stats
-
-# Reduce Redis memory limit
-# In docker-compose.yml, change:
-# --maxmemory 128mb
-
-# Reduce PM2 instances
-# In .env:
-PM2_INSTANCES=1
-```
-
-### Service-Specific Troubleshooting
-
-#### PostgreSQL Issues
-
-```bash
-# Check PostgreSQL logs
-docker compose logs postgres
-
-# Access PostgreSQL directly
-docker compose exec postgres psql -U postgres
-
-# Reset PostgreSQL data
-docker compose down postgres
-docker volume rm ggrequestz_postgres-data
-```
-
-#### Redis Issues
-
-```bash
-# Check Redis logs
-docker compose logs redis
-
-# Access Redis CLI
-docker compose exec redis redis-cli
-
-# Clear Redis cache
-docker compose exec redis redis-cli FLUSHALL
-```
-
-#### Typesense Issues
-
-```bash
-# Check Typesense logs
-docker compose logs typesense
-
-# Reset Typesense data
-docker compose down typesense
-docker volume rm ggrequestz_typesense-data
-```
-
-## 📊 Performance Testing
-
-### Load Testing Setup
-
-```bash
-# Install testing tools
-sudo apt install apache2-utils curl
-
-# Basic load test
-ab -n 100 -c 10 http://localhost:3000/
-
-# API endpoint test
-ab -n 50 -c 5 http://localhost:3000/api/health
-
-# Monitor during tests
-docker stats
-```
-
-### Memory and Resource Monitoring
-
-```bash
-# Monitor resource usage
-watch docker stats
-
-# Check disk usage
-docker system df
-
-# Check individual container resources
-docker compose exec ggrequestz top
-docker compose exec postgres top
-```
-
-## 🔄 Update Testing
-
-Test database migrations and updates:
-
-```bash
-# Test migration process
-docker compose exec ggrequestz node scripts/run-migrations.js
-
-# Backup before updates
-docker compose exec postgres pg_dump -U postgres ggrequestz > backup.sql
-
-# Test rolling updates
+docker compose exec -T postgres pg_dump -U postgres ggrequestz > backup_pre_upgrade.sql
 docker compose pull
-docker compose up -d --no-recreate
+docker compose up -d
+docker compose logs -f ggrequestz | grep -iE "schema|migration|error"
 ```
 
-## 🧹 Cleanup
+Migrations run automatically at boot unless `AUTO_MIGRATE=false`. There is **no
+rollback path** — `rollback_sql` is recorded but never executed — so the dump
+above is the only way back. Schema mismatches are logged rather than fatal, so
+the app starting is not by itself proof the upgrade succeeded; read the logs.
 
-Clean up test environments:
+Check [CHANGELOG.md](../../CHANGELOG.md) for breaking changes first. Upgrading
+to 1.3.0 in particular requires `SESSION_SECRET` to be set, and invalidates
+existing basic-auth sessions once.
 
-```bash
-# Stop and remove containers
-docker compose down
+Roll one instance at a time if you run several — migrations are not serialised
+between concurrently booting containers.
 
-# Remove volumes (WARNING: destroys data)
-docker compose down -v
+## Troubleshooting
 
-# Remove images
-docker rmi $(docker images "ggrequestz*" -q)
+**"Cross-site POST form submissions are forbidden"**
+`ORIGIN` / `PUBLIC_SITE_URL` do not match the URL users actually visit. See
+above.
 
-# Full cleanup
-docker system prune -a --volumes
+**Login redirects to the provider and comes back rejected**
+The redirect URI the app advertises differs from the one registered, usually
+`http` vs `https`. Set `OIDC_REDIRECT_URI` explicitly.
+
+**Site loads, ROMM covers and "Play in ROMM" links are broken**
+`ROMM_SERVER_URL` is an address only the server can resolve. Set
+`ROMM_SERVER_URL_PUBLIC` to the browser-facing URL — see
+[INTEGRATIONS.md](../guides/INTEGRATIONS.md).
+
+**Container restarts in a loop**
+Almost always a missing `SESSION_SECRET` or an unreachable database.
+`docker compose logs ggrequestz` says which.
+
+**High memory use**
+Each PM2 worker is a full Node process. Pin `PM2_INSTANCES` lower, and add a
+memory limit:
+
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 2G
 ```
 
-## 📋 Testing Checklist
+## Related
 
-Use this checklist to verify your deployment:
-
-- [ ] Environment file configured with required values
-- [ ] All containers start successfully
-- [ ] Health checks pass for all services
-- [ ] Application accessible on configured port
-- [ ] Database connection established
-- [ ] Cache connection working (if enabled)
-- [ ] Search engine accessible (if enabled)
-- [ ] Setup wizard completes (for basic auth)
-- [ ] Login process works
-- [ ] Game search functionality works
-- [ ] Request submission works
-- [ ] Admin panel accessible
-- [ ] External integrations work (if configured)
-
-## 🆘 Support
-
-If you encounter issues during testing:
-
-1. Check the logs: `docker compose logs -f`
-2. Verify your `.env` configuration
-3. Ensure all required environment variables are set
-4. Check the troubleshooting section above
-5. Consult the main README.md for additional configuration help
-
-For persistent issues, please check the project's issue tracker or documentation.
-
----
-
-**Happy Testing! 🚀**
+- [CONFIGURATION.md](../CONFIGURATION.md) — every environment variable
+- [DATABASE_SETUP.md](DATABASE_SETUP.md) — migrations, pooling, backups
+- [OIDC_SETUP.md](OIDC_SETUP.md) — SSO and redirect URIs
+- [TESTING.md](TESTING.md) — disposable stack for rehearsing an upgrade
