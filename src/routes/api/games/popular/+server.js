@@ -4,8 +4,7 @@
 
 import { json } from "@sveltejs/kit";
 import { getPopularGames } from "$lib/igdb.js";
-import { isRommAvailable, crossReferenceWithROMM } from "$lib/romm.server.js";
-import { cachePopularGames, invalidateCache, withCache } from "$lib/cache.js";
+import { invalidateCache } from "$lib/cache.js";
 import {
   parsePaginationParams,
   loadUserPreferences,
@@ -26,9 +25,6 @@ export async function GET({ url }) {
       "apply_to_popular",
     );
 
-    // Check if ROMM is available for cross-referencing
-    const rommAvailable = await isRommAvailable();
-
     // Force cache refresh if explicitly requested
     const forceRefresh = searchParams.get("refresh") === "true";
 
@@ -39,10 +35,11 @@ export async function GET({ url }) {
     // Simplified approach: direct IGDB query like Recent Games
     const games = await getPopularGames(limit, offset, userPreferences, false);
 
-    // TEMPORARY: Skip ROMM cross-reference for debugging
-    // if (rommAvailable && games.length > 0) {
-    //   games = await crossReferenceWithROMM(games);
-    // }
+    // No ROMM cross-reference here. It was disabled some time ago, but the
+    // uncached isRommAvailable() probe that fed it was left in place — so this
+    // route paid a live ROMM round trip, up to the full 12s retry budget, for a
+    // value it discarded. If cross-referencing returns, read availability from
+    // getRommAvailabilitySnapshot() rather than probing on the request path.
 
     // Return standard paginated response
     return json(buildPaginatedResponse(games, page, limit));
