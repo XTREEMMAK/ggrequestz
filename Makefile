@@ -1,7 +1,8 @@
 # G.G Requestz Docker Management Makefile
 
 .PHONY: help build up down logs clean dev prod backup restore health \
-	test-blank test-seeded test-live test-down test-logs test-seed test-shell
+	test-blank test-seeded test-live test-down test-logs test-seed test-shell \
+	test-upgrade-old test-upgrade-new test-upgrade-down
 
 # Default target
 help:
@@ -26,6 +27,11 @@ help:
 	@echo "  test-logs    Follow test stack logs"
 	@echo "  test-shell   Shell into the test app container"
 	@echo "  test-down    Stop the test stack and delete its volumes"
+	@echo ""
+	@echo "🔀 Version-upgrade test (isolated from the above):"
+	@echo "  test-upgrade-old FROM=v1.2.5   Build and run a past release"
+	@echo "  test-upgrade-new               Swap to this working tree, same DB"
+	@echo "  test-upgrade-down              Tear down and remove the worktree"
 	@echo ""
 	@echo "🚀 Production:"
 	@echo "  prod      Start production stack"
@@ -259,3 +265,97 @@ test-shell:
 # Removes volumes too — the stack is disposable by design
 test-down:
 	$(TEST_COMPOSE) --profile all down -v
+
+# ---------------------------------------------------------------------------
+# Version-upgrade integrity test — does a database created by a real past
+# release upgrade cleanly to this working tree?
+#
+# docker-compose.test.upgrade.yml brings up Postgres 15 + Redis only, isolated
+# from every other stack (separate project, ports, volumes). The app container
+# is built and run directly with `docker build`/`docker run`, once per leg, so
+# swapping versions is just building a different image against the same
+# database — no compose file to edit mid-test.
+#
+# Usage:
+#   make test-upgrade-old FROM=v1.2.5   # stand up the old release, seed some data
+#   make test-upgrade-new               # swap to this working tree, watch it migrate
+#   make test-upgrade-down              # tear down and remove the worktree
+# ---------------------------------------------------------------------------
+
+UPGRADE_COMPOSE = docker compose -f docker-compose.test.upgrade.yml
+UPGRADE_FROM ?= v1.2.5
+UPGRADE_WORKTREE = tmp/worktree-$(UPGRADE_FROM)
+UPGRADE_SECRET_FILE = tmp/test-upgrade.session-secret
+UPGRADE_PORT ?= 3200
+
+# Stood up once and reused by both legs, so the "old" admin's session and any
+# JWTs it issued stay valid across the swap to the "new" image.
+define upgrade_session_secret
+	@mkdir -p tmp
+	@test -f $(UPGRADE_SECRET_FILE) || openssl rand -hex 32 > $(UPGRADE_SECRET_FILE)
+endef
+
+test-upgrade-old:
+	$(call upgrade_session_secret)
+	@test -d $(UPGRADE_WORKTREE) || git worktree add $(UPGRADE_WORKTREE) $(UPGRADE_FROM)
+	$(UPGRADE_COMPOSE) up -d
+	docker build -t ggr-upgrade:old $(UPGRADE_WORKTREE)
+	docker rm -f ggr-upgrade-app >/dev/null 2>&1 || true
+	docker run -d --name ggr-upgrade-app \
+		--network ggr-upgrade-net \
+		-p 127.0.0.1:$(UPGRADE_PORT):3000 \
+		-e NODE_ENV=production \
+		-e PORT=3000 \
+		-e PUBLIC_SITE_URL=http://127.0.0.1:$(UPGRADE_PORT) \
+		-e ORIGIN=http://127.0.0.1:$(UPGRADE_PORT) \
+		-e POSTGRES_HOST=postgres \
+		-e POSTGRES_PORT=5432 \
+		-e POSTGRES_DB=ggrequestz \
+		-e POSTGRES_USER=ggrequestz \
+		-e POSTGRES_PASSWORD=upgradetestpass \
+		-e REDIS_URL=redis://redis:6379 \
+		-e AUTH_METHOD=basic \
+		-e SESSION_SECRET="$$(cat $(UPGRADE_SECRET_FILE))" \
+		-e AUTO_MIGRATE=true \
+		ggr-upgrade:old
+	@echo ""
+	@echo "$(UPGRADE_FROM) is up: http://127.0.0.1:$(UPGRADE_PORT)"
+	@echo ""
+	@echo "Next: sign up through the UI, create a request, a watchlist entry, and"
+	@echo "change a setting or two — then run 'make test-upgrade-new'."
+
+test-upgrade-new:
+	@test -f $(UPGRADE_SECRET_FILE) || { echo "❌ No session secret found — run 'make test-upgrade-old' first"; exit 1; }
+	docker rm -f ggr-upgrade-app >/dev/null 2>&1 || true
+	docker build -t ggr-upgrade:new .
+	docker run -d --name ggr-upgrade-app \
+		--network ggr-upgrade-net \
+		-p 127.0.0.1:$(UPGRADE_PORT):3000 \
+		-e NODE_ENV=production \
+		-e PORT=3000 \
+		-e PUBLIC_SITE_URL=http://127.0.0.1:$(UPGRADE_PORT) \
+		-e ORIGIN=http://127.0.0.1:$(UPGRADE_PORT) \
+		-e POSTGRES_HOST=postgres \
+		-e POSTGRES_PORT=5432 \
+		-e POSTGRES_DB=ggrequestz \
+		-e POSTGRES_USER=ggrequestz \
+		-e POSTGRES_PASSWORD=upgradetestpass \
+		-e REDIS_URL=redis://redis:6379 \
+		-e AUTH_METHOD=basic \
+		-e SESSION_SECRET="$$(cat $(UPGRADE_SECRET_FILE))" \
+		-e AUTO_MIGRATE=true \
+		ggr-upgrade:new
+	@echo ""
+	@echo "Now on this working tree: http://127.0.0.1:$(UPGRADE_PORT)"
+	@echo ""
+	@echo "Check the migration log:"
+	@echo "  docker logs ggr-upgrade-app 2>&1 | grep -E 'Skipping|Running migration|migration'"
+	@echo ""
+	@echo "Check what actually ran:"
+	@echo "  docker exec ggr-upgrade-app node scripts/database/db-manager.js status"
+
+test-upgrade-down:
+	docker rm -f ggr-upgrade-app >/dev/null 2>&1 || true
+	$(UPGRADE_COMPOSE) down -v
+	@if [ -d $(UPGRADE_WORKTREE) ]; then git worktree remove $(UPGRADE_WORKTREE) --force; fi
+	rm -f $(UPGRADE_SECRET_FILE)

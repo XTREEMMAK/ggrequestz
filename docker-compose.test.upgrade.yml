@@ -1,0 +1,54 @@
+# Isolated stack for the version-upgrade integrity test (`make test-upgrade-*`).
+#
+# Postgres and Redis only. The app container is built and run separately for
+# the "old" and "new" legs of the test (see the Makefile) so that swapping
+# versions never means editing a compose file mid-test — both legs point at
+# the same database and cache, just a different app image.
+#
+# Distinct project name, ports and volumes from docker-compose.test.yml, so
+# this can run alongside the regular disposable test stack (make test-blank /
+# test-seeded / test-live) without colliding.
+#
+# postgres:15-alpine to match what v1.2.5 and the real docker-compose.yml both
+# run — docker-compose.test.yml deliberately uses 16, which is fine for that
+# stack's own purposes but is not what this test is trying to reproduce.
+name: ggr-upgrade
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: ggr-upgrade-net
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: "no"
+    ports:
+      - "127.0.0.1:${GGR_UPGRADE_PG_PORT:-5434}:5432"
+    environment:
+      POSTGRES_DB: ggrequestz
+      POSTGRES_USER: ggrequestz
+      POSTGRES_PASSWORD: upgradetestpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ggrequestz -d ggrequestz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: "no"
+    ports:
+      - "127.0.0.1:${GGR_UPGRADE_REDIS_PORT:-6381}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

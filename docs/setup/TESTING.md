@@ -264,6 +264,45 @@ would otherwise succeed return `403`.
 
 ---
 
+## Version-upgrade integrity test
+
+A separate, isolated stack (`docker-compose.test.upgrade.yml`, project name
+`ggr-upgrade`) for verifying that a database created by a past release upgrades
+cleanly to this working tree — migrations apply in the right order, nothing
+gets re-run, and existing data survives.
+
+```bash
+make test-upgrade-old FROM=v1.2.5   # builds the tagged release via a git worktree
+# sign up, create a request/watchlist entry/setting through the UI
+make test-upgrade-new               # swaps to this working tree, same database
+# check the migration log and re-verify the data
+make test-upgrade-down              # tears down and removes the worktree
+```
+
+Both legs run on port `3200` and share the same Postgres 15 volume — only the
+app container is rebuilt between them, so the "upgrade" is exactly what a real
+one is: new code, old data. `FROM` accepts any tag; it defaults to `v1.2.5`.
+
+Watch `docker logs ggr-upgrade-app` for the migration sequence:
+
+```
+⏭️  Skipping 001_initial_schema.sql (already executed)
+⏭️  Skipping 002_complete_schema_updates.sql (already executed)
+🔄 Running migration: 008_add_animated_background_preference.sql
+```
+
+If a future release adds migrations beyond `008`, expect exactly the new ones
+to run — anything already recorded in `ggr_migrations` at the old version
+should be skipped, never re-executed. Compare `executed_at` timestamps for the
+pre-existing rows before and after to confirm nothing touched them.
+
+This is separate from `test-blank`/`test-seeded`/`test-live` on purpose — it
+runs on Postgres 15, matching what a real release actually ships, rather than
+the 16 used by the disposable stack, and it is the only mode that runs code
+from anywhere other than the current working tree.
+
+---
+
 ## Things worth checking here
 
 - **Cold start.** Point `ROMM_SERVER_URL` at an unroutable address
