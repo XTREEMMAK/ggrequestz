@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Bug Fixes
+
+- **ROMM degrades to permanent HTTP 500s until the container is restarted.**
+  The bearer token was cached in module scope with no expiry tracking and
+  discarded only on an exact `401`. RomM's password grant issues a 30-minute
+  token, and once it lapses RomM answers with **500**, not 401 — so the dead
+  token was never cleared and every subsequent request from that worker re-sent
+  it. The retry loop then replayed the same dead token four times.
+  - The token now tracks the lifetime RomM reports and renews a minute ahead of
+    it, concurrent callers share a single authentication, and the credential is
+    discarded on 401, 403 or 5xx.
+  - Setting `ROMM_API_TOKEN` to a Client API Token avoids the expiry entirely
+    and remains the recommended configuration.
+- **`/api/games/popular` took up to 12 seconds.** It awaited an uncached
+  `isRommAvailable()` probe whose only consumer — the cross-reference call — had
+  been commented out, so the route paid a full ROMM round trip, retries
+  included, for a value it discarded.
+- **Every log line was printed twice.** `out_file: /dev/stdout` in
+  `ecosystem.config.cjs` wrote to the container's stdout while `pm2-runtime`
+  re-emitted the same line from its own tail. This was widely read as evidence
+  of two cluster workers; it was not.
+- **ROMM cross-referencing hammered a failing server.** It probed availability
+  live and then issued its own request — eight HTTP calls per invocation with
+  retries — on every game page load. It now reads the background-refreshed
+  availability snapshot.
+- **The ROMM setup check could hang the first-run wizard.** Its `fetch` had no
+  `AbortSignal`, it reported failures as successes, and it did not recognise
+  `ROMM_API_TOKEN`, so a deployment configured the recommended way was told its
+  credentials were missing.
+
+### ✨ New Features
+
+- **ROMM availability now backs off.** Consecutive failures escalate the
+  re-probe interval 5 → 10 → 20 → 30 minutes instead of pinning it at 5, and
+  requests fail fast while a failure is still cached rather than spending the
+  full 12-second retry budget.
+- **The local test stack has three explicit modes.** `make test-blank` (no
+  admin, lands on `/setup`), `make test-seeded` (admin, 30 games, requests,
+  watchlist) and `make test-live` (seeded, with real IGDB/ROMM credentials).
+  `make test-up` / `test-seed` gave no way to ask for a blank instance and keep
+  it, which made the first-run wizard untestable.
+- **Deterministic offline seed data**, via `scripts/testing/seed-data.js`.
+
+### 🔧 Technical Changes
+
+- **The disposable test stack was inheriting production configuration.** Docker
+  Compose reads `./.env` for `${VAR:-default}` interpolation whether or not a
+  compose file asks it to, so the test stack silently received the production
+  `AUTH_METHOD`, `SESSION_SECRET` and `ROMM_SERVER_URL`. Because
+  `AUTH_METHOD=authentik` hardcodes `needsSetup = false`, the setup wizard could
+  never appear. The stack now runs with `--env-file /dev/null`.
+- **The local e2e suite ran against `.env.development`.** Playwright had a
+  hardcoded env block for CI and nothing for local runs, where its `webServer`
+  booted `npm run dev` — pointed at a live remote database. It now targets the
+  Docker test stack, and refuses to start when the stack is not up.
+- **e2e assertions that had never executed.** Every test branched on "`/setup`
+  or everything else" and treated everything else as the signed-in application;
+  against CI's blank database only the `/setup` branch was ever taken. Running
+  them against a seeded instance showed that none of the other branch's
+  selectors matched. Shell assertions now sign in first.
+- Added a node-environment Vitest project for server-side tests, covering the
+  ROMM credential lifecycle against a mocked `fetch`. `npm run test:integration`.
+
 ### 📚 Documentation
 
 - **Consolidated the documentation and removed guides that described software
