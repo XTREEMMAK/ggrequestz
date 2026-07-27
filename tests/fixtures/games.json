@@ -1,0 +1,313 @@
+{
+  "_comment": [
+    "Deterministic game fixtures for the seeded local test stack.",
+    "",
+    "The igdb_id values are synthetic and live in a 99xxxx range that IGDB does",
+    "not currently allocate, so a seeded instance can never be confused with",
+    "cached real IGDB records and a live cache warm will not collide with these.",
+    "cover_url is null throughout: GameCard renders its own fallback, and",
+    "pointing at remote images would make an offline fixture need the network."
+  ],
+  "games": [
+    {
+      "igdb_id": "990001",
+      "title": "Aurora Drift",
+      "summary": "A weightless racer through the rings of a dying gas giant.",
+      "rating": 88.5,
+      "release_date": "2021-03-12",
+      "platforms": ["PC", "PlayStation 5"],
+      "genres": ["Racing", "Arcade"],
+      "popularity_score": 91.2
+    },
+    {
+      "igdb_id": "990002",
+      "title": "Hollow Signal",
+      "summary": "A radio operator alone on a listening post that will not stay quiet.",
+      "rating": 92.0,
+      "release_date": "2020-10-30",
+      "platforms": ["PC"],
+      "genres": ["Horror", "Adventure"],
+      "popularity_score": 95.4
+    },
+    {
+      "igdb_id": "990003",
+      "title": "Ironroot Saga",
+      "summary": "Three kingdoms, one failing harvest, and a very long winter.",
+      "rating": 84.0,
+      "release_date": "2019-06-04",
+      "platforms": ["PC", "Xbox Series X", "Nintendo Switch"],
+      "genres": ["RPG", "Strategy"],
+      "popularity_score": 78.9
+    },
+    {
+      "igdb_id": "990004",
+      "title": "Neon Tessellate",
+      "summary": "A puzzle game about tiling light across an infinite floor.",
+      "rating": 79.5,
+      "release_date": "2022-01-19",
+      "platforms": ["PC", "Nintendo Switch"],
+      "genres": ["Puzzle", "Indie"],
+      "popularity_score": 64.1
+    },
+    {
+      "igdb_id": "990005",
+      "title": "Deepwater Cartography",
+      "summary": "Map the trench. Do not map what is already mapping you.",
+      "rating": 90.0,
+      "release_date": "2023-08-22",
+      "platforms": ["PC", "PlayStation 5", "Xbox Series X"],
+      "genres": ["Simulation", "Horror"],
+      "popularity_score": 88.7
+    },
+    {
+      "igdb_id": "990006",
+      "title": "Paper Kingdoms",
+      "summary": "A tactics game played entirely on folded maps.",
+      "rating": 86.5,
+      "release_date": "2018-11-15",
+      "platforms": ["PC", "Nintendo Switch"],
+      "genres": ["Strategy", "Indie"],
+      "popularity_score": 71.3
+    },
+    {
+      "igdb_id": "990007",
+      "title": "Vaultbreaker 2",
+      "summary": "The sequel nobody asked for, about a heist everybody remembers.",
+      "rating": 74.0,
+      "release_date": "2022-05-06",
+      "platforms": ["PC", "PlayStation 5"],
+      "genres": ["Action", "Shooter"],
+      "popularity_score": 82.0
+    },
+    {
+      "igdb_id": "990008",
+      "title": "Meridian Line",
+      "summary": "Run a railway across a continent that keeps rearranging itself.",
+      "rating": 87.0,
+      "release_date": "2021-09-28",
+      "platforms": ["PC"],
+      "genres": ["Simulation", "Strategy"],
+      "popularity_score": 69.5
+    },
+    {
+      "igdb_id": "990009",
+      "title": "Grave Tide",
+      "summary": "A fishing village, a rising sea, and one very old promise.",
+      "rating": 91.5,
+      "release_date": "2023-02-14",
+      "platforms": ["PC", "PlayStation 5", "Xbox Series X"],
+      "genres": ["Adventure", "Horror"],
+      "popularity_score": 93.8
+    },
+    {
+      "igdb_id": "990010",
+      "title": "Pocket Astronaut",
+      "summary": "Small person, large solar system, limited fuel.",
+      "rating": 82.0,
+      "release_date": "2020-04-02",
+      "platforms": ["Nintendo Switch", "PC"],
+      "genres": ["Platformer", "Indie"],
+      "popularity_score": 60.4
+    },
+    {
+      "igdb_id": "990011",
+      "title": "The Long Ledger",
+      "summary": "An accounting horror game. The numbers do not balance.",
+      "rating": 77.5,
+      "release_date": "2022-10-31",
+      "platforms": ["PC"],
+      "genres": ["Horror", "Puzzle"],
+      "popularity_score": 55.2
+    },
+    {
+      "igdb_id": "990012",
+      "title": "Salt & Sovereign",
+      "summary": "Trade routes, tall ships, and a crown with too many claimants.",
+      "rating": 85.0,
+      "release_date": "2019-03-21",
+      "platforms": ["PC", "Xbox Series X"],
+      "genres": ["Strategy", "RPG"],
+      "popularity_score": 73.6
+    },
+    {
+      "igdb_id": "990013",
+      "title": "Chromatic Fault",
+      "summary": "A platformer where colour is terrain and terrain is negotiable.",
+      "rating": 89.0,
+      "release_date": "2023-06-09",
+      "platforms": ["PC", "Nintendo Switch"],
+      "genres": ["Platformer", "Puzzle"],
+      "popularity_score": 80.1
+    },
+    {
+      "igdb_id": "990014",
+      "title": "Orbital Lament",
+      "summary": "Decommission a station that does not want to be decommissioned.",
+      "rating": 83.5,
+      "release_date": "2021-12-03",
+      "platforms": ["PC", "PlayStation 5"],
+      "genres": ["Adventure", "Simulation"],
+      "popularity_score": 67.9
+    },
+    {
+      "igdb_id": "990015",
+      "title": "Wolfsbane County",
+      "summary": "A rural detective story with one road in and none out.",
+      "rating": 88.0,
+      "release_date": "2020-08-18",
+      "platforms": ["PC", "Xbox Series X"],
+      "genres": ["Adventure", "Mystery"],
+      "popularity_score": 76.4
+    },
+    {
+      "igdb_id": "990016",
+      "title": "Foundry Zero",
+      "summary": "Automate a factory on a planet with a nineteen-hour day.",
+      "rating": 93.0,
+      "release_date": "2022-03-25",
+      "platforms": ["PC"],
+      "genres": ["Simulation", "Strategy"],
+      "popularity_score": 97.1
+    },
+    {
+      "igdb_id": "990017",
+      "title": "Lantern Hollow",
+      "summary": "Cosy farming, uncosy neighbours.",
+      "rating": 80.5,
+      "release_date": "2021-05-14",
+      "platforms": ["Nintendo Switch", "PC"],
+      "genres": ["Simulation", "RPG"],
+      "popularity_score": 72.8
+    },
+    {
+      "igdb_id": "990018",
+      "title": "Static Choir",
+      "summary": "A rhythm game scored entirely for broken transmitters.",
+      "rating": 85.5,
+      "release_date": "2023-11-07",
+      "platforms": ["PC", "Nintendo Switch"],
+      "genres": ["Rhythm", "Indie"],
+      "popularity_score": 66.3
+    },
+    {
+      "igdb_id": "990019",
+      "title": "Bastion of Ash",
+      "summary": "Hold the wall. The wall is the only thing left.",
+      "rating": 78.0,
+      "release_date": "2018-09-11",
+      "platforms": ["PC", "PlayStation 5", "Xbox Series X"],
+      "genres": ["Action", "Strategy"],
+      "popularity_score": 58.7
+    },
+    {
+      "igdb_id": "990020",
+      "title": "Feather & Fold",
+      "summary": "Origami puzzles that unfold into somewhere else.",
+      "rating": 87.5,
+      "release_date": "2022-07-12",
+      "platforms": ["Nintendo Switch", "PC"],
+      "genres": ["Puzzle", "Indie"],
+      "popularity_score": 63.9
+    },
+    {
+      "igdb_id": "990021",
+      "title": "Redline Parish",
+      "summary": "Street racing through a city under permanent curfew.",
+      "rating": 76.0,
+      "release_date": "2020-02-28",
+      "platforms": ["PC", "PlayStation 5"],
+      "genres": ["Racing", "Action"],
+      "popularity_score": 61.5
+    },
+    {
+      "igdb_id": "990022",
+      "title": "The Quiet Archive",
+      "summary": "Catalogue a library whose books rewrite themselves nightly.",
+      "rating": 90.5,
+      "release_date": "2023-04-18",
+      "platforms": ["PC"],
+      "genres": ["Adventure", "Puzzle"],
+      "popularity_score": 84.2
+    },
+    {
+      "igdb_id": "990023",
+      "title": "Glasswing",
+      "summary": "A flight sim with wings you build badly and repair worse.",
+      "rating": 81.0,
+      "release_date": "2021-07-30",
+      "platforms": ["PC", "Xbox Series X"],
+      "genres": ["Simulation", "Indie"],
+      "popularity_score": 59.8
+    },
+    {
+      "igdb_id": "990024",
+      "title": "Cinder Республик",
+      "summary": "Deliberately awkward Unicode in the title, to test rendering.",
+      "rating": 72.5,
+      "release_date": "2019-10-08",
+      "platforms": ["PC"],
+      "genres": ["Strategy"],
+      "popularity_score": 44.1
+    },
+    {
+      "igdb_id": "990025",
+      "title": "Tidebound",
+      "summary": "An island that is only whole at low water.",
+      "rating": 86.0,
+      "release_date": "2022-09-16",
+      "platforms": ["PC", "PlayStation 5", "Nintendo Switch"],
+      "genres": ["Adventure", "Puzzle"],
+      "popularity_score": 75.0
+    },
+    {
+      "igdb_id": "990026",
+      "title": "Null Sector",
+      "summary": "Corporate espionage in a city with no public records.",
+      "rating": 84.5,
+      "release_date": "2023-01-24",
+      "platforms": ["PC", "Xbox Series X"],
+      "genres": ["Action", "Stealth"],
+      "popularity_score": 79.3
+    },
+    {
+      "igdb_id": "990027",
+      "title": "Harrowgate",
+      "summary": "A roguelike about a door that opens onto worse doors.",
+      "rating": 89.5,
+      "release_date": "2021-11-11",
+      "platforms": ["PC", "Nintendo Switch"],
+      "genres": ["Roguelike", "RPG"],
+      "popularity_score": 86.6
+    },
+    {
+      "igdb_id": "990028",
+      "title": "Marrow & Meridian",
+      "summary": "Two surgeons, one patient, opposite ends of a century.",
+      "rating": 91.0,
+      "release_date": "2023-09-05",
+      "platforms": ["PC"],
+      "genres": ["Adventure", "Mystery"],
+      "popularity_score": 87.4
+    },
+    {
+      "igdb_id": "990029",
+      "title": "Sunken Circuit",
+      "summary": "Repair an underwater datacentre before the lease expires.",
+      "rating": 75.5,
+      "release_date": "2020-06-26",
+      "platforms": ["PC"],
+      "genres": ["Puzzle", "Simulation"],
+      "popularity_score": 52.0
+    },
+    {
+      "igdb_id": "990030",
+      "title": "Verdigris Crown",
+      "summary": "Inherit a kingdom already halfway reclaimed by the forest.",
+      "rating": 88.0,
+      "release_date": "2022-12-01",
+      "platforms": ["PC", "PlayStation 5", "Xbox Series X"],
+      "genres": ["RPG", "Strategy"],
+      "popularity_score": 83.5
+    }
+  ]
+}
