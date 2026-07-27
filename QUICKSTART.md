@@ -237,7 +237,8 @@ fixtures, see [docs/setup/TESTING.md](docs/setup/TESTING.md).
 - [Production Deployment](docs/setup/DEPLOYMENT.md) - SSL, reverse proxy, backups
 - [Database Setup](docs/setup/DATABASE_SETUP.md) - PostgreSQL and migrations
 - [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, basic auth
-- [Navigation Setup](docs/setup/NAVIGATION_SETUP.md) - Custom navigation
+- [Custom Navigation](docs/guides/NAVIGATION.md) - Role-based navigation links
+- [Integrations](docs/guides/INTEGRATIONS.md) - ROMM, Gotify, n8n
 - [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
 - [API Documentation](docs/API.md) - REST API reference
 - [Contributing Guide](CONTRIBUTING.md) - Development guidelines

@@ -1498,4 +1498,4 @@ GG Requestz integrates with:
 - **n8n** - Workflow automation
 - **Redis** - Caching and session storage
 
-See [Integration Guide](guides/INTEGRATION_GUIDE.md) for detailed setup instructions.
+See [Integrations](guides/INTEGRATIONS.md) for detailed setup instructions.

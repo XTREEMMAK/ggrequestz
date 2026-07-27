@@ -70,7 +70,7 @@ docker compose up -d
 ### Guides
 
 - [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, Basic Auth
-- [ROMM Integration](docs/guides/INTEGRATION_GUIDE.md) - Connect with ROMM
+- [Integrations](docs/guides/INTEGRATIONS.md) - ROMM, Gotify and n8n
 - [Content Filtering](#global-content-filtering) - User and global filtering options
 - [API Documentation](docs/API.md) - REST API reference
 - [Interactive API Docs](/api/docs) - OpenAPI specification with live examples

@@ -1,61 +1,49 @@
 # 📚 GG Requestz Documentation
 
-Welcome to the comprehensive documentation for GG Requestz. This directory contains all the guides and references you need to set up, deploy, and maintain your GG Requestz instance.
+Setup, deployment and reference material for running a GG Requestz instance.
 
-## 📖 Table of Contents
+## 🚀 Getting Started
 
-### 🚀 Getting Started
+- [Quick Start Guide](../QUICKSTART.md) — Docker setup, running from source, environment configuration
+- [Configuration Guide](CONFIGURATION.md) — every environment variable the code reads
+- [Architecture Overview](ARCHITECTURE.md) — system design and components
 
-- [Quick Start Guide](../QUICKSTART.md) - Docker setup, running from source, environment configuration
-- [Architecture Overview](ARCHITECTURE.md) - System design and components
+## ⚙️ Setup
 
-### ⚙️ Setup & Configuration
+- [Database Setup](setup/DATABASE_SETUP.md) — PostgreSQL settings, migrations, backups
+- [OIDC / SSO Setup](setup/OIDC_SETUP.md) — any OIDC provider, plus roles and admin access
+- [Production Deployment](setup/DEPLOYMENT.md) — reverse proxy, TLS, scaling, upgrades
+- [Local Test Environment](setup/TESTING.md) — disposable stack with live RomM and Keycloak fixtures
 
-- [Database Setup](setup/DATABASE_SETUP.md) - PostgreSQL configuration and migrations
-- [Docker Setup](setup/DOCKER_SETUP.md) - Container deployment guide
-- [Docker Updates](setup/DOCKER_UPDATES.md) - Updating Docker deployments
-- [Authentication Setup](setup/AUTHENTIK_ADMIN_SETUP.md) - OIDC authentication configuration
-- [OIDC Setup](setup/OIDC_SETUP.md) - Generic OIDC provider setup
-- [Navigation Setup](setup/NAVIGATION_SETUP.md) - Custom navigation configuration
-- [Deployment Guide](setup/DEPLOYMENT.md) - Production deployment strategies
+## 🔌 Guides
 
-### 🔌 Integrations & Guides
+- [Integrations](guides/INTEGRATIONS.md) — ROMM, Gotify, n8n
+- [Custom Navigation](guides/NAVIGATION.md) — role-based navigation links
+- [API Documentation](API.md) — REST API reference
+- [Release Guide](guides/RELEASE_GUIDE.md) — cutting a release
 
-- [Integration Guide](guides/INTEGRATION_GUIDE.md) - Third-party service integrations
-- [ROMM Troubleshooting](guides/ROMM_TROUBLESHOOTING.md) - ROMM integration troubleshooting
-- [API Documentation](API.md) - API endpoints and usage
+## 🏗️ Development
 
-### 🏗️ Development
+- [Contributing Guide](../CONTRIBUTING.md) — development guidelines and standards
+- [Working Agreements](../CLAUDE.md) — commit discipline, performance rules, migration constraints
+- [Changelog](../CHANGELOG.md) — version history
 
-- [Contributing Guide](../CONTRIBUTING.md) - Development guidelines and standards
-- [Changelog](../CHANGELOG.md) - Version history and changes
-
-### 🎨 UI/UX
-
-- **SkeletonLoader Component**: Enhanced with dark theme-optimized colors for better visual consistency
-- **Preloading System**: Hover-based data preloading for improved navigation performance
-
-## 🗂️ Documentation Structure
+## 🗂️ Structure
 
 ```
 docs/
-├── README.md                    # This index file
-├── ARCHITECTURE.md              # System architecture overview
-├── API.md                       # API documentation
-├── CONFIGURATION.md             # Full environment variable reference
-├── setup/                       # Setup and configuration guides
-│   ├── DATABASE_SETUP.md        # Database configuration
-│   ├── DOCKER_SETUP.md          # Docker deployment
-│   ├── DOCKER_UPDATES.md        # Docker updates
+├── README.md                    # This index
+├── ARCHITECTURE.md              # System architecture
+├── API.md                       # API reference
+├── CONFIGURATION.md             # Environment variable reference
+├── setup/
+│   ├── DATABASE_SETUP.md        # PostgreSQL and migrations
 │   ├── DEPLOYMENT.md            # Production deployment
-│   ├── TESTING.md               # Local Docker test stack with live fixtures
-│   ├── AUTHENTIK_ADMIN_SETUP.md # Authentication setup
-│   ├── OIDC_SETUP.md            # OIDC configuration
-│   └── NAVIGATION_SETUP.md      # Navigation configuration
-├── guides/                      # Integration and troubleshooting guides
-│   ├── INTEGRATION_GUIDE.md     # Third-party integrations
-│   ├── ROMM_TROUBLESHOOTING.md  # ROMM troubleshooting
-│   ├── MIGRATION_v1.0.3.md      # Upgrade notes for v1.0.3
+│   ├── OIDC_SETUP.md            # SSO, roles, admin access
+│   └── TESTING.md               # Local Docker test stack
+├── guides/
+│   ├── INTEGRATIONS.md          # ROMM, Gotify, n8n
+│   ├── NAVIGATION.md            # Custom navigation links
 │   └── RELEASE_GUIDE.md         # Cutting a release
 └── dev-notes/                   # Records of past investigations
     ├── V1.3_FINDINGS.md         # v1.3 root causes and open items
@@ -64,20 +52,16 @@ docs/
 
 ## 🆘 Getting Help
 
-1. **Quick Issues**: Check the troubleshooting guides in `guides/`
-2. **Setup Problems**: Review the setup guides in `setup/`
-3. **Development Questions**: See the [Contributing Guide](../CONTRIBUTING.md)
-4. **Feature Requests**: Open an issue on the project repository
+1. **Setup problems** — the guide for that service in `setup/`
+2. **An integration isn't working** — [guides/INTEGRATIONS.md](guides/INTEGRATIONS.md), then the container logs
+3. **Development questions** — [CONTRIBUTING.md](../CONTRIBUTING.md)
+4. **Bugs and feature requests** — [open an issue](https://github.com/XTREEMMAK/ggrequestz/issues)
 
-## 🔄 Documentation Updates
+## 🔄 Maintaining these docs
 
-This documentation is maintained alongside the codebase. When making changes:
-
-1. Update relevant documentation files
-2. Ensure links remain valid
-3. Test setup procedures
-4. Update this index if new documents are added
-
----
-
-**Need to get started quickly?** Jump to the [Quick Start Guide](../QUICKSTART.md)!
+Documentation must describe **shipped behavior**. Several guides here once
+documented environment variables that no code read, which produced user-facing
+bug reports ([#4](https://github.com/XTREEMMAK/ggrequestz/issues/4),
+[#7](https://github.com/XTREEMMAK/ggrequestz/issues/7)). When you change a
+documented setting, grep for it in `src/` before writing about it, and say so
+explicitly when a feature is planned rather than implemented.
