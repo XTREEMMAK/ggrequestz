@@ -122,6 +122,47 @@ Default mapping when `OIDC_ROLE_MAP` is unset (unchanged from earlier
 versions): `gg-requestz-admins` → admin, `gg-requestz-managers` → manager,
 `gg-requestz-users` → viewer.
 
+### Granting admin access
+
+Two routes, and they compose: a locally-set `is_admin` flag is not cleared by
+group membership, so a database admin stays an admin even if the provider sends
+no groups at all.
+
+**Via the provider.** Create the group, add the user, and have them log in
+again. With the default mapping that group is `gg-requestz-admins`; with
+`OIDC_ROLE_MAP` set it is whichever group you mapped to `admin`. Membership is
+re-read from the token on every login and on every admin page load, so removing
+someone from the group revokes their access immediately.
+
+In Authentik specifically: **Directory → Groups → Create Group**, named
+`gg-requestz-admins`, then add users under **Directory → Users → Groups**. The
+provider must actually emit the claim — check **Applications → Providers → your
+provider** for "Include claims in id_token", and that the `groups` scope is
+mapped. Keycloak needs a "Group Membership" mapper added by hand; it emits none
+by default.
+
+**Directly in the database**, when you are locked out or setting up the first
+admin:
+
+```sql
+UPDATE ggr_users SET is_admin = TRUE WHERE email = 'you@example.com';
+```
+
+The first user to log in is made an admin automatically, so this is usually
+only needed after that user is gone.
+
+Verify which one is in effect:
+
+```sql
+SELECT email, is_admin FROM ggr_users WHERE email = 'you@example.com';
+```
+
+**Admin access denied after adding the group?** Check the spelling — matching is
+case-sensitive — and confirm the claim is actually arriving. An absent groups
+claim is logged with a warning at each login; a claim that arrives empty is
+treated as "member of no groups" and is the usual culprit when only group-based
+admin was configured.
+
 ---
 
 ## Provider examples
