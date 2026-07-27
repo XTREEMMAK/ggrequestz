@@ -1,7 +1,7 @@
 # GameRequest Docker Management Makefile
 
 .PHONY: help build up down logs clean dev prod backup restore health \
-	test-up test-down test-logs test-seed test-shell
+	test-blank test-seeded test-live test-down test-logs test-seed test-shell
 
 # Default target
 help:
@@ -19,11 +19,13 @@ help:
 	@echo "  dev-logs  Follow development logs"
 	@echo ""
 	@echo "🧪 Local test stack (docker-compose.test.yml):"
-	@echo "  test-up     Build and start the test stack + fixtures"
-	@echo "  test-seed   Seed the admin login, RomM and Keycloak into known states"
-	@echo "  test-logs   Follow test stack logs"
-	@echo "  test-shell  Shell into the test app container"
-	@echo "  test-down   Stop the test stack and delete its volumes"
+	@echo "  test-blank   Fresh empty instance — lands on the /setup wizard"
+	@echo "  test-seeded  Admin + demo library — lands on /login"
+	@echo "  test-live    Seeded, plus real IGDB/ROMM credentials from .env"
+	@echo "  test-seed    Re-run the fixture seeding against a running stack"
+	@echo "  test-logs    Follow test stack logs"
+	@echo "  test-shell   Shell into the test app container"
+	@echo "  test-down    Stop the test stack and delete its volumes"
 	@echo ""
 	@echo "🚀 Production:"
 	@echo "  prod      Start production stack"
@@ -164,29 +166,85 @@ dev-setup:
 # ---------------------------------------------------------------------------
 # Local test stack — a real Docker install built from this working tree, plus
 # RomM and Keycloak fixtures. See docs/setup/TESTING.md.
+#
+# Two modes, because they test different things and are mutually exclusive:
+#
+#   test-blank   no admin, no data. needsInitialSetup() is true, so the app
+#                redirects to /setup. This is the only way to exercise the
+#                first-run wizard, and seeding destroys the state.
+#   test-seeded  admin, demo library, requests, watchlist. Lands on /login.
+#
+# Both start from an empty volume, so switching between them means test-down
+# first — which the targets do for you.
 # ---------------------------------------------------------------------------
 
-TEST_COMPOSE = docker compose -f docker-compose.test.yml
+# --env-file /dev/null is load-bearing. Compose automatically reads ./.env for
+# ${VAR:-default} interpolation, so without this every default in
+# docker-compose.test.yml resolved from the *production* .env: the stack
+# inherited AUTH_METHOD=authentik (which hardcodes needsSetup=false and hides
+# the setup wizard entirely), the real SESSION_SECRET, and the real
+# ROMM_SERVER_URL. The test stack is meant to be self-contained.
+TEST_COMPOSE = docker compose --env-file /dev/null -f docker-compose.test.yml
+
+# test-live is the deliberate exception: it reads .env so the real IGDB and ROMM
+# credentials interpolate through. docker-compose.test.live.yml pins everything
+# else back to the test values. No romm profile — it points at a real ROMM.
+TEST_LIVE_COMPOSE = docker compose --env-file .env \
+	-f docker-compose.test.yml -f docker-compose.test.live.yml
+TEST_LIVE_PROFILES = --profile oidc
+
 TEST_PROFILES = --profile romm --profile oidc
 
-# Build and start the app, database, cache and integration fixtures
-test-up:
+# Shared: wipe any previous stack and bring a fresh one up. Starting from a
+# deleted volume is what makes "blank" mean blank.
+define test_stack_up
 	mkdir -p tmp/test-fixtures/romm-library/roms tmp/test-fixtures/romm-assets
-	$(TEST_COMPOSE) $(TEST_PROFILES) up -d --build
+	$(1) --profile all down -v 2>/dev/null || true
+	$(1) $(2) up -d --build
+endef
+
+define test_stack_banner
 	@echo ""
 	@echo "App:      http://127.0.0.1:$${GGR_TEST_PORT:-3100}"
 	@echo "RomM:     http://127.0.0.1:$${ROMM_TEST_PORT:-8090}"
 	@echo "Keycloak: http://127.0.0.1:$${KEYCLOAK_TEST_PORT:-8091}"
 	@echo ""
-	@echo "Next: make test-seed"
+endef
 
-# Provision the admin and fixtures, and print the env vars to configure the app
-# with. seed-app.sh runs first so there is an account to sign in with before the
-# integration config is printed.
-test-seed:
-	./scripts/testing/seed-app.sh
+# A brand new installation: schema and system roles only, no admin.
+test-blank:
+	$(call test_stack_up,$(TEST_COMPOSE),$(TEST_PROFILES))
+	$(call test_stack_banner)
+	@echo "Blank instance. Open the app and it will redirect to /setup."
+	@echo "Do NOT run 'make test-seed' — creating the admin ends the blank state."
+
+# A populated installation: admin, demo library, requests, watchlist.
+test-seeded:
+	$(call test_stack_up,$(TEST_COMPOSE),$(TEST_PROFILES))
+	@$(MAKE) --no-print-directory test-seed
 	./scripts/testing/seed-romm.sh
 	./scripts/testing/seed-keycloak.sh
+	$(call test_stack_banner)
+	@echo "Seeded instance. Sign in at /login."
+
+# Seeded, plus the real IGDB and ROMM credentials from .env, for exercising the
+# live integrations. The database and cache stay disposable.
+test-live:
+	@test -f .env || { echo "❌ .env not found — test-live layers it for credentials"; exit 1; }
+	$(call test_stack_up,$(TEST_LIVE_COMPOSE),$(TEST_LIVE_PROFILES))
+	@$(MAKE) --no-print-directory test-seed
+	$(call test_stack_banner)
+	@echo "Seeded instance with live IGDB/ROMM credentials from .env."
+
+# Provision the admin and demo data against a stack that is already running.
+# seed-app.sh runs first so there is an account to sign in with, and it also
+# waits for the entrypoint's migrations, which seed-data.js needs.
+#
+# The RomM and Keycloak fixtures are seeded by test-seeded only: test-live
+# points at a real ROMM, so provisioning the local fixture there is meaningless.
+test-seed:
+	./scripts/testing/seed-app.sh
+	node scripts/testing/seed-data.js
 
 test-logs:
 ifdef SERVICE

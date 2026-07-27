@@ -1,0 +1,45 @@
+# Overlay for `make test-live`.
+#
+# The blank and seeded stacks run with `--env-file /dev/null`, so every
+# ${VAR:-default} in docker-compose.test.yml falls back to its test default and
+# the stack is fully self-contained.
+#
+# test-live is the opposite trade: it runs with `--env-file .env` so the real
+# IGDB_*, ROMM_* and notification credentials interpolate through, letting you
+# exercise the live integrations against a throwaway database.
+#
+# That would also pull in everything else .env defines — AUTH_METHOD=authentik,
+# the production SESSION_SECRET, the production Postgres host. This file pins
+# those back. Anything that decides *what kind of instance this is* stays on the
+# test values; only outbound integration credentials come from .env.
+#
+#   docker compose --env-file .env \
+#     -f docker-compose.test.yml -f docker-compose.test.live.yml up -d --build
+#
+# The local RomM fixture profile is not started for this mode — you are pointing
+# at a real ROMM, so running the fixture too would be contradictory.
+
+services:
+  app:
+    environment:
+      # Basic auth, so the seeded admin can actually sign in. Under
+      # AUTH_METHOD=authentik the app hardcodes needsSetup=false and expects an
+      # external IdP that this stack does not run.
+      AUTH_METHOD: basic
+      SESSION_SECRET: test-only-session-secret-do-not-use-in-production
+
+      # The disposable database and cache from the base file, never .env's.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ggrequestz
+      POSTGRES_USER: ggrequestz
+      POSTGRES_PASSWORD: testpass
+      REDIS_URL: redis://redis:6379
+
+      # OIDC stays off. Seed it deliberately with seed-keycloak.sh if wanted.
+      OIDC_ISSUER_URL: ""
+      OIDC_CLIENT_ID: ""
+      OIDC_CLIENT_SECRET: ""
+      AUTHENTIK_CLIENT_ID: ""
+      AUTHENTIK_CLIENT_SECRET: ""
+      AUTHENTIK_ISSUER: ""
