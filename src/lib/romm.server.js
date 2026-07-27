@@ -300,6 +300,35 @@ function warnIfMissingReadScope(token) {
 }
 
 /**
+ * Make an authenticated ROMM request, refusing outright while ROMM is known to
+ * be down.
+ *
+ * Every caller except the availability probe goes through here. The probe uses
+ * `rommAttempt` directly, since it is the thing that closes the breaker again.
+ *
+ * @param {string} endpoint - API endpoint (without /api prefix)
+ * @param {Object} options - Fetch options
+ * @param {string} cookies - Optional cookies to forward (for same-domain auth)
+ * @returns {Promise<Object>} - API response
+ */
+async function rommRequest(endpoint, options = {}, cookies = null) {
+  if (isBreakerOpen()) {
+    const retryAt = availabilityState.checkedAt + availabilityTtl();
+    const error = new Error(
+      `ROMM is unavailable (${availabilityState.reason}); not retrying before ${new Date(
+        retryAt,
+      ).toISOString()}`,
+    );
+    error.status = availabilityState.status;
+    error.reason = "circuit_open";
+    error.endpoint = endpoint;
+    throw error;
+  }
+
+  return rommAttempt(endpoint, options, cookies);
+}
+
+/**
  * Make authenticated request to ROMM API using Bearer token with retry logic
  * @param {string} endpoint - API endpoint (without /api prefix)
  * @param {Object} options - Fetch options
@@ -311,7 +340,7 @@ function warnIfMissingReadScope(token) {
  *   spent its single re-authentication (internal)
  * @returns {Promise<Object>} - API response
  */
-async function rommRequest(
+async function rommAttempt(
   endpoint,
   options = {},
   cookies = null,
@@ -424,7 +453,7 @@ async function rommRequest(
         console.warn(
           `ROMM API error (attempt ${retryCount + 1}/${maxRetries}): ${response.status} ${url}`,
         );
-        return rommRequest(
+        return rommAttempt(
           endpoint,
           options,
           cookies,
@@ -461,7 +490,7 @@ async function rommRequest(
       console.warn(
         `ROMM request ${error.name} (attempt ${retryCount + 1}/${maxRetries}): ${url}`,
       );
-      return rommRequest(
+      return rommAttempt(
         endpoint,
         options,
         cookies,
@@ -602,9 +631,49 @@ const availabilityState = {
   reason: null,
   checkedAt: 0,
   inFlight: null,
+  consecutiveFailures: 0,
 };
 
 const AVAILABILITY_TTL_MS = 5 * 60 * 1000;
+const AVAILABILITY_MAX_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * How long the current result stays authoritative.
+ *
+ * A flat five minutes for both outcomes meant a dead ROMM was re-probed — four
+ * requests and seven seconds of backoff — every five minutes per worker, for as
+ * long as the outage lasted. The interval now doubles with each consecutive
+ * failure (5 → 10 → 20 → 30) and resets the moment ROMM answers.
+ *
+ * @returns {number} - Milliseconds
+ */
+function availabilityTtl() {
+  const failures = availabilityState.consecutiveFailures;
+  if (failures <= 0) return AVAILABILITY_TTL_MS;
+
+  return Math.min(
+    AVAILABILITY_TTL_MS * 2 ** (failures - 1),
+    AVAILABILITY_MAX_TTL_MS,
+  );
+}
+
+/**
+ * Whether ROMM is known to be down and the negative-cache interval has not yet
+ * elapsed. Callers fail immediately rather than spending the full 12s retry
+ * budget on a server that refused them moments ago.
+ *
+ * `not_configured` is excluded: that is not an outage, and rommRequest already
+ * reports it with a more useful message.
+ *
+ * @returns {boolean}
+ */
+function isBreakerOpen() {
+  return (
+    availabilityState.ok === false &&
+    availabilityState.reason !== "not_configured" &&
+    Date.now() - availabilityState.checkedAt < availabilityTtl()
+  );
+}
 
 /**
  * Probe ROMM and record the result. Never throws.
@@ -620,15 +689,19 @@ async function refreshRommAvailability() {
           ok: false,
           status: null,
           reason: "not_configured",
+          consecutiveFailures: 0,
         });
         return availabilityState;
       }
 
-      await rommRequest("/roms?group_by_meta_id=false&limit=1&offset=0");
+      // rommAttempt, not rommRequest: the probe is what closes the breaker
+      // again, so it must be the one caller the breaker never blocks.
+      await rommAttempt("/roms?group_by_meta_id=false&limit=1&offset=0");
       Object.assign(availabilityState, {
         ok: true,
         status: 200,
         reason: null,
+        consecutiveFailures: 0,
       });
     } catch (error) {
       const status = error?.status ?? null;
@@ -638,12 +711,20 @@ async function refreshRommAvailability() {
           ? "unreachable"
           : "error";
 
-      // Log it. A silent `return false` here is why the library could vanish
-      // with nothing in the logs to explain it.
+      Object.assign(availabilityState, {
+        ok: false,
+        status,
+        reason,
+        consecutiveFailures: availabilityState.consecutiveFailures + 1,
+      });
+
+      // Log it, and say when we will look again. A silent `return false` here
+      // is why the library could vanish with nothing in the logs to explain it.
       console.warn(
-        `⚠️ ROMM availability probe failed (${reason}): ${error?.message || error}`,
+        `⚠️ ROMM availability probe failed (${reason}): ${
+          error?.message || error
+        } — next probe in ${Math.round(availabilityTtl() / 60000)}min`,
       );
-      Object.assign(availabilityState, { ok: false, status, reason });
     } finally {
       availabilityState.checkedAt = Date.now();
       availabilityState.inFlight = null;
