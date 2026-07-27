@@ -122,6 +122,12 @@ vitest.config.ts.timestamp-*
 # curl cookie jars from manual API testing
 cookies.txt
 
-# Per-developer Claude Code settings. .claude/settings.json is the shared,
-# checked-in one; .local.json is personal and must not be.
-.claude/settings.local.json
+# Claude Code. Nothing here is shared: CLAUDE.md is agent working agreements,
+# and the settings files are per-developer. Anything a contributor needs is in
+# docs/dev-notes/ENGINEERING_RULES.md instead.
+#
+# CLAUDE.md stays at the repository root rather than moving under .claude/,
+# because the root path is the one Claude Code is documented to read. Ignoring
+# it keeps it out of the repository without risking it going silently unread.
+.claude/
+CLAUDE.md
