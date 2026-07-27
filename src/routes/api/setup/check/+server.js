@@ -6,8 +6,12 @@
 import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getRedisClient } from "$lib/cache.js";
+import { fetchWithTimeout } from "$lib/utils.js";
 
-export async function POST({ request, cookies }) {
+// The setup wizard waits on this check, so it cannot block unbounded.
+const ROMM_CHECK_TIMEOUT_MS = 10000;
+
+export async function POST({ request }) {
   try {
     const { service } = await request.json();
 
@@ -24,7 +28,7 @@ export async function POST({ request, cookies }) {
         result = await testIGDB();
         break;
       case "romm_library":
-        result = await testROMM(cookies);
+        result = await testROMM();
         break;
       default:
         result = { success: false, error: "Unknown service" };
@@ -131,66 +135,101 @@ async function testIGDB() {
   }
 }
 
-async function testROMM(cookies) {
+async function testROMM() {
+  const rommUrl = process.env.ROMM_SERVER_URL;
+  const rommToken = process.env.ROMM_API_TOKEN;
+  const rommUsername = process.env.ROMM_USERNAME;
+  const rommPassword = process.env.ROMM_PASSWORD;
+
+  if (!rommUrl) {
+    return { success: true, warning: "ROMM not configured (optional)" };
+  }
+
+  // A Client API Token is a complete credential on its own — requiring a
+  // username and password alongside it reported a working configuration as
+  // broken.
+  if (!rommToken && !(rommUsername && rommPassword)) {
+    return {
+      success: false,
+      error:
+        "ROMM credentials not configured. Set ROMM_API_TOKEN, or ROMM_USERNAME and ROMM_PASSWORD.",
+    };
+  }
+
   try {
-    const rommUrl = process.env.ROMM_SERVER_URL;
-    const rommUsername = process.env.ROMM_USERNAME;
-    const rommPassword = process.env.ROMM_PASSWORD;
+    // A Client API Token needs no exchange; verify it against the library
+    // instead, which is what the app actually calls.
+    const response = rommToken
+      ? await fetchWithTimeout(
+          `${rommUrl}/api/roms?group_by_meta_id=false&limit=1&offset=0`,
+          {
+            headers: {
+              Authorization: `Bearer ${rommToken}`,
+              accept: "application/json",
+            },
+          },
+          ROMM_CHECK_TIMEOUT_MS,
+        )
+      : await fetchWithTimeout(
+          `${rommUrl}/api/token`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              grant_type: "password",
+              username: rommUsername,
+              password: rommPassword,
+              scope: "roms.read",
+            }),
+          },
+          ROMM_CHECK_TIMEOUT_MS,
+        );
 
-    if (!rommUrl) {
-      return { success: true, warning: "ROMM not configured (optional)" };
-    }
+    if (response.ok) {
+      if (rommToken) return { success: true };
 
-    if (!rommUsername || !rommPassword) {
-      return { success: false, error: "ROMM credentials not configured" };
-    }
+      const data = await response.json();
+      if (data.access_token) return { success: true };
 
-    // Check if user is authenticated with basic auth
-    let authHeaders = { "Content-Type": "application/json" };
-
-    // Get basic auth session if available
-    const basicAuthSession = cookies?.get("basic_auth_session");
-    if (basicAuthSession) {
-      // For basic auth users, we may need to pass additional headers
-      // But for ROMM test, we use the configured ROMM credentials directly
-    }
-
-    // Test ROMM authentication using the correct OAuth2 token endpoint
-    const tokenResponse = await fetch(`${rommUrl}/api/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        grant_type: "password",
-        username: rommUsername,
-        password: rommPassword,
-        scope: "roms.read",
-      }),
-    });
-
-    if (tokenResponse.ok) {
-      const data = await tokenResponse.json();
-      if (data.access_token) {
-        return { success: true };
-      } else {
-        return {
-          success: false,
-          error: "ROMM authentication failed: No access token received",
-        };
-      }
-    } else if (tokenResponse.status === 401 || tokenResponse.status === 403) {
-      return { success: false, error: "ROMM credentials are invalid" };
-    } else {
+      console.error(
+        "ROMM setup check: token endpoint returned no access_token",
+      );
       return {
         success: false,
-        error: `ROMM connection failed: ${tokenResponse.status}`,
+        error: "ROMM authentication failed: No access token received",
       };
     }
-  } catch (error) {
+
+    if (response.status === 401 || response.status === 403) {
+      console.error(
+        `ROMM setup check: credentials rejected (${response.status})`,
+      );
+      return {
+        success: false,
+        error: `ROMM rejected the credentials (HTTP ${response.status}). Check the token or account, and that it has the roms.read scope.`,
+      };
+    }
+
+    console.error(`ROMM setup check: HTTP ${response.status} from ${rommUrl}`);
     return {
-      success: true,
-      warning: `ROMM connection test failed: ${error.message} (optional service)`,
+      success: false,
+      error: `ROMM connection failed: HTTP ${response.status}`,
+    };
+  } catch (error) {
+    // Report this as a failure. It used to return success:true with a warning,
+    // so an unreachable ROMM looked like a passing check.
+    const timedOut = error?.name === "TimeoutError";
+    console.error(
+      `ROMM setup check failed (${timedOut ? "timeout" : error?.name || "error"}): ${
+        error?.message || error
+      }`,
+    );
+
+    return {
+      success: false,
+      error: timedOut
+        ? `ROMM did not respond within ${ROMM_CHECK_TIMEOUT_MS / 1000}s`
+        : `ROMM connection test failed: ${error?.message || error}`,
     };
   }
 }
