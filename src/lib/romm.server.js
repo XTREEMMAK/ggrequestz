@@ -917,7 +917,18 @@ async function formatROMData(rom) {
  */
 export async function crossReferenceWithROMM(igdbGames, cookies = null) {
   if (browser) throw new Error("crossReferenceWithROMM is server-only");
-  if (!(await isRommConfigured()) || !(await isRommAvailable(cookies))) {
+  if (!(await isRommConfigured())) {
+    return igdbGames;
+  }
+
+  // Read the snapshot instead of probing. This runs on every /game/[id] load,
+  // and a live isRommAvailable() here meant two ROMM round trips per page —
+  // eight requests once retries are counted, whenever ROMM was down.
+  //
+  // Only a known-bad snapshot short-circuits. `ok === null` means no probe has
+  // completed yet on this worker, and skipping on that would drop ROMM badges
+  // from the first page loads after every restart.
+  if (getRommAvailabilitySnapshot().ok === false) {
     return igdbGames;
   }
 
