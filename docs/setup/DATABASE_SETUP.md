@@ -1,194 +1,156 @@
-# Database Setup Guide
+# Database Setup
 
-This document explains how to set up the Supabase PostgreSQL database for GG Requestz with the new cache-first architecture.
+G.G Requestz stores everything in a single PostgreSQL database, accessed
+through the `pg` driver directly — there is no ORM. All tables carry a `ggr_`
+prefix so the app can share a database with other software.
 
-## Architecture Overview
+> **Changed in v1.3.** Earlier versions of this guide described a Supabase
+> cloud project and told you to set `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+> `SUPABASE_SERVICE_KEY`. **No code reads those three variables.** The app has
+> always connected over plain `POSTGRES_*` settings. `scripts/database/db-manager.js`
+> still accepts `SUPABASE_DB_HOST`, `SUPABASE_DB_PORT`, `SUPABASE_DB_NAME`,
+> `SUPABASE_DB_USER` and `SUPABASE_DB_PASSWORD` as fallbacks, but they are
+> legacy aliases for the `POSTGRES_*` values and are not the documented path.
 
-GG Requestz now uses a **cache-first strategy** to minimize IGDB API calls and improve performance:
+## Connection settings
 
-- **Primary Data Source**: Supabase PostgreSQL database
-- **Secondary Source**: IGDB API (fallback when cache misses)
-- **Search Engine**: Typesense (with database fallback)
-- **Cache Strategy**: Intelligent TTL-based refresh
+| Variable            | Description                       | Default      | Required |
+| ------------------- | --------------------------------- | ------------ | -------- |
+| `POSTGRES_HOST`     | Hostname                          | `postgres`   | Yes      |
+| `POSTGRES_PORT`     | Port                              | `5432`       | Yes      |
+| `POSTGRES_DB`       | Database name                     | `ggrequestz` | Yes      |
+| `POSTGRES_USER`     | User                              | `postgres`   | Yes      |
+| `POSTGRES_PASSWORD` | Password                          | -            | **Yes**  |
+| `POSTGRES_POOL_MAX` | Pool size, **per PM2 worker**     | `10`         | No       |
+| `AUTO_MIGRATE`      | Run migrations at container start | `true`       | No       |
 
-## Database Tables
+`POSTGRES_POOL_MAX` is per worker, not per container. With the default
+`PM2_INSTANCES=max` the real ceiling is `POSTGRES_POOL_MAX` × core count, so a
+16-core host opens up to 160 connections against Postgres's default
+`max_connections` of 100. Raise `max_connections` before raising the pool.
 
-All tables use the `ggr_` prefix for namespace isolation:
+## Docker: nothing to do
 
-### `ggr_games_cache`
-
-- **Purpose**: Cache IGDB game data locally
-- **Key Fields**: `igdb_id`, `title`, `summary`, `cover_url`, `rating`, `platforms`, `genres`
-- **Cache Fields**: `cached_at`, `last_updated`, `needs_refresh`
-
-### `ggr_game_requests`
-
-- **Purpose**: Store user game requests
-- **Key Fields**: `user_id`, `title`, `request_type`, `status`, `priority`
-- **Types**: `game` (new), `update` (metadata), `fix` (broken data)
-
-### `ggr_user_watchlist`
-
-- **Purpose**: User's personal game watchlists
-- **Key Fields**: `user_id`, `igdb_id`, `added_at`
-- **Relation**: Links to `ggr_games_cache`
-
-### `ggr_user_analytics`
-
-- **Purpose**: Track user actions for insights
-- **Key Fields**: `user_id`, `action`, `metadata`, `timestamp`
-
-## Setup Instructions
-
-### 1. Supabase Project Setup
-
-1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Note your project URL and API keys
-3. Copy the following from your Supabase dashboard:
-   - **Project URL**: `https://your-project-ref.supabase.co`
-   - **Anon Key**: Found in Settings > API
-   - **Service Role Key**: Found in Settings > API (keep secret!)
-
-### 2. Environment Configuration
-
-Update your `.env` file with Supabase credentials:
-
-```env
-# Supabase Database Configuration
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_KEY=your_supabase_service_role_key
-```
-
-### 3. Database Initialization
-
-Run the database initialization script:
+`docker compose up -d` starts a `postgres:15-alpine` service, waits for its
+health check, and then `scripts/deployment/docker-entrypoint.js` initialises the
+schema on first boot and applies pending migrations on every subsequent boot.
+Watch it happen:
 
 ```bash
-# Initialize database tables and indexes
-npm run db:init
+docker compose logs -f ggrequestz | grep -iE "schema|migration"
 ```
 
-This script will:
+Set `AUTO_MIGRATE=false` if you would rather apply migrations yourself during a
+maintenance window; the app still starts, against whatever schema is present.
 
-- Create all `ggr_` prefixed tables
-- Set up indexes for performance
-- Add triggers for automatic timestamps
-- Verify table creation
+### Using an external PostgreSQL
 
-### 4. Cache Warm-Up (Optional)
-
-Populate the cache with popular games:
+Point the connection variables at your server and remove the `postgres` service
+from `docker-compose.yml` (also drop it from the app's `depends_on`, or Compose
+will refuse to start):
 
 ```bash
-# Warm up the games cache
-npm run db:warm
+POSTGRES_HOST=db.internal.example.com
+POSTGRES_PORT=5432
+POSTGRES_DB=ggrequestz
+POSTGRES_USER=ggrequestz
+POSTGRES_PASSWORD=...
 ```
 
-### 5. Verify Setup
+The database must exist and the user must own it — the app creates tables, not
+databases.
 
-Check cache statistics:
+## Running from source
 
 ```bash
-# Show cache statistics
-npm run db:stats
+docker compose up -d postgres    # or point .env at your own server
+npm run db:migrate
 ```
 
-## Cache Strategy Details
+## Migration commands
 
-### Cache TTL (Time To Live)
+| Command              | Effect                                       |
+| -------------------- | -------------------------------------------- |
+| `npm run db:init`    | Create the core tables on an empty database  |
+| `npm run db:migrate` | Apply every migration not yet recorded       |
+| `npm run db:status`  | List applied and pending migrations          |
+| `npm run db:warm`    | Populate the games cache with popular titles |
+| `npm run db:stats`   | Print cache row counts and freshness         |
+| `npm run db:fix`     | Repair a damaged `ggr_migrations` table      |
 
-- **Popular Games**: 6 hours
-- **Recent Games**: 12 hours
-- **Game Details**: 24 hours
-- **Search Results**: 2 hours
+## How migrations are tracked
 
-### Cache Flow
+Files live in `migrations/`, named `NNN_description.sql`, and run in
+**lexicographic order**. `db-manager.js` records each one in `ggr_migrations`
+**by filename** and skips any filename already present.
 
-1. **Request comes in** → Check cache first
-2. **Cache hit & fresh** → Return cached data
-3. **Cache miss/stale** → Fetch from IGDB API
-4. **Cache result** → Store in database for future requests
-5. **Return data** → Serve to user
+Two consequences worth knowing:
 
-### Background Refresh
+- Renaming a migration that has already shipped makes it run again. Don't.
+- Ordering is lexicographic, not numeric, so a hypothetical `010_` sorts before
+  `002_`. Keep the three-digit prefix.
 
-- Stale games are refreshed in background
-- Popular games are prioritized for refresh
-- Failed API calls use stale cache as fallback
+Write new migrations defensively — `IF NOT EXISTS`, `ON CONFLICT DO NOTHING` —
+because there is no transaction wrapping the whole run and a partial failure
+leaves the schema half-applied.
 
-## Performance Benefits
+```sql
+-- Migration: 009_add_widget_preference
+-- Description: Per-user widget layout preference
 
-### Before (Direct IGDB API)
+ALTER TABLE ggr_users
+  ADD COLUMN IF NOT EXISTS widget_layout JSONB DEFAULT '[]'::jsonb;
+```
 
-- ⚠️ 2-5 second page loads
-- ⚠️ Rate limited to 4 requests/second
-- ⚠️ Fails when IGDB is down
-- ⚠️ High API usage costs
+### Known limitations
 
-### After (Cache-First)
+These are real gaps in the current implementation. Do not rely on them working:
 
-- ✅ 200-500ms page loads
-- ✅ Handle thousands of concurrent users
-- ✅ Works offline/when IGDB is down
-- ✅ 90% reduction in API calls
+- **No locking.** `ggr_migration_lock` is created by `001_initial_schema.sql`
+  but never read. Two containers booting at once are not serialised against
+  each other. With `AUTO_MIGRATE=true` and a replicated deployment, roll one
+  instance at a time.
+- **No rollback.** `rollback_sql` is stored in `ggr_migrations` and never
+  executed. Restoring from a backup is the only way back.
+- **No version gate.** `ggr_schema_version` is written but never read; there is
+  no upgrade path keyed on schema version.
+- **Schema mismatches do not stop the app.** `verifySchemaIntegrity()` logs to
+  stderr and returns. An instance that refuses to boot is harder to repair than
+  one running degraded, so this is deliberate — but it means **you have to read
+  the container logs after an upgrade** to know whether the schema is sound.
 
-## Monitoring & Maintenance
+`migrations/legacy/` holds migrations from before the tracking table existed.
+They are not run and are kept for reference only.
 
-### Regular Tasks
-
-1. **Monitor cache hit rates** - Use `npm run db:stats`
-2. **Refresh stale games** - Runs automatically in background
-3. **Database maintenance** - PostgreSQL handles automatically
-4. **API quota monitoring** - Much lower usage now
-
-### Troubleshooting
-
-**Database connection issues:**
-
-- Verify Supabase credentials in `.env`
-- Check Supabase project status
-- Test network connectivity
-
-**Cache not populating:**
-
-- Check IGDB API credentials
-- Verify IGDB API quotas
-- Review application logs
-
-**Performance issues:**
-
-- Monitor database query performance
-- Check Supabase usage metrics
-- Consider upgrading Supabase plan if needed
-
-## Database Migration
-
-The system is designed for clean deployment:
-
-1. Fresh Supabase database setup with `ggr_` tables
-2. Cache populates automatically as users browse games
-3. No migration needed from legacy systems
-4. Clean, modern PostgreSQL architecture
-
-## Security Considerations
-
-- **Service Role Key**: Keep secret, only use server-side
-- **Anon Key**: Safe for client-side use
-- **Row Level Security**: Can be enabled for additional protection
-- **API Rate Limiting**: Built into Supabase
-
-## Backup & Recovery
-
-Supabase provides automated backups:
-
-- **Point-in-time recovery** for paid plans
-- **Manual backups** via dashboard
-- **Export options** for data portability
-
-For additional backup, consider:
+## Backups
 
 ```bash
-# Export games cache (example)
-pg_dump -h your-supabase-host -U postgres -t ggr_games_cache > games_backup.sql
+# Dump
+docker compose exec -T postgres pg_dump -U postgres ggrequestz > backup.sql
+
+# Restore into an empty database
+docker compose exec -T postgres psql -U postgres -d ggrequestz < backup.sql
 ```
+
+Take a dump before every upgrade. Given that there is no rollback path, it is
+the only way to undo a migration.
+
+## Troubleshooting
+
+**App exits with "Failed to connect to database after maximum retries"**
+The entrypoint retries with a delay before giving up. Check that Postgres is
+healthy (`docker compose ps`) and that `POSTGRES_HOST` resolves _from inside
+the app container_ — `localhost` is the container itself, not the host.
+
+**"too many connections for role"**
+`POSTGRES_POOL_MAX` × `PM2_INSTANCES` exceeds `max_connections`. Lower the pool,
+pin `PM2_INSTANCES` to a number, or raise `max_connections`.
+
+**A migration failed halfway**
+Check `npm run db:status` for what was recorded, inspect the schema, and fix
+forward with a new migration. `npm run db:fix` only repairs the tracking table
+itself; it does not undo DDL.
+
+**Schema warnings in the logs after upgrading**
+`verifySchemaIntegrity()` found a mismatch and let the app boot anyway. Run
+`npm run db:status`, and if migrations are pending, apply them.
