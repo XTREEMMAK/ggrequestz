@@ -34,9 +34,11 @@ module.exports = {
       max_restarts: 10,
       max_memory_restart: "1G",
 
-      // Logging - disable file logging to let Docker capture stdout
-      out_file: "/dev/stdout",
-      error_file: "/dev/stderr",
+      // Logging. Deliberately no out_file/error_file: pm2-runtime already
+      // forwards worker output to the container's stdout, so pointing the log
+      // files at /dev/stdout wrote every line twice — once directly, once via
+      // pm2-runtime's tail. Setting them is what produced duplicate log lines,
+      // not cluster mode.
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       merge_logs: true,
 
@@ -79,7 +81,7 @@ module.exports = {
       path: "/var/www/ggrequestz",
       "pre-deploy-local": "",
       "post-deploy":
-        "npm install && npm run build && pm2 reload ecosystem.config.js --env production",
+        "npm install && npm run build && pm2 reload ecosystem.config.cjs --env production",
       "pre-setup": "",
       ssh_options: "ForwardAgent=yes",
     },
