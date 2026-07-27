@@ -71,7 +71,8 @@ Before contributing, ensure you have:
 
    ```bash
    # Option 1: Use Docker
-   docker compose --profile database up -d
+   docker compose up -d postgres redis
+   npm run db:migrate
 
    # Option 2: Local PostgreSQL
    createdb ggrequestz
@@ -85,18 +86,19 @@ Before contributing, ensure you have:
 
 ### Docker Development
 
-For a complete isolated environment:
+For a complete isolated environment — a real installation built from your
+working tree, with live RomM and Keycloak fixtures:
 
 ```bash
-# Start full development stack
-docker compose -f docker-compose.yml -f docker-compose.development.yml up -d
-
-# View logs
-docker compose logs -f ggrequestz
-
-# Rebuild after changes
-docker compose build ggrequestz
+make test-up      # build and start the stack
+make test-seed    # provision fixtures and print config to paste back
+make test-logs    # follow the app logs
+make test-down    # stop and delete its volumes
 ```
+
+See [docs/setup/TESTING.md](docs/setup/TESTING.md). Use this rather than
+reasoning about an external API from its documentation — during the v1.3 work
+three separate diagnoses made that way turned out to be wrong.
 
 ## 🔄 Making Changes
 
