@@ -553,7 +553,7 @@
                     </button>
 
                     <a
-                      href="https://github.com/XTREEMMAK/ggrequestz/blob/main/docs/guides/INTEGRATION_GUIDE.md#romm-library-integration"
+                      href="https://github.com/XTREEMMAK/ggrequestz/blob/main/docs/guides/INTEGRATIONS.md#romm"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm flex items-center space-x-1"
