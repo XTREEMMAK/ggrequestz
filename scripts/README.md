@@ -7,23 +7,30 @@ This directory contains utility scripts for database management, deployment, and
 ```
 scripts/
 ├── README.md              # This index file
+├── create-release.sh           # Cut a release; see docs/guides/RELEASE_GUIDE.md
+├── healthcheck.cjs             # Docker HEALTHCHECK probe
 ├── database/              # Database and migration scripts
-│   ├── db-manager.js           # Unified database management (replaces 4 scripts)
+│   ├── db-manager.js           # Unified database management
 │   └── setup-postgres.js       # Direct PostgreSQL setup
 ├── deployment/            # Deployment and Docker scripts
 │   ├── docker-entrypoint.js    # Docker container entry point
 │   ├── docker-cleanup.sh       # Docker cleanup utilities
 │   ├── docker-deploy.sh        # Docker deployment automation
 │   └── deploy-production.sh    # Production deployment script
-└── maintenance/           # Maintenance and data management
-    └── update-game-slugs.js    # Update game slugs in cache
+├── maintenance/           # Maintenance and data management
+│   └── update-game-slugs.js    # Update game slugs in cache
+└── testing/               # Local test stack fixtures — see docs/setup/TESTING.md
+    ├── seed-app.sh             # Initial admin, via the app's first-run endpoint
+    ├── seed-data.js            # Games, users, requests, watchlist fixtures
+    ├── seed-romm.sh            # RomM admin, API token, and a 403 repro account
+    └── seed-keycloak.sh        # OIDC client and test user
 ```
 
 ## 🗄️ Database Scripts
 
 ### `database/db-manager.js` ⭐ **Unified Database Manager**
 
-Consolidated database operations script that replaces 4 separate scripts. Handles initialization, migrations, cache management, and maintenance.
+Consolidated database operations script. Handles initialization, migrations, cache management, and maintenance.
 
 ```bash
 node scripts/database/db-manager.js <command>
@@ -34,9 +41,12 @@ Commands:
   status   - Show migration status and pending migrations
   warm     - Warm up the games cache
   stats    - Show cache statistics
-  sync     - Sync data to Typesense search engine
   fix      - Fix migration table issues
 ```
+
+There is no `seed` command: migrations create the schema and system roles but no
+domain data, and demo fixtures belong to the test stack rather than to the
+production database tool. Use `scripts/testing/seed-data.js` for those.
 
 ### `database/setup-postgres.js`
 
@@ -91,6 +101,35 @@ Update existing cached games with generated slugs. Run this after implementing s
 ```bash
 node scripts/maintenance/update-game-slugs.js
 ```
+
+## 🧪 Testing Scripts
+
+Fixtures for the local Docker test stack. They target `127.0.0.1` on the test
+stack's ports and are not for use against a real deployment. See
+[docs/setup/TESTING.md](../docs/setup/TESTING.md).
+
+Normally you do not run these directly — `make test-seeded` does.
+
+### `testing/seed-app.sh`
+
+Creates the initial admin through the app's own first-run endpoint
+(`POST /api/auth/basic/setup`), so the password is hashed and the admin role
+assigned the way a real installation does it. Also waits for the app's database
+to report healthy, which is what makes it safe to run right after the stack
+starts.
+
+### `testing/seed-data.js`
+
+Inserts 30 games, two non-admin users, one request per status, watchlist entries
+and a custom navigation link. Runs offline and is idempotent. It refuses to run
+against a database holding non-fixture games unless given `--force`, and it does
+not read the repo `.env`.
+
+### `testing/seed-romm.sh` and `testing/seed-keycloak.sh`
+
+Provision the RomM and Keycloak fixture containers and print the environment
+blocks to configure the app with. `seed-romm.sh` also creates an
+under-privileged account that reproduces the RomM 403 outage.
 
 ## 🚀 Quick Usage Examples
 

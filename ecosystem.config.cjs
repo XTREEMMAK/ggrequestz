@@ -1,5 +1,5 @@
 /**
- * PM2 ecosystem configuration for GameRequest
+ * PM2 ecosystem configuration for G.G Requestz
  * Provides production-ready process management with clustering and monitoring
  */
 

@@ -1,6 +1,6 @@
-# Contributing to GameRequest
+# Contributing to G.G Requestz
 
-Thank you for your interest in contributing to GameRequest! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to G.G Requestz! This document provides guidelines and information for contributors.
 
 ## 📋 Table of Contents
 
@@ -38,7 +38,7 @@ Before contributing, ensure you have:
 
 ### Finding Issues to Work On
 
-1. Check the [Issues](https://github.com/username/ggrequestz/issues) page
+1. Check the [Issues](https://github.com/XTREEMMAK/ggrequestz/issues) page
 2. Look for issues labeled `good-first-issue` or `help-wanted`
 3. Read the issue description and existing comments
 4. Comment on the issue to express your interest
@@ -50,7 +50,7 @@ Before contributing, ensure you have:
 1. **Fork and Clone the Repository**
 
    ```bash
-   git clone https://github.com/yourusername/ggrequestz.git
+   git clone https://github.com/XTREEMMAK/ggrequestz.git
    cd ggrequestz
    ```
 
@@ -218,9 +218,10 @@ which one a given test belongs in.
 1. **Ensure Tests Pass**
 
    ```bash
-   npm run check
    npm run lint
-   npm test
+   npm run check
+   npm run test:unit
+   npm run test:integration
    ```
 
 2. **Update Documentation**
@@ -236,33 +237,10 @@ which one a given test belongs in.
 
 ### Pull Request Template
 
-When creating a PR, include:
-
-```markdown
-## Description
-
-Brief description of changes
-
-## Type of Change
-
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
-
-## Testing
-
-- [ ] Tests pass locally
-- [ ] New tests added for functionality
-- [ ] Manual testing completed
-
-## Checklist
-
-- [ ] Code follows style guidelines
-- [ ] Self-review completed
-- [ ] Documentation updated
-- [ ] No breaking changes (or documented)
-```
+GitHub fills this in for you from
+[`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md). It used
+to be copied out here as well, which meant two versions to keep in step and no
+signal about which one was authoritative.
 
 ## 🎨 Style Guidelines
 
@@ -480,7 +458,7 @@ Contributors are recognized in:
 - **Release notes** - Major contributions
 - **Hall of Fame** - Outstanding contributors
 
-Thank you for contributing to GameRequest! Every contribution, no matter how small, helps make this project better for everyone.
+Thank you for contributing to G.G Requestz! Every contribution, no matter how small, helps make this project better for everyone.
 
 ---
 

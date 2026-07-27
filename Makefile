@@ -1,11 +1,11 @@
-# GameRequest Docker Management Makefile
+# G.G Requestz Docker Management Makefile
 
 .PHONY: help build up down logs clean dev prod backup restore health \
 	test-blank test-seeded test-live test-down test-logs test-seed test-shell
 
 # Default target
 help:
-	@echo "🎮 GameRequest Docker Management"
+	@echo "🎮 G.G Requestz Docker Management"
 	@echo ""
 	@echo "📦 Basic Commands:"
 	@echo "  build     Build all containers"
@@ -129,7 +129,7 @@ pm2-restart:
 
 # Setup for first time
 setup:
-	@echo "🔧 Setting up GameRequest for first time..."
+	@echo "🔧 Setting up G.G Requestz for first time..."
 	@if [ ! -f .env ]; then \
 		echo "📄 Copying environment template..."; \
 		cp .env.example .env; \
