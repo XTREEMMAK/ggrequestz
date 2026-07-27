@@ -15,6 +15,13 @@ const REQUEST_TIMEOUT_MS = 5000;
 // Hard ceiling across all retries for a single logical request.
 const TOTAL_BUDGET_MS = 12000;
 
+// Renew this far ahead of the stated expiry so a request never leaves carrying
+// a token that dies in transit.
+const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
+// RomM's password grant issues a 30-minute token. When the response omits the
+// lifetime, assume less than that rather than more.
+const DEFAULT_TOKEN_TTL_MS = 25 * 60 * 1000;
+
 // Configuration variables
 let ROMM_SERVER_URL, ROMM_SERVER_URL_PUBLIC;
 let ROMM_USERNAME, ROMM_PASSWORD, ROMM_API_TOKEN;
@@ -47,20 +54,83 @@ async function loadEnvironmentVariables() {
   ROMM_API_TOKEN = env.ROMM_API_TOKEN || process.env.ROMM_API_TOKEN;
 }
 
-// Session token storage for authenticated requests
-let sessionToken = null;
+// Session token storage for authenticated requests.
+//
+// `expiresAt` is the epoch-ms after which the token must not be reused. This
+// used to be a bare token with no expiry: the password grant's 30-minute token
+// would lapse, RomM would answer with 500 rather than 401, and because the only
+// invalidation path was an exact 401 the dead token was re-sent forever. The
+// worker stayed poisoned until the process restarted.
+let session = { token: null, expiresAt: 0 };
+
+// Single-flight guard. Without it, every concurrent request on a worker whose
+// token has just lapsed fires its own /api/token call.
+let authInFlight = null;
+
+// Whether the "RomM did not state a token lifetime" fallback has been reported.
+// It is worth knowing once per process, not once every renewal.
+let warnedAboutMissingTtl = false;
 
 /**
  * Clear ROMM session token to force re-authentication
  */
 export function clearRommSession() {
   if (browser) throw new Error("clearRommSession is server-only");
-  sessionToken = null;
+  session = { token: null, expiresAt: 0 };
+}
+
+/**
+ * Whether the cached token is present and not within the renewal margin.
+ * A Client API Token has `expiresAt: Infinity` and is always usable.
+ * @returns {boolean}
+ */
+function hasUsableToken() {
+  return (
+    !!session.token && Date.now() < session.expiresAt - TOKEN_REFRESH_MARGIN_MS
+  );
+}
+
+/**
+ * Return a usable bearer token, authenticating only when necessary.
+ *
+ * Concurrent callers share a single in-flight authentication rather than each
+ * issuing their own.
+ *
+ * @param {boolean} forceRefresh - Discard the cached token first
+ * @returns {Promise<string|null>} - Bearer token, or null if unconfigured
+ */
+async function getSessionToken(forceRefresh = false) {
+  if (forceRefresh) {
+    session = { token: null, expiresAt: 0 };
+  }
+
+  if (hasUsableToken()) {
+    return session.token;
+  }
+
+  // An authentication already in progress is always fetching a fresh token, so
+  // it satisfies a forced refresh too.
+  if (authInFlight) {
+    return authInFlight;
+  }
+
+  authInFlight = (async () => {
+    try {
+      const issued = await authenticateROMM();
+      session = issued;
+      return issued.token;
+    } finally {
+      authInFlight = null;
+    }
+  })();
+
+  return authInFlight;
 }
 
 /**
  * Authenticate with ROMM API using token endpoint
- * @returns {Promise<string|null>} - Access token or null if failed
+ * @returns {Promise<{token: string|null, expiresAt: number}>} - Token and the
+ *   epoch-ms it lapses at. `Infinity` for credentials that never expire.
  */
 async function authenticateROMM() {
   if (browser) throw new Error("authenticateROMM is server-only");
@@ -68,16 +138,16 @@ async function authenticateROMM() {
   await loadEnvironmentVariables();
 
   // A Client API Token is used verbatim as the bearer credential — there is no
-  // token exchange to perform.
+  // token exchange to perform, and no expiry to track.
   if (ROMM_API_TOKEN) {
-    return ROMM_API_TOKEN;
+    return { token: ROMM_API_TOKEN, expiresAt: Infinity };
   }
 
   if (!ROMM_SERVER_URL || !ROMM_USERNAME || !ROMM_PASSWORD) {
     console.warn(
       "⚠️ ROMM server URL or credentials not configured - ROMM features disabled",
     );
-    return null;
+    return { token: null, expiresAt: 0 };
   }
 
   try {
@@ -136,12 +206,28 @@ async function authenticateROMM() {
 
     if (!token) {
       console.error("No access token received from ROMM API");
-      return null;
+      return { token: null, expiresAt: 0 };
     }
 
     warnIfMissingReadScope(token);
 
-    return token;
+    // RomM reports the lifetime as `expires_in`; older builds use `expires`.
+    // Both are seconds.
+    const ttlSeconds = Number(data.expires_in ?? data.expires);
+    const hasTtl = Number.isFinite(ttlSeconds) && ttlSeconds > 0;
+
+    if (!hasTtl && !warnedAboutMissingTtl) {
+      warnedAboutMissingTtl = true;
+      console.warn(
+        `⚠️ ROMM issued a token without stating a lifetime; assuming ${
+          DEFAULT_TOKEN_TTL_MS / 60000
+        } minutes. Set ROMM_API_TOKEN to a Client API Token to avoid expiry entirely.`,
+      );
+    }
+
+    const ttlMs = hasTtl ? ttlSeconds * 1000 : DEFAULT_TOKEN_TTL_MS;
+
+    return { token, expiresAt: Date.now() + ttlMs };
   } catch (error) {
     // Propagate HTTP-level failures so callers can classify them (a 403 needs
     // a different message and a different fix than an unreachable host).
@@ -241,14 +327,11 @@ async function rommRequest(
   // cannot consume — sending it achieved nothing and leaked a GGR session
   // token to a third-party service.
 
-  // Get session token if we don't have one
-  if (!sessionToken) {
-    sessionToken = await authenticateROMM();
-  }
-
-  // Add Bearer token authentication
-  if (sessionToken) {
-    headers["Authorization"] = `Bearer ${sessionToken}`;
+  // Renewed proactively — a token inside the refresh margin is treated as
+  // already gone, rather than waiting for RomM to reject it.
+  const token = await getSessionToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const fetchOptions = { ...options, headers };
@@ -269,11 +352,10 @@ async function rommRequest(
     // response replaces the original so error reporting below describes the
     // attempt that actually failed.
     if (response.status === 401) {
-      sessionToken = null;
-      sessionToken = await authenticateROMM();
+      const refreshed = await getSessionToken(true);
 
-      if (sessionToken && remaining() > 0) {
-        headers["Authorization"] = `Bearer ${sessionToken}`;
+      if (refreshed && remaining() > 0) {
+        headers["Authorization"] = `Bearer ${refreshed}`;
         response = await fetchWithTimeout(
           url,
           { ...fetchOptions, headers },
