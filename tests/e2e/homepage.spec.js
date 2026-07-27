@@ -1,26 +1,50 @@
 import { test, expect } from "@playwright/test";
+import { signIn } from "./helpers.js";
 
-test.describe("Homepage", () => {
-  test("should display the main navigation", async ({ page }) => {
-    await page.goto("/");
+/**
+ * `/` is never the application for an unauthenticated visitor: it redirects to
+ * /setup on a blank instance and /login on a seeded one. These tests used to
+ * assume anything that was not /setup was the signed-in app, so their
+ * navigation assertions had never actually run — and once they did, none of the
+ * selectors matched. The login page renders the shell server-side and then
+ * drops it on hydration, so those elements really are absent.
+ *
+ * Anything asserting on the shell now signs in first.
+ */
+test.describe("Application shell", () => {
+  test("should display the main navigation once signed in", async ({
+    page,
+  }) => {
+    test.skip(!(await signIn(page)), "instance has no admin yet");
 
-    // Will redirect to setup if first time, skip navigation check in that case
-    if (page.url().includes("/setup")) {
-      await expect(page.getByText(/setup/i).first()).toBeVisible();
-    } else {
-      // Check for main navigation elements
-      await expect(page.locator("nav")).toBeVisible();
-      await expect(page.getByText("GG.Requestz")).toBeVisible();
-
-      // Check for main navigation links
-      await expect(page.getByRole("button", { name: /home/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /search/i })).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: /request/i }),
-      ).toBeVisible();
-    }
+    await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/);
+    await expect(page.locator("nav").first()).toBeVisible();
   });
 
+  test("should render the seeded library on the homepage", async ({ page }) => {
+    test.skip(!(await signIn(page)), "instance has no admin yet");
+
+    // seed-data.js inserts 30 games; the homepage shows a subset of them.
+    const gameLinks = page.locator('a[href^="/game/"]');
+    await expect(gameLinks.first()).toBeVisible();
+    expect(await gameLinks.count()).toBeGreaterThan(0);
+  });
+
+  test("should handle mobile navigation menu", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    test.skip(!(await signIn(page)), "instance has no admin yet");
+
+    // The control is labelled "Open sidebar", not "toggle mobile menu". The old
+    // name matched nothing, and the assertion never ran to reveal that.
+    const sidebarToggle = page.getByRole("button", { name: /open sidebar/i });
+    await expect(sidebarToggle).toBeVisible();
+
+    await sidebarToggle.click();
+    await expect(page.locator("nav").first()).toBeVisible();
+  });
+});
+
+test.describe("Homepage", () => {
   test("should redirect unauthenticated users to login", async ({ page }) => {
     await page.goto("/");
 
@@ -32,32 +56,6 @@ test.describe("Homepage", () => {
     } else {
       await expect(page.getByText(/login/i)).toBeVisible();
     }
-  });
-
-  test("should handle mobile navigation menu", async ({ page }) => {
-    // Set mobile viewport
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto("/");
-
-    // Skip if on setup page (no navigation menu)
-    if (page.url().includes("/setup")) {
-      await expect(page.getByText(/setup/i).first()).toBeVisible();
-      return;
-    }
-
-    // Should show mobile menu button
-    const mobileMenuButton = page.getByRole("button", {
-      name: /toggle mobile menu/i,
-    });
-    await expect(mobileMenuButton).toBeVisible();
-
-    // Click to open mobile menu
-    await mobileMenuButton.click();
-
-    // Check if mobile menu items are visible
-    await expect(page.getByText("Home")).toBeVisible();
-    await expect(page.getByText("Search")).toBeVisible();
-    await expect(page.getByText("Request")).toBeVisible();
   });
 
   test("should display loading state initially", async ({ page }) => {
@@ -104,10 +102,11 @@ test.describe("Performance", () => {
   test("should preload critical navigation on hover", async ({ page }) => {
     await page.goto("/");
 
-    // Hover over navigation link
-    const searchLink = page.getByRole("button", { name: /search/i });
-    if (await searchLink.isVisible()) {
-      await searchLink.hover();
+    // .first(), because the shell renders a desktop and a mobile search field
+    // and a bare locator matching both trips Playwright's strict mode.
+    const searchField = page.getByPlaceholder(/search games/i).first();
+    if (await searchField.isVisible().catch(() => false)) {
+      await searchField.hover();
 
       // Wait a bit for prefetching to potentially occur
       await page.waitForTimeout(500);
