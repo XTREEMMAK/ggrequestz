@@ -63,17 +63,47 @@ docker compose up -d
 
 ### Getting Started
 
-- **[Quickstart Guide](QUICKSTART.md)** - Get running in 5 minutes
-- **[Configuration Guide](docs/CONFIGURATION.md)** - All configuration options
-- **[Deployment Guide](docs/setup/DEPLOYMENT.md)** - Production deployment
+- **[Quickstart Guide](QUICKSTART.md)** — Docker setup, running from source, environment configuration
+- **[Configuration Guide](docs/CONFIGURATION.md)** — every environment variable the code reads
+- **[Architecture Overview](docs/ARCHITECTURE.md)** — system design and components
+
+### Setup
+
+- [Database Setup](docs/setup/DATABASE_SETUP.md) — PostgreSQL settings, migrations, backups
+- [OIDC / SSO Setup](docs/setup/OIDC_SETUP.md) — any OIDC provider, plus roles and admin access
+- [Production Deployment](docs/setup/DEPLOYMENT.md) — reverse proxy, TLS, scaling, upgrades
+- [Testing](docs/setup/TESTING.md) — the test layers, and the disposable local stack
 
 ### Guides
 
-- [Authentication Setup](docs/setup/OIDC_SETUP.md) - OIDC, Authentik, Basic Auth
-- [Integrations](docs/guides/INTEGRATIONS.md) - ROMM, Gotify and n8n
-- [Content Filtering](#global-content-filtering) - User and global filtering options
-- [API Documentation](docs/API.md) - REST API reference
-- [Interactive API Docs](/api/docs) - OpenAPI specification with live examples
+- [Integrations](docs/guides/INTEGRATIONS.md) — ROMM, Gotify, n8n
+- [Custom Navigation](docs/guides/NAVIGATION.md) — role-based navigation links
+- [Content Filtering](#global-content-filtering) — user and global filtering options
+- [API Documentation](docs/API.md) — REST API reference
+- [Interactive API Docs](/api/docs) — OpenAPI specification with live examples
+- [Release Guide](docs/guides/RELEASE_GUIDE.md) — cutting a release
+
+### Development
+
+- [Contributing Guide](CONTRIBUTING.md) — development guidelines and standards
+- [Engineering Rules](docs/dev-notes/ENGINEERING_RULES.md) — performance rules, migration constraints, commit discipline
+- [v1.3 Findings](docs/dev-notes/V1.3_FINDINGS.md) — root causes and open items
+- [Login Animation Archive](docs/dev-notes/ARCHIVE_LOGIN_ANIMATION.md) — a past investigation
+- [Changelog](CHANGELOG.md) — version history
+
+### Getting help
+
+1. **Setup problems** — the guide for that service in [docs/setup/](docs/setup/)
+2. **An integration isn't working** — [INTEGRATIONS.md](docs/guides/INTEGRATIONS.md), then the container logs
+3. **Development questions** — [CONTRIBUTING.md](CONTRIBUTING.md)
+4. **Bugs and feature requests** — [open an issue](https://github.com/XTREEMMAK/ggrequestz/issues)
+
+> **Maintaining these docs.** Documentation must describe **shipped behavior**.
+> Several guides once documented environment variables that no code read, which
+> produced user-facing bug reports ([#4](https://github.com/XTREEMMAK/ggrequestz/issues/4),
+> [#7](https://github.com/XTREEMMAK/ggrequestz/issues/7)). When you change a
+> documented setting, grep for it in `src/` before writing about it, and say so
+> explicitly when a feature is planned rather than implemented.
 
 ## 🔧 Key Features Configuration
 

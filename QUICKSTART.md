@@ -245,6 +245,6 @@ fixtures, see [docs/setup/TESTING.md](docs/setup/TESTING.md).
 
 ## Getting Help
 
-- 📖 [Documentation](docs/README.md)
+- 📖 [Documentation](README.md#-documentation)
 - 🐛 [Report Issues](https://github.com/XTREEMMAK/ggrequestz/issues)
 - 💬 [Discussions](https://github.com/XTREEMMAK/ggrequestz/discussions)

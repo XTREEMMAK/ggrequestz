@@ -184,4 +184,4 @@ If you encounter issues with the release process:
 
 ---
 
-**Next:** [Contributing Guide](../../CONTRIBUTING.md) | **Back:** [Documentation Index](../README.md)
+**Next:** [Contributing Guide](../../CONTRIBUTING.md) | **Back:** [Documentation Index](../../README.md#-documentation)
