@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/xtreemmak/projects/node/**)",
+      "Read(//home/xtreemmak/**)"
+    ]
+  }
+}

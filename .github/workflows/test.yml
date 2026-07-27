@@ -27,6 +27,10 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      # Server-side tests, run against a mocked fetch. No services required.
+      - name: Run integration tests
+        run: npm run test:integration
+
       - name: Generate coverage report
         run: npm run test:coverage
 
