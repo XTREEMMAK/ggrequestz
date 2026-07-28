@@ -477,15 +477,11 @@ export const gamesCache = {
    */
   async clear() {
     try {
-      // First, remove foreign key references from game requests (set to null)
-      await query(
-        "UPDATE ggr_game_requests SET igdb_id = NULL WHERE igdb_id IS NOT NULL",
-      );
-
-      // Clear the watchlist entries (they have ON DELETE CASCADE, but let's be explicit)
-      await query("DELETE FROM ggr_user_watchlist");
-
-      // Now we can safely clear the games cache
+      // Only the cache table is cleared. Requests and watchlist entries carry an
+      // igdb_id that used to be a foreign key into this table, which is why this
+      // function once nulled and deleted them; 002_complete_schema_updates.sql
+      // drops both constraints, so that is no longer required and destroyed user
+      // data every time the cache was cleared.
       await query("DELETE FROM ggr_games_cache");
 
       return true;
