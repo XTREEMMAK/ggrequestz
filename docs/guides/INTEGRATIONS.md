@@ -131,16 +131,44 @@ Both are required; notifications are skipped if either is missing. Create an
 
 ---
 
-## n8n
+## Outbound request webhook
 
-Posts request events to an n8n webhook for workflow automation.
+Posts request events to any URL that accepts JSON. n8n is one receiver; so is a
+download automation service, a script, or a chat bridge.
 
 ```env
-N8N_WEBHOOK_URL=https://n8n.example.com/webhook/ggrequestz
+REQUEST_WEBHOOK_URL=https://automation.example.com/hook/ggrequestz
 ```
+
+`N8N_WEBHOOK_URL` is still honoured as a deprecated alias, so existing installs
+need no change. When both are set, `REQUEST_WEBHOOK_URL` wins.
 
 The app sends its own outbound webhooks from `/api/webhooks`; failures are
 logged and do not block the request that triggered them.
+
+### Payload
+
+```json
+{
+  "type": "game_request",
+  "title": "New Game Request: Chrono Trigger",
+  "message": "alice requested \"Chrono Trigger\"",
+  "priority": 5,
+  "timestamp": "2026-01-01T00:00:00.000Z",
+  "data": {
+    "request_id": 42,
+    "user_id": 7,
+    "game_title": "Chrono Trigger",
+    "igdb_id": 1234,
+    "platforms": ["Super Nintendo"],
+    "request_type": "game"
+  }
+}
+```
+
+`data.game_title` and `data.platforms` are what a receiver needs to act on a
+request. `igdb_id` identifies the title unambiguously where the receiver also
+speaks IGDB.
 
 ---
 
