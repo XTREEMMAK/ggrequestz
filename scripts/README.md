@@ -13,10 +13,7 @@ scripts/
 │   ├── db-manager.js           # Unified database management
 │   └── setup-postgres.js       # Direct PostgreSQL setup
 ├── deployment/            # Deployment and Docker scripts
-│   ├── docker-entrypoint.js    # Docker container entry point
-│   ├── docker-cleanup.sh       # Docker cleanup utilities
-│   ├── docker-deploy.sh        # Docker deployment automation
-│   └── deploy-production.sh    # Production deployment script
+│   └── docker-entrypoint.js    # Docker container entry point
 ├── maintenance/           # Maintenance and data management
 │   └── update-game-slugs.js    # Update game slugs in cache
 └── testing/               # Local test stack fixtures — see docs/setup/TESTING.md
@@ -67,30 +64,6 @@ Used automatically in Docker containers. Handles:
 - Environment variable validation
 - Database migration execution
 - Application startup coordination
-
-### `deployment/docker-cleanup.sh`
-
-Docker cleanup utilities for resolving common Docker production issues.
-
-```bash
-bash scripts/deployment/docker-cleanup.sh
-```
-
-### `deployment/docker-deploy.sh`
-
-Automated Docker deployment script.
-
-```bash
-bash scripts/deployment/docker-deploy.sh
-```
-
-### `deployment/deploy-production.sh`
-
-Production deployment script with security settings and health checks.
-
-```bash
-bash scripts/deployment/deploy-production.sh
-```
 
 ## 🔧 Maintenance Scripts
 
@@ -149,16 +122,6 @@ node scripts/database/db-manager.js status
 node scripts/database/db-manager.js warm
 ```
 
-### Docker Deployment
-
-```bash
-# Deploy with Docker
-bash scripts/deployment/docker-deploy.sh
-
-# Clean up Docker issues
-bash scripts/deployment/docker-cleanup.sh
-```
-
 ### Maintenance Operations
 
 ```bash
@@ -188,7 +151,7 @@ When adding new scripts:
 - **Permission denied**: Ensure scripts have execute permissions (`chmod +x script.sh`)
 - **Module not found**: Ensure you're running from the project root directory
 - **Database connection errors**: Check environment variables and database connectivity
-- **Docker issues**: Use the `docker-cleanup.sh` script to resolve common problems
+- **Docker issues**: See [docs/setup/DEPLOYMENT.md](../docs/setup/DEPLOYMENT.md)
 
 ---
 

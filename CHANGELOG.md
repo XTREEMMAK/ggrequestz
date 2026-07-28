@@ -166,6 +166,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Technical Changes
 
+- **Removed three deployment scripts that could not run, one of them
+  destructive.** `deploy-production.sh`, `docker-deploy.sh` and
+  `docker-cleanup.sh` all required a `.env.docker` that is not in the repository
+  and exited immediately without it, and all three referenced the `typesense`
+  service removed several releases ago. `scripts/README.md` nonetheless told
+  users to run them. `deploy-production.sh` was the dangerous one: it invoked
+  `db-manager.js fix` — which drops and recreates `ggr_migrations`
+  unconditionally — as a routine "ensuring migration table structure is
+  compatible" step on every deploy, so anyone who supplied the missing
+  `.env.docker` would have silently lost their migration history each time.
+  `docker-entrypoint.js`, the entrypoint the image actually uses, is unaffected.
 - **The disposable test stack was inheriting production configuration.** Docker
   Compose reads `./.env` for `${VAR:-default}` interpolation whether or not a
   compose file asks it to, so the test stack silently received the production
