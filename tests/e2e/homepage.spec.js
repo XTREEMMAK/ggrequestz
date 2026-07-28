@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { signIn } from "./helpers.js";
+import { signIn, ensureAdmin } from "./helpers.js";
 
 /**
  * `/` is never the application for an unauthenticated visitor: it redirects to
@@ -11,6 +11,17 @@ import { signIn } from "./helpers.js";
  *
  * Anything asserting on the shell now signs in first.
  */
+// The admin these tests sign in as must exist before any of them run. See
+// ensureAdmin() in helpers.js — locally this is a no-op, in CI it creates it.
+test.beforeAll(async ({ playwright, baseURL }) => {
+  const context = await playwright.request.newContext({ baseURL });
+  try {
+    await ensureAdmin(context, baseURL);
+  } finally {
+    await context.dispose();
+  }
+});
+
 test.describe("Application shell", () => {
   test("should display the main navigation once signed in", async ({
     page,
@@ -102,11 +113,18 @@ test.describe("Performance", () => {
   test("should preload critical navigation on hover", async ({ page }) => {
     await page.goto("/");
 
+    // Settle first. Unauthenticated, "/" redirects to /login, which has no
+    // search field — and isVisible() can win a race against that redirect,
+    // leaving hover() waiting on a detached element until the test times out.
+    // That is what happened on the touch profiles once this test stopped being
+    // skipped.
+    await page.waitForLoadState("networkidle");
+
     // .first(), because the shell renders a desktop and a mobile search field
     // and a bare locator matching both trips Playwright's strict mode.
     const searchField = page.getByPlaceholder(/search games/i).first();
     if (await searchField.isVisible().catch(() => false)) {
-      await searchField.hover();
+      await searchField.hover({ timeout: 5000 }).catch(() => {});
 
       // Wait a bit for prefetching to potentially occur
       await page.waitForTimeout(500);

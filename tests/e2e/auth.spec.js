@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { ensureAdmin } from "./helpers.js";
 
 /**
  * An unauthenticated request lands in one of two places, and which one depends
@@ -18,6 +19,17 @@ async function pageState(page) {
   if (url.includes("/login")) return "login";
   return "app";
 }
+
+// The admin these tests sign in as must exist before any of them run. See
+// ensureAdmin() in helpers.js — locally this is a no-op, in CI it creates it.
+test.beforeAll(async ({ playwright, baseURL }) => {
+  const context = await playwright.request.newContext({ baseURL });
+  try {
+    await ensureAdmin(context, baseURL);
+  } finally {
+    await context.dispose();
+  }
+});
 
 test.describe("Authentication Flow", () => {
   test("should display login page for unauthenticated users", async ({

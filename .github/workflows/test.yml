@@ -107,6 +107,21 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test_password
 
+      # The e2e suite asserts on the seeded library (30 games, requests,
+      # watchlist). Migrations create the schema and nothing else, so without
+      # this those assertions have no data to find. seed-data.js is offline and
+      # idempotent by design — no IGDB, ROMM or OIDC credentials needed. The
+      # admin is not created here; the suite does that through the app's own
+      # first-run endpoint (see ensureAdmin in tests/e2e/helpers.js).
+      - name: Seed test fixtures
+        run: node scripts/testing/seed-data.js
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: ggrequestz_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+
       - name: Build application
         run: npm run build
 
