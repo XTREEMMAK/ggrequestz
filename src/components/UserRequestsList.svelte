@@ -18,13 +18,20 @@
 
   let requestCoverUrls = $state(new Map());
 
+  // Plain Set, deliberately not $state: the effect below writes it, and a
+  // reactive read would re-trigger the effect. Tracking attempts rather than
+  // successes is what stops a request whose cover cannot be resolved from being
+  // retried forever.
+  const attempted = new Set();
+
   $effect(() => {
     const needingCovers = requests.filter(
-      (request) => request.igdb_id && !requestCoverUrls.has(request.id)
+      (request) => request.igdb_id && !attempted.has(request.id)
     );
-    if (needingCovers.length > 0) {
-      fetchRequestCoverUrls(needingCovers);
-    }
+    if (needingCovers.length === 0) return;
+
+    needingCovers.forEach((request) => attempted.add(request.id));
+    fetchRequestCoverUrls(needingCovers);
   });
 
   async function fetchRequestCoverUrls(needingCovers) {
