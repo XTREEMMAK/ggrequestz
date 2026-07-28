@@ -7,8 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔒 Security
+
+- **Clearing the games cache required no privileges.** `/api/cache/clear` and
+  `/api/admin/clear-cache` each ran an unqualified `DELETE FROM ggr_games_cache`
+  with no permission check of their own. The only gate was the global one in
+  `hooks.server.js`, which requires merely an authenticated principal — and
+  accepts a bearer API key — so any signed-in user could empty a table shared by
+  the whole instance. 1.3.0 hardened the admin endpoints under `/admin/api/*`;
+  these two sit at `/api/admin/*` and `/api/cache/*`, the inverted prefix, and
+  fell through. Both now require `admin.panel`.
+
 ### 🐛 Bug Fixes
 
+- **Clearing the cache deleted every user's watchlist.** `gamesCache.clear()`
+  removed all `ggr_user_watchlist` rows — for every user, not the caller — and
+  nulled `igdb_id` on every game request before emptying the cache table. Both
+  steps existed to satisfy foreign keys into `ggr_games_cache` that
+  `002_complete_schema_updates.sql` drops, so they had been unnecessary for two
+  migrations while still destroying data on every call. Nulling `igdb_id` also
+  severed each request from its game, which is what the request list uses to
+  resolve cover art.
 - **ROMM degrades to permanent HTTP 500s until the container is restarted.**
   The bearer token was cached in module scope with no expiry tracking and
   discarded only on an exact `401`. RomM's password grant issues a 30-minute
@@ -39,6 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ New Features
 
+- **Your submitted requests are now visible from the Requests page.** The list
+  lived only inside a profile tab, so the sidebar's "Requests" entry led
+  somewhere you could file a request but not see one. `/request` is now two tabs
+  — Submit a Request, and My Requests — and accepts `?tab=requests` to deep link
+  into the latter. The profile tab is unchanged and renders the same component.
 - **ROMM availability now backs off.** Consecutive failures escalate the
   re-probe interval 5 → 10 → 20 → 30 minutes instead of pinning it at 5, and
   requests fail fast while a failure is still cached rather than spending the
@@ -69,6 +93,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selectors matched. Shell assertions now sign in first.
 - Added a node-environment Vitest project for server-side tests, covering the
   ROMM credential lifecycle against a mocked `fetch`. `npm run test:integration`.
+- **Upgrades are now testable against a real past release.** No existing tooling
+  could stand up a tagged release and then swap it to the working tree over the
+  same database — `docker-compose.test.yml` always builds from HEAD. Adds an
+  isolated stack (`docker-compose.test.upgrade.yml`, Postgres 15 to match what a
+  release actually ships) and three targets:
+  `make test-upgrade-old FROM=v1.2.5`, `make test-upgrade-new`,
+  `make test-upgrade-down`. Verified end to end against the real v1.2.5 tag:
+  requests, watchlist entries and system settings all survived, migrations 001
+  and 002 were correctly skipped as already executed with their `executed_at`
+  timestamps untouched, and only the new migration ran. The one real breaking
+  risk it exercises is `SESSION_SECRET`, whose enforcement changed from a silent
+  fallback at v1.2.5 to a hard failure at HEAD.
 
 ### 📚 Documentation
 
@@ -179,7 +215,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty list — a 403 from an under-privileged account is now distinguishable
   from a timeout.
 - The basic-auth fallback no longer logs as an error when it is working normally.
-- The startup cache warm-up no longer makes an HTTP call that always returned 401.
+- **The startup cache warm-up no longer makes an HTTP call at all**, so it can no
+  longer fail against `localhost` on a deployment that sets `PUBLIC_SITE_URL`.
+  The call it used to make always returned 401 regardless. `ORIGIN` is now also
+  derived from `PUBLIC_SITE_URL` rather than being configured twice. Closes #9.
 - Admin API endpoints now require authentication and the appropriate permission.
 - The OpenAPI spec served at `/api/openapi.json` now includes the 14 admin
   endpoints. They had been added to a second, unserved copy of the spec, so they
