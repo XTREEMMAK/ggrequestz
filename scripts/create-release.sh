@@ -73,11 +73,36 @@ get_current_version() {
     node -p "require('./package.json').version"
 }
 
-# Function to update package.json version
+# Function to update package.json version.
+# npm version exits non-zero with "Version not changed" when package.json already
+# carries the target, which under `set -e` aborted the whole release. Bumping
+# ahead of the release is normal here, so treat a matching version as done.
 update_package_version() {
     local version=$1
+    if [[ "$(get_current_version)" == "$version" ]]; then
+        print_success "package.json is already at $version"
+        return 0
+    fi
     print_status "Updating package.json version to $version"
-    npm version --no-git-tag-version $version
+    npm version --no-git-tag-version "$version"
+}
+
+# Function to check we are releasing from the default branch.
+# The push step below is hardcoded to main, so tagging from a feature branch
+# would publish a tag whose commit is not on main — and the generated release
+# notes link to blob/main.
+check_on_main() {
+    local branch
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    if [[ "$branch" != "main" ]]; then
+        print_error "Releases must be cut from main (currently on '$branch')"
+        print_warning "Merge your branch into main first, then re-run this script"
+        exit 1
+    fi
+    if [[ -n "$(git log origin/main..main --oneline 2>/dev/null)" ]]; then
+        print_warning "main has commits not yet on origin/main; they will be pushed"
+    fi
+    print_success "On main"
 }
 
 # Main script
@@ -107,6 +132,7 @@ main() {
     
     # Validate inputs
     validate_version $version
+    check_on_main
     check_git_status
     check_existing_tag $tag
     check_changelog $version
@@ -123,9 +149,14 @@ main() {
     echo "  🔗 Repository: $(git remote get-url origin)"
     echo ""
     
-    read -p "Continue with release? (y/N): " -n 1 -r
-    echo
-    
+    # RELEASE_YES=1 skips the prompt for non-interactive use (CI, agents).
+    if [[ "${RELEASE_YES:-}" == "1" ]]; then
+        REPLY=y
+    else
+        read -p "Continue with release? (y/N): " -n 1 -r
+        echo
+    fi
+
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         print_warning "Release cancelled"
         # Reset package.json changes
