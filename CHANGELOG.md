@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-27
+
+### ⚠️ Breaking Changes
+
+- **`SESSION_SECRET` is now required.** The app previously fell back to a
+  hardcoded `"your-secret-key"` when the variable was unset, which meant session
+  tokens on those installs were signed with a value published in this
+  repository. That fallback is gone and the app now refuses to start without a
+  real secret. **Set `SESSION_SECRET` before upgrading** — generate one with
+  `openssl rand -hex 32`.
+- **Basic-auth session tokens are now signed.** Existing `basic_auth_session`
+  cookies are invalidated, so basic-auth users must log in again after upgrading.
+- **CSRF origin checking is enabled.** If you run behind a reverse proxy, set
+  `ORIGIN` to the URL users actually type or form submissions will be rejected as
+  cross-site. Logins fail while GET requests keep working, which makes this look
+  stranger than it is.
+
 ### 🔒 Security
 
 - **Clearing the games cache required no privileges.** `/api/cache/clear` and
@@ -14,9 +31,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with no permission check of their own. The only gate was the global one in
   `hooks.server.js`, which requires merely an authenticated principal — and
   accepts a bearer API key — so any signed-in user could empty a table shared by
-  the whole instance. 1.3.0 hardened the admin endpoints under `/admin/api/*`;
-  these two sit at `/api/admin/*` and `/api/cache/*`, the inverted prefix, and
-  fell through. Both now require `admin.panel`.
+  the whole instance. The hardening below covered `/admin/api/*`; these two sit
+  at `/api/admin/*` and `/api/cache/*`, the inverted prefix, and fell through.
+  Both now require `admin.panel`.
+
+### ✨ New Features
+
+- **Your submitted requests are now visible from the Requests page.** The list
+  lived only inside a profile tab, so the sidebar's "Requests" entry led
+  somewhere you could file a request but not see one. `/request` is now two tabs
+  — Submit a Request, and My Requests — and accepts `?tab=requests` to deep link
+  into the latter. The profile tab is unchanged and renders the same component.
+- **ROMM availability now backs off.** Consecutive failures escalate the
+  re-probe interval 5 → 10 → 20 → 30 minutes instead of pinning it at 5, and
+  requests fail fast while a failure is still cached rather than spending the
+  full 12-second retry budget.
+- **The local test stack has three explicit modes.** `make test-blank` (no
+  admin, lands on `/setup`), `make test-seeded` (admin, 30 games, requests,
+  watchlist) and `make test-live` (seeded, with real IGDB/ROMM credentials).
+  `make test-up` / `test-seed` gave no way to ask for a blank instance and keep
+  it, which made the first-run wizard untestable.
+- **Deterministic offline seed data**, via `scripts/testing/seed-data.js`.
+- **Generic OIDC support.** Works with any standards-compliant provider —
+  Keycloak, Pocket ID, Auth0, Okta, Entra ID — with endpoints resolved from the
+  provider's discovery document and `id_token` validation via JWKS. Manual
+  endpoint overrides are available for providers without discovery. `AUTH_METHOD`
+  accepts `oidc`, `oidc_generic` and `authentik` as equivalents, and the existing
+  `AUTHENTIK_*` variables continue to work unchanged. Fixes #4 and #7, where
+  `oidc_generic` never actually worked.
+- **Configurable claim mapping** via `OIDC_GROUPS_CLAIM`, `OIDC_ROLE_MAP` and
+  `OIDC_ADMIN_GROUP`, replacing hardcoded Authentik-shaped claim handling.
+- **Configurable login button label** via `OIDC_PROVIDER_NAME`, defaulting to
+  "Login with SSO". Authentik-only configs keep their original label.
+- **ROMM Client API Tokens** (`ROMM_API_TOKEN`), the recommended path on RomM
+  5.0+. Unlike the password grant it does not expire and does not require storing
+  a password.
+- **Real error and empty states for the ROMM library**, instead of a silently
+  blank section.
+- **Separate internal and browser-facing ROMM URLs.** `ROMM_SERVER_URL_PUBLIC`
+  backs "Play in ROMM" links, the library nav link and cover images, while
+  `ROMM_SERVER_URL` stays on the internal address used for API calls. Needed on
+  Kubernetes and any split-network setup where the app reaches ROMM at a service
+  name the browser cannot resolve. Defaults to `ROMM_SERVER_URL`, so existing
+  deployments need no change. Closes #2.
+- **Opt-in ambient background**, a particle effect toggled per user under
+  Profile → Content Preferences → Appearance. Off by default. Honours
+  `prefers-reduced-motion`, caps at 30fps, reduces particle count on small
+  screens, and pauses entirely in a background tab.
+- **Local Docker test stack** (`docker-compose.test.yml`) building a real
+  installation from the working tree, with live RomM, Keycloak and Authentik
+  fixtures. `make test-up` / `test-seed` / `test-down`; see
+  [docs/setup/TESTING.md](docs/setup/TESTING.md). `make test-seed` also creates
+  the basic-auth admin, so a torn-down stack comes back with a usable login.
 
 ### 🐛 Bug Fixes
 
@@ -55,147 +121,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AbortSignal`, it reported failures as successes, and it did not recognise
   `ROMM_API_TOKEN`, so a deployment configured the recommended way was told its
   credentials were missing.
-
-### ✨ New Features
-
-- **Your submitted requests are now visible from the Requests page.** The list
-  lived only inside a profile tab, so the sidebar's "Requests" entry led
-  somewhere you could file a request but not see one. `/request` is now two tabs
-  — Submit a Request, and My Requests — and accepts `?tab=requests` to deep link
-  into the latter. The profile tab is unchanged and renders the same component.
-- **ROMM availability now backs off.** Consecutive failures escalate the
-  re-probe interval 5 → 10 → 20 → 30 minutes instead of pinning it at 5, and
-  requests fail fast while a failure is still cached rather than spending the
-  full 12-second retry budget.
-- **The local test stack has three explicit modes.** `make test-blank` (no
-  admin, lands on `/setup`), `make test-seeded` (admin, 30 games, requests,
-  watchlist) and `make test-live` (seeded, with real IGDB/ROMM credentials).
-  `make test-up` / `test-seed` gave no way to ask for a blank instance and keep
-  it, which made the first-run wizard untestable.
-- **Deterministic offline seed data**, via `scripts/testing/seed-data.js`.
-
-### 🔧 Technical Changes
-
-- **The disposable test stack was inheriting production configuration.** Docker
-  Compose reads `./.env` for `${VAR:-default}` interpolation whether or not a
-  compose file asks it to, so the test stack silently received the production
-  `AUTH_METHOD`, `SESSION_SECRET` and `ROMM_SERVER_URL`. Because
-  `AUTH_METHOD=authentik` hardcodes `needsSetup = false`, the setup wizard could
-  never appear. The stack now runs with `--env-file /dev/null`.
-- **The local e2e suite ran against `.env.development`.** Playwright had a
-  hardcoded env block for CI and nothing for local runs, where its `webServer`
-  booted `npm run dev` — pointed at a live remote database. It now targets the
-  Docker test stack, and refuses to start when the stack is not up.
-- **e2e assertions that had never executed.** Every test branched on "`/setup`
-  or everything else" and treated everything else as the signed-in application;
-  against CI's blank database only the `/setup` branch was ever taken. Running
-  them against a seeded instance showed that none of the other branch's
-  selectors matched. Shell assertions now sign in first.
-- Added a node-environment Vitest project for server-side tests, covering the
-  ROMM credential lifecycle against a mocked `fetch`. `npm run test:integration`.
-- **Upgrades are now testable against a real past release.** No existing tooling
-  could stand up a tagged release and then swap it to the working tree over the
-  same database — `docker-compose.test.yml` always builds from HEAD. Adds an
-  isolated stack (`docker-compose.test.upgrade.yml`, Postgres 15 to match what a
-  release actually ships) and three targets:
-  `make test-upgrade-old FROM=v1.2.5`, `make test-upgrade-new`,
-  `make test-upgrade-down`. Verified end to end against the real v1.2.5 tag:
-  requests, watchlist entries and system settings all survived, migrations 001
-  and 002 were correctly skipped as already executed with their `executed_at`
-  timestamps untouched, and only the new migration ran. The one real breaking
-  risk it exercises is `SESSION_SECRET`, whose enforcement changed from a silent
-  fallback at v1.2.5 to a hard failure at HEAD.
-
-### 📚 Documentation
-
-- **Consolidated the documentation and removed guides that described software
-  that does not exist.** Several files documented environment variables no code
-  reads and commands that fail immediately — the same class of problem that
-  produced #4 and #7 on the OIDC side.
-  - **Deleted** `DOCKER_UPDATES.md` (every path in it — `docker-init.sql`,
-    `scripts/migrate.sh`, `migrations/deprecated/` — is absent from the repo),
-    `MIGRATION_v1.0.3.md` (a one-time note three minors stale), and
-    `DOCKER_SETUP.md` (duplicated QUICKSTART, and listed Typesense as required
-    two years after its removal).
-  - **`DATABASE_SETUP.md` rewritten.** It described a Supabase project and told
-    readers to set `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
-    `SUPABASE_SERVICE_KEY`; none of the three is read anywhere. Now documents
-    the actual `POSTGRES_*` connection, the `npm run db:*` commands, and the
-    migration system's real limitations — no locking, no rollback, non-fatal
-    schema verification.
-  - **`DEPLOYMENT.md` rewritten.** It was titled "Docker Testing Guide" while
-    being linked as the production deployment guide, and referenced four Compose
-    profiles that do not exist. Now covers reverse proxy configuration, `ORIGIN`,
-    hardening, scaling and upgrades.
-  - **Merged** `INTEGRATION_GUIDE.md` and `ROMM_TROUBLESHOOTING.md` into
-    `guides/INTEGRATIONS.md`. The former configured everything through
-    `AUTH_PROVIDER` (the variable is `AUTH_METHOD`) and documented an
-    `/admin/integrations` screen and `/api/integrations/*` endpoints that were
-    never implemented.
-  - **Merged** `AUTHENTIK_ADMIN_SETUP.md` into `OIDC_SETUP.md`, which already
-    covered roles and groups generically.
-  - **`NAVIGATION_SETUP.md` → `guides/NAVIGATION.md`**, dropping a "Required
-    Database Changes" section whose SQL `001_initial_schema.sql` already applies.
-- Fixed two links that would 404 for users rather than for doc readers: the ROMM
-  "Setup Guide" link in the admin settings panel, and a `DOCKER_SETUP.md` link
-  emitted into every generated GitHub release page.
-- Corrected the Compose profiles section in `CONFIGURATION.md`; the project
-  defines no profiles, so `--profile notifications` and `--profile proxy` were
-  silently inert.
-
-## [1.3.0] - 2026-07-26
-
-### ⚠️ Breaking Changes
-
-- **`SESSION_SECRET` is now required.** The app previously fell back to a
-  hardcoded `"your-secret-key"` when the variable was unset, which meant session
-  tokens on those installs were signed with a value published in this
-  repository. That fallback is gone and the app now refuses to start without a
-  real secret. **Set `SESSION_SECRET` before upgrading** — generate one with
-  `openssl rand -hex 32`.
-- **Basic-auth session tokens are now signed.** Existing `basic_auth_session`
-  cookies are invalidated, so basic-auth users must log in again after upgrading.
-- **CSRF origin checking is enabled.** If you run behind a reverse proxy, set
-  `ORIGIN` to the URL users actually type or form submissions will be rejected as
-  cross-site. Logins fail while GET requests keep working, which makes this look
-  stranger than it is.
-
-### ✨ New Features
-
-- **Generic OIDC support.** Works with any standards-compliant provider —
-  Keycloak, Pocket ID, Auth0, Okta, Entra ID — with endpoints resolved from the
-  provider's discovery document and `id_token` validation via JWKS. Manual
-  endpoint overrides are available for providers without discovery. `AUTH_METHOD`
-  accepts `oidc`, `oidc_generic` and `authentik` as equivalents, and the existing
-  `AUTHENTIK_*` variables continue to work unchanged. Fixes #4 and #7, where
-  `oidc_generic` never actually worked.
-- **Configurable claim mapping** via `OIDC_GROUPS_CLAIM`, `OIDC_ROLE_MAP` and
-  `OIDC_ADMIN_GROUP`, replacing hardcoded Authentik-shaped claim handling.
-- **Configurable login button label** via `OIDC_PROVIDER_NAME`, defaulting to
-  "Login with SSO". Authentik-only configs keep their original label.
-- **ROMM Client API Tokens** (`ROMM_API_TOKEN`), the recommended path on RomM
-  5.0+. Unlike the password grant it does not expire and does not require storing
-  a password.
-- **Real error and empty states for the ROMM library**, instead of a silently
-  blank section.
-- **Separate internal and browser-facing ROMM URLs.** `ROMM_SERVER_URL_PUBLIC`
-  backs "Play in ROMM" links, the library nav link and cover images, while
-  `ROMM_SERVER_URL` stays on the internal address used for API calls. Needed on
-  Kubernetes and any split-network setup where the app reaches ROMM at a service
-  name the browser cannot resolve. Defaults to `ROMM_SERVER_URL`, so existing
-  deployments need no change. Closes #2.
-- **Opt-in ambient background**, a particle effect toggled per user under
-  Profile → Content Preferences → Appearance. Off by default. Honours
-  `prefers-reduced-motion`, caps at 30fps, reduces particle count on small
-  screens, and pauses entirely in a background tab.
-- **Local Docker test stack** (`docker-compose.test.yml`) building a real
-  installation from the working tree, with live RomM, Keycloak and Authentik
-  fixtures. `make test-up` / `test-seed` / `test-down`; see
-  [docs/setup/TESTING.md](docs/setup/TESTING.md). `make test-seed` also creates
-  the basic-auth admin, so a torn-down stack comes back with a usable login.
-
-### 🐛 Bug Fixes
-
 - **Admins were demoted on every login** by any IdP that does not send a `groups`
   claim. Keycloak does not send one without an explicit mapper, so this hit
   immediately. An absent claim now leaves locally assigned roles untouched.
@@ -241,6 +166,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Technical Changes
 
+- **The disposable test stack was inheriting production configuration.** Docker
+  Compose reads `./.env` for `${VAR:-default}` interpolation whether or not a
+  compose file asks it to, so the test stack silently received the production
+  `AUTH_METHOD`, `SESSION_SECRET` and `ROMM_SERVER_URL`. Because
+  `AUTH_METHOD=authentik` hardcodes `needsSetup = false`, the setup wizard could
+  never appear. The stack now runs with `--env-file /dev/null`.
+- **The local e2e suite ran against `.env.development`.** Playwright had a
+  hardcoded env block for CI and nothing for local runs, where its `webServer`
+  booted `npm run dev` — pointed at a live remote database. It now targets the
+  Docker test stack, and refuses to start when the stack is not up.
+- **e2e assertions that had never executed.** Every test branched on "`/setup`
+  or everything else" and treated everything else as the signed-in application;
+  against CI's blank database only the `/setup` branch was ever taken. Running
+  them against a seeded instance showed that none of the other branch's
+  selectors matched. Shell assertions now sign in first.
+- Added a node-environment Vitest project for server-side tests, covering the
+  ROMM credential lifecycle against a mocked `fetch`. `npm run test:integration`.
+- **Upgrades are now testable against a real past release.** No existing tooling
+  could stand up a tagged release and then swap it to the working tree over the
+  same database — `docker-compose.test.yml` always builds from HEAD. Adds an
+  isolated stack (`docker-compose.test.upgrade.yml`, Postgres 15 to match what a
+  release actually ships) and three targets:
+  `make test-upgrade-old FROM=v1.2.5`, `make test-upgrade-new`,
+  `make test-upgrade-down`. Verified end to end against the real v1.2.5 tag:
+  requests, watchlist entries and system settings all survived, migrations 001
+  and 002 were correctly skipped as already executed with their `executed_at`
+  timestamps untouched, and only the new migration ran. The one real breaking
+  risk it exercises is `SESSION_SECRET`, whose enforcement changed from a silent
+  fallback at v1.2.5 to a hard failure at HEAD.
+
 - Runtime image moved from `node:18-alpine` to `node:22-alpine`.
 - Server-side `console` output is no longer stripped from production bundles.
   `drop_console` had been removing every server log, which is how integration
@@ -256,6 +211,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that are not defined anywhere and was therefore identical to `prod`.
 
 ### 📚 Documentation
+
+- **Consolidated the documentation and removed guides that described software
+  that does not exist.** Several files documented environment variables no code
+  reads and commands that fail immediately — the same class of problem that
+  produced #4 and #7 on the OIDC side.
+  - **Deleted** `DOCKER_UPDATES.md` (every path in it — `docker-init.sql`,
+    `scripts/migrate.sh`, `migrations/deprecated/` — is absent from the repo),
+    `MIGRATION_v1.0.3.md` (a one-time note three minors stale), and
+    `DOCKER_SETUP.md` (duplicated QUICKSTART, and listed Typesense as required
+    two years after its removal).
+  - **`DATABASE_SETUP.md` rewritten.** It described a Supabase project and told
+    readers to set `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+    `SUPABASE_SERVICE_KEY`; none of the three is read anywhere. Now documents
+    the actual `POSTGRES_*` connection, the `npm run db:*` commands, and the
+    migration system's real limitations — no locking, no rollback, non-fatal
+    schema verification.
+  - **`DEPLOYMENT.md` rewritten.** It was titled "Docker Testing Guide" while
+    being linked as the production deployment guide, and referenced four Compose
+    profiles that do not exist. Now covers reverse proxy configuration, `ORIGIN`,
+    hardening, scaling and upgrades.
+  - **Merged** `INTEGRATION_GUIDE.md` and `ROMM_TROUBLESHOOTING.md` into
+    `guides/INTEGRATIONS.md`. The former configured everything through
+    `AUTH_PROVIDER` (the variable is `AUTH_METHOD`) and documented an
+    `/admin/integrations` screen and `/api/integrations/*` endpoints that were
+    never implemented.
+  - **Merged** `AUTHENTIK_ADMIN_SETUP.md` into `OIDC_SETUP.md`, which already
+    covered roles and groups generically.
+  - **`NAVIGATION_SETUP.md` → `guides/NAVIGATION.md`**, dropping a "Required
+    Database Changes" section whose SQL `001_initial_schema.sql` already applies.
+- Fixed two links that would 404 for users rather than for doc readers: the ROMM
+  "Setup Guide" link in the admin settings panel, and a `DOCKER_SETUP.md` link
+  emitted into every generated GitHub release page.
+- Corrected the Compose profiles section in `CONFIGURATION.md`; the project
+  defines no profiles, so `--profile notifications` and `--profile proxy` were
+  silently inert.
 
 - `docs/setup/OIDC_SETUP.md` rewritten against the shipped implementation. It had
   documented eight `OIDC_*` variables that no code read.
