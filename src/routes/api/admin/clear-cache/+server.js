@@ -2,11 +2,24 @@
  * Admin API endpoint to clear game cache for testing
  */
 
-import { json } from "@sveltejs/kit";
+import { json, error } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
+import { getAuthenticatedUser } from "$lib/auth.server.js";
+import { getUserIdFromAuth } from "$lib/getUserId.js";
+import { userHasPermission } from "$lib/userProfile.js";
 
-export async function POST({ request }) {
+export async function POST({ request, cookies }) {
   try {
+    const user = await getAuthenticatedUser(cookies, request);
+    if (!user) {
+      throw error(401, "Authentication required");
+    }
+
+    const localUserId = await getUserIdFromAuth(user, query);
+    if (!(await userHasPermission(localUserId, "admin.panel"))) {
+      throw error(403, "Admin permissions required");
+    }
+
     const { gameId, clearEsrbOnly } = await request.json();
 
     if (gameId) {
@@ -31,8 +44,9 @@ export async function POST({ request }) {
       await query("DELETE FROM ggr_games_cache");
       return json({ success: true, message: "Cleared all games cache" });
     }
-  } catch (error) {
-    console.error("Cache clear error:", error);
-    return json({ success: false, error: error.message }, { status: 500 });
+  } catch (err) {
+    if (err?.status) throw err;
+    console.error("Cache clear error:", err);
+    return json({ success: false, error: err.message }, { status: 500 });
   }
 }
