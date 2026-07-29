@@ -81,6 +81,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integer and `igdb_id` as a number; `ggr_game_requests.id` is a `UUID` and
   `igdb_id` is `TEXT`. A receiver written against integers would break on its
   first real payload.
+- **The glass theme applied no blur.** The rule asked for
+  `backdrop-filter: blur(16px) saturate(140%)`, which the CSS minifier emitted
+  without the separating space; a filter list is space-separated, so the whole
+  declaration was invalid and dropped. The sidebar and header were merely
+  translucent. A hand-written `-webkit-backdrop-filter` beside it then made the
+  minifier keep only the prefixed form, which Firefox does not support. The rule
+  now uses a single filter function and leaves prefixing to the build. Verified in
+  Chromium and Firefox against the built stylesheet rather than the source.
+- **A saved preference sometimes did not take effect until the cache expired.**
+  Invalidation deletes from Redis and from the memory of the one worker handling
+  that request, but a Redis miss fell through to worker-local memory — so with PM2
+  running a process per core, the other workers kept serving their stale copies
+  and whether a theme change appeared depended on which worker answered next. With
+  Redis healthy, a miss now means "not cached". Memory remains the fallback for an
+  actual outage.
 
 ### 🔧 Technical Changes
 
