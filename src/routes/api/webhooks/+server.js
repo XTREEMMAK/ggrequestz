@@ -1,5 +1,5 @@
 /**
- * Webhook endpoint for Gotify notifications and n8n automation
+ * Webhook endpoint for Gotify notifications and the outbound request webhook.
  */
 
 import { json, error } from "@sveltejs/kit";
@@ -47,10 +47,16 @@ export async function POST({ request }) {
       }
     }
 
-    // Send n8n webhook
-    if (env.N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL) {
+    // Send the outbound request webhook.
+    //
+    // The payload has always been provider-neutral JSON, but both the variable
+    // and the docs named n8n, so it reads as an n8n-only feature. The same
+    // dispatch under a neutral name lets any receiver subscribe -- a download
+    // automation service, a script, a chat bridge -- without pretending to be
+    // n8n.
+    if (requestWebhookUrl()) {
       try {
-        const n8nResponse = await sendN8nWebhook({
+        const n8nResponse = await sendRequestWebhook({
           type,
           title,
           message,
@@ -60,7 +66,7 @@ export async function POST({ request }) {
         });
         results.n8n = n8nResponse;
       } catch (n8nError) {
-        console.error("n8n webhook failed:", n8nError);
+        console.error("Request webhook failed:", n8nError);
         results.n8n = { error: n8nError.message };
       }
     }
@@ -109,25 +115,37 @@ async function sendGotifyNotification({ title, message, priority, extras }) {
 }
 
 /**
- * Send webhook to n8n
+ * The configured outbound webhook URL.
+ *
+ * REQUEST_WEBHOOK_URL is preferred; N8N_WEBHOOK_URL keeps working so existing
+ * installs need no change.
  */
-async function sendN8nWebhook(payload) {
-  const response = await fetch(
-    env.N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    },
+function requestWebhookUrl() {
+  return (
+    env.REQUEST_WEBHOOK_URL ||
+    process.env.REQUEST_WEBHOOK_URL ||
+    env.N8N_WEBHOOK_URL ||
+    process.env.N8N_WEBHOOK_URL
   );
+}
+
+/**
+ * Send the outbound request webhook.
+ */
+async function sendRequestWebhook(payload) {
+  const response = await fetch(requestWebhookUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
-    throw new Error(`n8n webhook error: ${response.statusText}`);
+    throw new Error(`Request webhook error: ${response.statusText}`);
   }
 
-  // n8n might return different response formats
+  // Receivers return whatever they like; a non-JSON body is still a success.
   try {
     return await response.json();
   } catch {
