@@ -143,10 +143,19 @@ REQUEST_WEBHOOK_URL=https://automation.example.com/hook/ggrequestz
 `N8N_WEBHOOK_URL` is still honoured as a deprecated alias, so existing installs
 need no change. When both are set, `REQUEST_WEBHOOK_URL` wins.
 
-Submitting a request dispatches one. Failures are logged and never block the
-submission — by the time the webhook is sent the request is already saved, so a
-receiver that is slow, rejecting or absent cannot cost a user their request.
-Receivers get five seconds to respond.
+Approving a request dispatches one. With `request.auto_approve` enabled — as a
+global setting or a per-role permission — requests are approved on submission,
+so the webhook fires immediately and behaves as it did before approval gating.
+With it disabled, nothing is dispatched until an admin approves, which is what
+makes the approval queue meaningful.
+
+Re-opening a fulfilled request dispatches again, since the game needs fetching
+a second time.
+
+Failures are logged and never block the submission — by the time the webhook
+is sent the request is already saved, so a receiver that is slow, rejecting or
+absent cannot cost a user their request. Receivers get five seconds to
+respond.
 
 ### Payload
 
