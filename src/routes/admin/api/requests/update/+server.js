@@ -120,11 +120,14 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    const { row: updatedRequest, changed } = await applyRequestStatusChange({
+    // admin_notes is passed through as-is: absent from the request body it
+    // is `undefined` (owner keeps the existing value); present -- including
+    // "" -- the owner writes it (and normalises "" to null).
+    const { row: updatedRequest } = await applyRequestStatusChange({
       id: request_id,
       to: status,
       actor: user.name || user.email,
-      adminNotes: admin_notes || null,
+      adminNotes: admin_notes,
     });
 
     if (!updatedRequest) {

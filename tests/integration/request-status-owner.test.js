@@ -152,4 +152,53 @@ describe("applyRequestStatusChange", () => {
 
     expect(result.changed).toBe(true);
   });
+
+  // admin_notes: an explicit "is the caller setting notes" flag travels
+  // alongside the value, so a deliberate clear ("") cannot be mistaken for
+  // "notes not mentioned" (undefined), and vice versa. These pin the SQL
+  // parameters the CASE WHEN $4 branch depends on.
+
+  it("writes admin notes when supplied as a non-empty string", async () => {
+    const { applyRequestStatusChange } = await freshModule();
+
+    await applyRequestStatusChange({
+      id: "req-1",
+      to: "approved",
+      adminNotes: "looks good",
+    });
+
+    const [, params] = query.mock.calls[0];
+    const [, , notesValue, setNotes] = params;
+    expect(setNotes).toBe(true);
+    expect(notesValue).toBe("looks good");
+  });
+
+  it("clears the admin notes column when supplied as an empty string", async () => {
+    const { applyRequestStatusChange } = await freshModule();
+
+    await applyRequestStatusChange({
+      id: "req-1",
+      to: "approved",
+      adminNotes: "",
+    });
+
+    const [, params] = query.mock.calls[0];
+    const [, , notesValue, setNotes] = params;
+    expect(setNotes).toBe(true);
+    expect(notesValue).toBeNull();
+  });
+
+  it("preserves the existing admin notes when the caller doesn't mention them", async () => {
+    const { applyRequestStatusChange } = await freshModule();
+
+    await applyRequestStatusChange({
+      id: "req-1",
+      to: "approved",
+      // adminNotes intentionally omitted -- not the same as passing null.
+    });
+
+    const [, params] = query.mock.calls[0];
+    const [, , , setNotes] = params;
+    expect(setNotes).toBe(false);
+  });
 });

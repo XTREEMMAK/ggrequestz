@@ -147,11 +147,14 @@ export async function POST({ request, cookies }) {
 
     const results = [];
     for (const requestId of request_ids) {
+      // admin_notes passed through as-is: absent from the request body it
+      // is `undefined` (owner keeps the existing value per row); present --
+      // including "" -- the owner writes it (and normalises "" to null).
       const outcome = await applyRequestStatusChange({
         id: requestId,
         to: status,
         actor: user.name || user.email,
-        adminNotes: admin_notes || null,
+        adminNotes: admin_notes,
       });
       if (outcome.row) results.push(outcome.row);
     }

@@ -214,12 +214,14 @@ export const actions = {
 
       // Status is routed through the owner so this path notifies and
       // invalidates cache like the others. It previously did neither.
+      // admin_notes is deliberately omitted here (left undefined): this
+      // form's own UPDATE above already owns title/priority/notes, so the
+      // owner must not write admin_notes a second time on this path.
       if (status) {
         await applyRequestStatusChange({
           id: requestId,
           to: status,
           actor: user.name || user.email,
-          adminNotes: adminNotes || null,
         });
       }
 

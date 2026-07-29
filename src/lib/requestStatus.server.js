@@ -23,31 +23,44 @@ import { invalidateCache } from "$lib/cache.js";
  * approving at once cannot both observe the old status and both fire the
  * side effects.
  *
+ * `adminNotes` distinguishes "the caller didn't mention notes" from "the
+ * caller is setting notes, including clearing them": pass `undefined` (i.e.
+ * omit the key entirely) to leave the existing notes column untouched, or
+ * supply any other value -- including `null` or `""` -- to overwrite it.
+ * An empty string is normalised to `null` in the column. This is carried
+ * into SQL as an explicit boolean flag rather than folded into the value
+ * itself, so a deliberate "clear the notes" cannot be mistaken for "notes
+ * not supplied" (or vice versa) the way a single COALESCE-on-value would.
+ *
  * @param {Object} params
  * @param {string} params.id - Request UUID
  * @param {string} params.to - New status
  * @param {string|null} [params.actor] - Display name of whoever acted
- * @param {string|null} [params.adminNotes] - Notes to store, null keeps existing
+ * @param {string|null} [params.adminNotes] - Notes to write; omit (leave
+ *   undefined) to keep the existing value, pass "" or null to clear it
  * @returns {Promise<{row: Object|null, from: string|null, to: string, changed: boolean}>}
  */
 export async function applyRequestStatusChange({
   id,
   to,
   actor = null,
-  adminNotes = null,
+  adminNotes,
 }) {
+  const setNotes = adminNotes !== undefined;
+  const notesValue = setNotes ? adminNotes || null : null;
+
   const result = await query(
     `WITH previous AS (
          SELECT id, status FROM ggr_game_requests WHERE id = $1 FOR UPDATE
      )
      UPDATE ggr_game_requests r
         SET status = $2,
-            admin_notes = COALESCE($3, r.admin_notes),
+            admin_notes = CASE WHEN $4 THEN $3 ELSE r.admin_notes END,
             updated_at = NOW()
        FROM previous p
       WHERE r.id = p.id
      RETURNING r.*, p.status AS previous_status`,
-    [id, to, adminNotes],
+    [id, to, notesValue, setNotes],
   );
 
   if (result.rows.length === 0) {
@@ -60,7 +73,7 @@ export async function applyRequestStatusChange({
     return { row, from, to, changed: false };
   }
 
-  notify({ row, from, to, actor, adminNotes });
+  notify({ row, from, to, actor });
 
   // Fire and forget, as every caller did before: the row is committed and a
   // cold cache must not turn a successful action into an error.
@@ -82,7 +95,7 @@ function cacheKeysFor(row) {
 }
 
 /** Announce the transition. Never allowed to fail the transition. */
-function notify({ row, from, to, actor, adminNotes }) {
+function notify({ row, from, to, actor }) {
   const failed = (error) => {
     console.warn("Failed to send request status notification:", error.message);
   };
@@ -93,7 +106,7 @@ function notify({ row, from, to, actor, adminNotes }) {
       title: row.title,
       user_name: row.user_name,
       action: "cancelled",
-      reason: adminNotes || "",
+      reason: row.admin_notes || "",
       admin_name: actor || "Admin",
     }).catch(failed);
     return;
@@ -105,6 +118,6 @@ function notify({ row, from, to, actor, adminNotes }) {
     old_status: from,
     new_status: to,
     user_name: row.user_name,
-    admin_notes: adminNotes,
+    admin_notes: row.admin_notes,
   }).catch(failed);
 }
