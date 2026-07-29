@@ -5,6 +5,7 @@
 <script>
   import { goto, invalidateAll, invalidate } from '$app/navigation';
   import { browser } from '$app/environment';
+  import Icon from '@iconify/svelte';
   import GameCard from '../../components/GameCard.svelte';
   import LoadingSpinner from '../../components/LoadingSpinner.svelte';
   import UserRequestsList from '../../components/UserRequestsList.svelte';
@@ -42,10 +43,42 @@
   let savingPreferences = $state(false);
 
   let tabs = $derived([
-    { id: 'watchlist', label: 'My Watchlist', count: userWatchlist.length },
-    { id: 'requests', label: 'My Requests', count: userRequests.length },
-    { id: 'preferences', label: 'Content Preferences', count: null }
+    { id: 'watchlist', label: 'My Watchlist', count: userWatchlist.length, icon: 'heroicons:bookmark' },
+    { id: 'requests', label: 'My Requests', count: userRequests.length, icon: 'heroicons:inbox-arrow-down' },
+    { id: 'preferences', label: 'Settings', count: null, icon: 'heroicons:cog-6-tooth' }
   ]);
+
+  // Settings holds several unrelated groups of controls, so they are split
+  // across sub-tabs rather than one long scroll. Local state only — this is a
+  // view concern, not something worth putting in the URL.
+  //
+  // Opens on Content: filtering is what people come here to change, and the
+  // theme settings are a once-and-forget choice.
+  let settingsTab = $state('content');
+
+  // Content first: it is both the default and the most-visited category.
+  const settingsTabs = [
+    { id: 'content', label: 'Content', icon: 'heroicons:funnel' },
+    { id: 'themes', label: 'Themes', icon: 'heroicons:paint-brush' },
+    { id: 'genres', label: 'Genres', icon: 'heroicons:tag' }
+  ];
+
+  // Chrome themes offered in the Themes sub-tab. Adding one here plus a CSS
+  // block in app.css is the whole extension path; the column is a string
+  // precisely so this stays additive.
+  const uiThemes = [
+    {
+      id: 'default',
+      label: 'Default',
+      description: 'Solid sidebar and header. Highest contrast, no blur cost.'
+    },
+    {
+      id: 'glass',
+      label: 'Glass',
+      description:
+        'Translucent, blurred sidebar and header that let the background through. Pairs with the animated background, but works without it.'
+    }
+  ];
   
   // Redirect to login if not authenticated
   $effect(() => {
@@ -398,7 +431,7 @@
           <button
             type="button"
             onclick={() => switchTab(tab.id)}
-            class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors"
+            class="inline-flex items-center gap-2 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors"
             class:border-blue-500={activeTab === tab.id}
             class:text-blue-600={activeTab === tab.id}
             class:dark:text-blue-400={activeTab === tab.id}
@@ -408,6 +441,7 @@
             class:dark:text-gray-400={activeTab !== tab.id}
             class:dark:hover:text-gray-300={activeTab !== tab.id}
           >
+            <Icon icon={tab.icon} class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             {tab.label}
             {#if tab.count !== null && tab.count > 0}
               <span class="ml-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 py-0.5 px-2 rounded-full text-xs">
@@ -603,7 +637,7 @@
         <div class="space-y-8">
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
-              Content Preferences
+              Settings
             </h2>
             {#if preferencesChanged}
               <button
@@ -627,6 +661,95 @@
 
           {#if userPreferences}
             <!-- Content Filtering Section -->
+          <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Category navigation. Vertical on desktop, horizontal scroll on narrow
+                 screens, because a vertical rail eats the width the forms need. -->
+            <!-- A div rather than <nav>: a non-interactive landmark cannot carry
+                 role="tablist", and these switch panels rather than navigate. -->
+            <div
+              class="lg:w-52 flex-shrink-0 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible"
+              role="tablist"
+              aria-orientation="vertical"
+              aria-label="Settings categories"
+            >
+              {#each settingsTabs as sub}
+                <button
+                  type="button"
+                  role="tab"
+                  id="settings-tab-{sub.id}"
+                  aria-selected={settingsTab === sub.id}
+                  aria-controls="settings-panel-{sub.id}"
+                  onclick={() => (settingsTab = sub.id)}
+                  class="flex items-center gap-2 whitespace-nowrap px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors"
+                  class:bg-blue-50={settingsTab === sub.id}
+                  class:dark:bg-blue-900={settingsTab === sub.id}
+                  class:text-blue-700={settingsTab === sub.id}
+                  class:dark:text-blue-300={settingsTab === sub.id}
+                  class:text-gray-600={settingsTab !== sub.id}
+                  class:dark:text-gray-400={settingsTab !== sub.id}
+                  class:hover:bg-gray-100={settingsTab !== sub.id}
+                  class:dark:hover:bg-gray-700={settingsTab !== sub.id}
+                >
+                  <Icon icon={sub.icon} class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                  {sub.label}
+                </button>
+              {/each}
+            </div>
+
+            <div
+              class="flex-1 min-w-0 space-y-8"
+              role="tabpanel"
+              id="settings-panel-{settingsTab}"
+              aria-labelledby="settings-tab-{settingsTab}"
+            >
+              {#if settingsTab === 'themes'}
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Appearance</h3>
+
+              <label class="flex items-start">
+                <input
+                  type="checkbox"
+                  checked={userPreferences.animated_background}
+                  onchange={(e) => updatePreference('animated_background', e.target.checked)}
+                  class="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span class="ml-2">
+                  <span class="block text-sm text-gray-700 dark:text-gray-300">Animated background</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Drifting particles behind the page. Off by default. Runs an animation
+                    for as long as a page is open, so leave it off on low-powered devices.
+                    Respects your system's reduced-motion setting.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">UI Theme</h3>
+
+              <fieldset>
+                <legend class="sr-only">UI theme</legend>
+                <div class="space-y-3">
+                  {#each uiThemes as theme}
+                    <label class="flex items-start">
+                      <input
+                        type="radio"
+                        name="ui-theme"
+                        value={theme.id}
+                        checked={(userPreferences.ui_theme || 'default') === theme.id}
+                        onchange={() => updatePreference('ui_theme', theme.id)}
+                        class="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300"
+                      />
+                      <span class="ml-2">
+                        <span class="block text-sm text-gray-700 dark:text-gray-300">{theme.label}</span>
+                        <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">{theme.description}</span>
+                      </span>
+                    </label>
+                  {/each}
+                </div>
+              </fieldset>
+            </div>
+              {:else if settingsTab === 'content'}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Content Filtering</h3>
 
@@ -699,29 +822,6 @@
               </div>
             </div>
 
-            <!-- Appearance Section -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Appearance</h3>
-
-              <label class="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={userPreferences.animated_background}
-                  onchange={(e) => updatePreference('animated_background', e.target.checked)}
-                  class="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span class="ml-2">
-                  <span class="block text-sm text-gray-700 dark:text-gray-300">Animated background</span>
-                  <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Drifting particles behind the page. Off by default. Runs an animation
-                    for as long as a page is open, so leave it off on low-powered devices.
-                    Respects your system's reduced-motion setting.
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            <!-- Custom Content Blocks Section -->
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Custom Content Blocks</h3>
               <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -814,7 +914,65 @@
               </div>
             </div>
 
-            <!-- Genre Preferences Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Apply Filtering To</h3>
+
+              <div class="space-y-3">
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_homepage}
+                    onchange={(e) => updatePreference('apply_to_homepage', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Homepage (all sections)</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_popular}
+                    onchange={(e) => updatePreference('apply_to_popular', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Popular Games section</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_recent}
+                    onchange={(e) => updatePreference('apply_to_recent', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">New Releases section</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={userPreferences.apply_to_search}
+                    onchange={(e) => updatePreference('apply_to_search', e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Search results</span>
+                </label>
+              </div>
+
+              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div class="flex">
+                  <svg class="flex-shrink-0 w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                  </svg>
+                  <div class="ml-3">
+                    <p class="text-sm text-blue-800 dark:text-blue-300">
+                      <strong>Note:</strong> Enabling filters may reduce the number of games shown and affect caching performance. Search filtering is enabled by default and recommended for the best experience.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+              {:else if settingsTab === 'genres'}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Genre Preferences</h3>
 
@@ -880,66 +1038,9 @@
                 </div>
               </div>
             </div>
-
-            <!-- Apply Filtering Section -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Apply Filtering To</h3>
-
-              <div class="space-y-3">
-                <label class="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={userPreferences.apply_to_homepage}
-                    onchange={(e) => updatePreference('apply_to_homepage', e.target.checked)}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Homepage (all sections)</span>
-                </label>
-
-                <label class="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={userPreferences.apply_to_popular}
-                    onchange={(e) => updatePreference('apply_to_popular', e.target.checked)}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Popular Games section</span>
-                </label>
-
-                <label class="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={userPreferences.apply_to_recent}
-                    onchange={(e) => updatePreference('apply_to_recent', e.target.checked)}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">New Releases section</span>
-                </label>
-
-                <label class="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={userPreferences.apply_to_search}
-                    onchange={(e) => updatePreference('apply_to_search', e.target.checked)}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Search results</span>
-                </label>
-              </div>
-
-              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div class="flex">
-                  <svg class="flex-shrink-0 w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                  </svg>
-                  <div class="ml-3">
-                    <p class="text-sm text-blue-800 dark:text-blue-300">
-                      <strong>Note:</strong> Enabling filters may reduce the number of games shown and affect caching performance. Search filtering is enabled by default and recommended for the best experience.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              {/if}
             </div>
+          </div>
 
             <!-- Save Button (Mobile) -->
             {#if preferencesChanged}
