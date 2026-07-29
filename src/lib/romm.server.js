@@ -819,34 +819,13 @@ export async function probeRommAvailability() {
   return { ...state, inFlight: undefined };
 }
 
-/**
- * Check if ROMM is available and accessible
- * @param {string} cookies - Optional cookies to forward
- * @returns {Promise<boolean>} - Whether ROMM is available
- */
-export async function isRommAvailable(cookies = null) {
-  if (browser) throw new Error("isRommAvailable is server-only");
-  if (!(await isRommConfigured())) {
-    return false;
-  }
-
-  try {
-    // Try a simple endpoint to test connectivity
-    await rommRequest(
-      "/roms?group_by_meta_id=false&limit=1&offset=0",
-      {},
-      cookies,
-    );
-    return true;
-  } catch (error) {
-    // Always log. Returning a bare `false` here made a 403, a DNS failure, a
-    // timeout, and an empty library indistinguishable from one another.
-    console.warn(
-      `⚠️ ROMM unavailable (${error?.status ? `HTTP ${error.status}` : error?.name || "error"}): ${error?.message || error}`,
-    );
-    return false;
-  }
-}
+// There is deliberately no live `isRommAvailable()` probe here. Render paths
+// read `getRommAvailabilitySnapshot()`, which never touches the network;
+// out-of-band callers (startup warm-up, admin "test connection") use
+// `probeRommAvailability()`, which records what it finds so the breaker and the
+// UI both learn from it. A probe that returns a bare boolean teaches the process
+// nothing, and every caller that had one ended up racing it against a timeout
+// too short to ever win — see the homepage in `src/routes/+page.server.js`.
 
 /**
  * Turn a ROMM failure into something that can be shown to a user and acted on
@@ -1045,8 +1024,8 @@ export async function crossReferenceWithROMM(igdbGames, cookies = null) {
   }
 
   // Read the snapshot instead of probing. This runs on every /game/[id] load,
-  // and a live isRommAvailable() here meant two ROMM round trips per page —
-  // eight requests once retries are counted, whenever ROMM was down.
+  // and a live probe here meant two ROMM round trips per page — eight requests
+  // once retries are counted, whenever ROMM was down.
   //
   // Only a known-bad snapshot short-circuits. `ok === null` means no probe has
   // completed yet on this worker, and skipping on that would drop ROMM badges

@@ -66,6 +66,15 @@ async function freshRomm() {
   return import("../../src/lib/romm.server.js");
 }
 
+/**
+ * These tests drive the client through `getRecentlyAddedROMs`, a real caller:
+ * one logical `rommRequest` per call, with no availability state of its own. It
+ * resolves to `[]` against `{ items: [] }` and rethrows on failure.
+ *
+ * `probeRommAvailability` would be the wrong driver here — it single-flights on
+ * `availabilityState.inFlight`, so the concurrency test below would collapse to
+ * one request and pass without proving anything about the token.
+ */
 describe("ROMM token lifecycle", () => {
   beforeEach(() => {
     process.env.ROMM_SERVER_URL = ROMM_URL;
@@ -92,9 +101,9 @@ describe("ROMM token lifecycle", () => {
       .mockResolvedValueOnce(grant("fresh-token"))
       .mockResolvedValueOnce(response(200, { items: [] }));
 
-    const { isRommAvailable } = await freshRomm();
+    const { getRecentlyAddedROMs } = await freshRomm();
 
-    await expect(isRommAvailable()).resolves.toBe(true);
+    await expect(getRecentlyAddedROMs(1)).resolves.toEqual([]);
     expect(authCount()).toBe(2);
 
     // The replay must carry the new credential, not the dead one.
@@ -117,9 +126,9 @@ describe("ROMM token lifecycle", () => {
           : response(500, { detail: "Internal Server Error" }),
       );
 
-      const { isRommAvailable } = await freshRomm();
+      const { getRecentlyAddedROMs } = await freshRomm();
 
-      await expect(isRommAvailable()).resolves.toBe(false);
+      await expect(getRecentlyAddedROMs(1)).rejects.toThrow();
       expect(authCount()).toBe(2); // initial grant + the single re-auth
     },
     RETRY_BUDGET_TEST_TIMEOUT,
@@ -130,11 +139,11 @@ describe("ROMM token lifecycle", () => {
       String(url) === TOKEN_URL ? grant("token") : response(200, { items: [] }),
     );
 
-    const { isRommAvailable } = await freshRomm();
+    const { getRecentlyAddedROMs } = await freshRomm();
 
-    await isRommAvailable();
-    await isRommAvailable();
-    await isRommAvailable();
+    await getRecentlyAddedROMs(1);
+    await getRecentlyAddedROMs(1);
+    await getRecentlyAddedROMs(1);
 
     expect(authCount()).toBe(1);
   });
@@ -147,15 +156,15 @@ describe("ROMM token lifecycle", () => {
         : response(200, { items: [] }),
     );
 
-    const { isRommAvailable } = await freshRomm();
+    const { getRecentlyAddedROMs } = await freshRomm();
 
-    await isRommAvailable();
+    await getRecentlyAddedROMs(1);
     expect(authCount()).toBe(1);
 
     // Inside the refresh margin but before the stated expiry. The old code
     // would happily send this token and wait for RomM to reject it.
     vi.advanceTimersByTime(90_000);
-    await isRommAvailable();
+    await getRecentlyAddedROMs(1);
 
     expect(authCount()).toBe(2);
     const lastLibraryCall = global.fetch.mock.calls.at(-1);
@@ -172,16 +181,16 @@ describe("ROMM token lifecycle", () => {
       String(url) === TOKEN_URL ? pendingGrant : response(200, { items: [] }),
     );
 
-    const { isRommAvailable } = await freshRomm();
+    const { getRecentlyAddedROMs } = await freshRomm();
 
     const all = Promise.all([
-      isRommAvailable(),
-      isRommAvailable(),
-      isRommAvailable(),
+      getRecentlyAddedROMs(1),
+      getRecentlyAddedROMs(1),
+      getRecentlyAddedROMs(1),
     ]);
     resolveGrant(grant("token"));
 
-    await expect(all).resolves.toEqual([true, true, true]);
+    await expect(all).resolves.toEqual([[], [], []]);
     expect(authCount()).toBe(1);
   });
 
@@ -194,9 +203,9 @@ describe("ROMM token lifecycle", () => {
 
       global.fetch.mockResolvedValue(response(500, { detail: "boom" }));
 
-      const { isRommAvailable } = await freshRomm();
+      const { getRecentlyAddedROMs } = await freshRomm();
 
-      await expect(isRommAvailable()).resolves.toBe(false);
+      await expect(getRecentlyAddedROMs(1)).rejects.toThrow();
       expect(authCount()).toBe(0);
       expect(calledUrls().every((url) => url.includes("/api/roms"))).toBe(true);
     },
