@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-29
+
 ### ⚠️ Breaking Changes
 
 - **API key scopes are now enforced, so existing narrow-scoped keys may start
@@ -48,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   background, so either can be used without the other, and it falls back to solid
   chrome where `backdrop-filter` is unsupported. Scoped to the chrome
   deliberately — cards, modals and form controls keep full opacity.
+- **The animated background is now a named selection.** Profile → Settings →
+  Themes offers **None** (the default) and **Drifty Stars**, the effect that
+  shipped in 1.3.0, rather than a single on/off checkbox. Existing opt-ins are
+  carried across by the migration, so anyone who had the background enabled keeps
+  it. Selecting None mounts nothing at all, so the default still costs nothing.
 
 ### 🔧 Technical Changes
 
