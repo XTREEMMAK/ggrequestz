@@ -164,10 +164,18 @@ main() {
         exit 0
     fi
     
-    # Commit version bump
+    # Commit version bump.
+    # Nothing is staged when package.json already carried the target version —
+    # the same "bumped ahead of the release" case update_package_version handles.
+    # `git commit` exits non-zero on an empty index, which under `set -e` aborted
+    # the run one step before the tag was created.
     print_status "Committing version bump"
     git add package.json package-lock.json
-    git commit -m "bump: version $version"
+    if git diff --cached --quiet -- package.json package-lock.json; then
+        print_success "Version already committed; nothing to bump"
+    else
+        git commit -m "bump: version $version"
+    fi
     
     # Create and push tag
     print_status "Creating tag $tag"
