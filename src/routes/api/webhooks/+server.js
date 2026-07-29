@@ -133,16 +133,13 @@ function requestWebhookUrl() {
  * Send the outbound request webhook.
  */
 async function sendRequestWebhook(payload) {
-  const response = await fetch(
-    requestWebhookUrl(),
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+  const response = await fetch(requestWebhookUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
     throw new Error(`Request webhook error: ${response.statusText}`);
