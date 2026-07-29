@@ -6,6 +6,7 @@ import { error, redirect } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
+import { applyRequestStatusChange } from "$lib/requestStatus.server.js";
 
 export async function load({ params, parent }) {
   const { userPermissions } = await parent();
@@ -177,19 +178,19 @@ export const actions = {
         };
       }
 
-      // Update the request
+      // Update the request. Status is excluded here and routed through the
+      // owner below, so this query only ever touches the non-status fields.
       const updateQuery = `
-        UPDATE ggr_game_requests 
-        SET 
+        UPDATE ggr_game_requests
+        SET
           title = $1,
           description = $2,
           reason = $3,
           priority = COALESCE($4, priority),
-          status = COALESCE($5, status),
-          platforms = $6,
-          admin_notes = $7,
+          platforms = $5,
+          admin_notes = $6,
           updated_at = NOW()
-        WHERE id = $8
+        WHERE id = $7
         RETURNING *
       `;
 
@@ -198,7 +199,6 @@ export const actions = {
         description || null,
         reason || null,
         priority || null,
-        status || null,
         JSON.stringify(platforms),
         adminNotes || null,
         requestId,
@@ -206,6 +206,21 @@ export const actions = {
 
       if (updateResult.rows.length === 0) {
         return { success: false, error: "Request not found" };
+      }
+
+      // Captured before any status change below, since this query never
+      // touches the status column.
+      const previousStatus = updateResult.rows[0].status;
+
+      // Status is routed through the owner so this path notifies and
+      // invalidates cache like the others. It previously did neither.
+      if (status) {
+        await applyRequestStatusChange({
+          id: requestId,
+          to: status,
+          actor: user.name || user.email,
+          adminNotes: adminNotes || null,
+        });
       }
 
       // Log the action for analytics
@@ -222,7 +237,7 @@ export const actions = {
               request_id: requestId,
               changes: {
                 title: title !== updateResult.rows[0].title,
-                status: status && status !== updateResult.rows[0].status,
+                status: status && status !== previousStatus,
                 priority:
                   priority && priority !== updateResult.rows[0].priority,
               },
