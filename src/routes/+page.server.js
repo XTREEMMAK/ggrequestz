@@ -15,7 +15,6 @@ import { getUserPreferences } from "$lib/userPreferences.js";
 import { gameRequests, watchlist } from "$lib/database.js";
 import {
   getRecentlyAddedROMs,
-  isRommAvailable,
   isRommConfigured,
   getRommAvailabilitySnapshot,
   crossReferenceWithROMM,
@@ -29,7 +28,7 @@ import {
   withCache,
   getCacheStats,
 } from "$lib/cache.js";
-import { safeAsync, withTimeout } from "$lib/utils.js";
+import { safeAsync } from "$lib/utils.js";
 
 import { redirect } from "@sveltejs/kit";
 import {
@@ -132,34 +131,26 @@ export async function load({ parent, cookies, url, depends }) {
     // surfaces an error instead of silently vanishing.
     const rommConfigured = await isRommConfigured();
 
-    // Check if ROMM is available (with caching and timeout) - optimized for speed
-    const rommAvailable = rommConfigured
-      ? await safeAsync(
-          () =>
-            withCache(
-              "romm-availability",
-              () =>
-                withTimeout(
-                  isRommAvailable(cookieHeader),
-                  1500 * timeoutMultiplier,
-                  "ROMM availability check timed out",
-                ),
-              5 * 60 * 1000, // 5 minutes cache
-            ),
-          {
-            timeout: 2000 * timeoutMultiplier,
-            fallback: false,
-            errorContext: "ROMM availability check",
-          },
-        )
-      : false;
+    // Availability comes from the background-refreshed snapshot; nothing here
+    // probes ROMM. Racing a live `isRommAvailable()` against a 1500ms ceiling
+    // (2250ms under the Docker multiplier) capped this check far below the
+    // client's own request budget, so a large library — where the probe needs
+    // seconds, not milliseconds — lost the race every time and the page
+    // reported an outage against a healthy server. The race also left the
+    // request running, uncancelled, with its result discarded.
+    //
+    // Optimistic until a probe has actually failed, matching the root layout.
+    // The shelf below streams, so a wrong guess still surfaces the real reason
+    // through describeRommError() when the request settles; a false negative
+    // here has no such recovery, it just renders an outage and stops.
+    const snapshot = rommConfigured ? getRommAvailabilitySnapshot() : null;
+    const rommAvailable = rommConfigured && snapshot.ok !== false;
 
-    // Configured but unreachable — carry the reason recorded by the background
-    // health probe so the page can explain itself rather than showing an empty
-    // shelf or an endless skeleton.
+    // Only a recorded failure earns an error banner. A stale or never-probed
+    // snapshot says nothing about reachability, and reporting "unreachable"
+    // from one is how this page claimed outages it had never observed.
     let rommError = null;
-    if (rommConfigured && !rommAvailable) {
-      const snapshot = getRommAvailabilitySnapshot();
+    if (rommConfigured && snapshot.ok === false) {
       rommError = {
         reason: snapshot.reason || "unreachable",
         status: snapshot.status,
