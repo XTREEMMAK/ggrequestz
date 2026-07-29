@@ -63,6 +63,22 @@
     { id: 'genres', label: 'Genres', icon: 'heroicons:tag' }
   ];
 
+  // Backgrounds offered in the Themes sub-tab. Adding one here plus a branch in
+  // AmbientBackground is the whole extension path.
+  const backgroundThemes = [
+    {
+      id: 'none',
+      label: 'None',
+      description: 'No background animation. Default, and costs nothing.'
+    },
+    {
+      id: 'drifty-stars',
+      label: 'Drifty Stars',
+      description:
+        'Drifting particles behind the page. Runs an animation for as long as a page is open, so leave it off on low-powered devices. Respects your system’s reduced-motion setting, caps at 30fps, and pauses in a background tab.'
+    }
+  ];
+
   // Chrome themes offered in the Themes sub-tab. Adding one here plus a CSS
   // block in app.css is the whole extension path; the column is a string
   // precisely so this stays additive.
@@ -316,7 +332,8 @@
         show_content_warnings: true,
         safe_mode_enabled: false,
         require_confirmation_for_mature: false,
-        animated_background: false
+        background_theme: 'none',
+        ui_theme: 'default'
       };
     }
   });
@@ -704,24 +721,29 @@
             >
               {#if settingsTab === 'themes'}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Appearance</h3>
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Background</h3>
 
-              <label class="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={userPreferences.animated_background}
-                  onchange={(e) => updatePreference('animated_background', e.target.checked)}
-                  class="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span class="ml-2">
-                  <span class="block text-sm text-gray-700 dark:text-gray-300">Animated background</span>
-                  <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Drifting particles behind the page. Off by default. Runs an animation
-                    for as long as a page is open, so leave it off on low-powered devices.
-                    Respects your system's reduced-motion setting.
-                  </span>
-                </span>
-              </label>
+              <fieldset>
+                <legend class="sr-only">Background</legend>
+                <div class="space-y-3">
+                  {#each backgroundThemes as background}
+                    <label class="flex items-start">
+                      <input
+                        type="radio"
+                        name="background-theme"
+                        value={background.id}
+                        checked={(userPreferences.background_theme || 'none') === background.id}
+                        onchange={() => updatePreference('background_theme', background.id)}
+                        class="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300"
+                      />
+                      <span class="ml-2">
+                        <span class="block text-sm text-gray-700 dark:text-gray-300">{background.label}</span>
+                        <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">{background.description}</span>
+                      </span>
+                    </label>
+                  {/each}
+                </div>
+              </fieldset>
             </div>
 
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">

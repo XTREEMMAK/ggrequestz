@@ -21,7 +21,10 @@
 	let authMethod = $derived(data?.authMethod || 'authentik');
 	let needsSetup = $derived(data?.needsSetup || false);
 	let basicAuthEnabled = $derived(data?.basicAuthEnabled || false);
-	let ambientBackground = $derived(data?.ambientBackground || false);
+	// Background selection. "none" mounts nothing at all, so the default costs
+	// nothing; any other value names the effect to render.
+	let backgroundTheme = $derived(data?.backgroundTheme || 'none');
+	let ambientBackground = $derived(backgroundTheme !== 'none');
 	// Chrome theme, independent of the background above. Unknown values fall
 	// back to the default styling rather than rendering unthemed chrome.
 	let uiTheme = $derived(data?.uiTheme === 'glass' ? 'glass' : 'default');
@@ -768,7 +771,7 @@
 <!-- Opt-in ambient background. Rendered last so it never delays content,
      and only for users who turned it on in their profile. -->
 {#if ambientBackground}
-	<AmbientBackground />
+	<AmbientBackground variant={backgroundTheme} />
 {/if}
 
 <!-- Toast notifications -->

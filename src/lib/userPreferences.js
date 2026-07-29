@@ -24,7 +24,9 @@ export const DEFAULT_PREFERENCES = {
   show_content_warnings: true,
   safe_mode_enabled: false,
   require_confirmation_for_mature: false,
+  // Superseded by background_theme; retained so existing rows round-trip.
   animated_background: false,
+  background_theme: "none",
   ui_theme: "default",
 };
 
@@ -73,6 +75,7 @@ export async function getUserPreferences(userId) {
       require_confirmation_for_mature:
         prefs.require_confirmation_for_mature || false,
       animated_background: prefs.animated_background || false,
+      background_theme: prefs.background_theme || "none",
       ui_theme: prefs.ui_theme || "default",
       created_at: prefs.created_at,
       updated_at: prefs.updated_at,
@@ -106,9 +109,9 @@ export async function saveUserPreferences(userId, preferences) {
         max_esrb_rating, custom_content_blocks, preferred_genres, excluded_genres,
         apply_to_homepage, apply_to_popular, apply_to_recent, apply_to_search,
         show_content_warnings, safe_mode_enabled, require_confirmation_for_mature,
-        animated_background, ui_theme, updated_at
+        animated_background, background_theme, ui_theme, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW()
       )
       ON CONFLICT (user_id) DO UPDATE SET
         content_filter_level = EXCLUDED.content_filter_level,
@@ -126,6 +129,7 @@ export async function saveUserPreferences(userId, preferences) {
         safe_mode_enabled = EXCLUDED.safe_mode_enabled,
         require_confirmation_for_mature = EXCLUDED.require_confirmation_for_mature,
         animated_background = EXCLUDED.animated_background,
+        background_theme = EXCLUDED.background_theme,
         ui_theme = EXCLUDED.ui_theme,
         updated_at = NOW()
     `,
@@ -146,6 +150,7 @@ export async function saveUserPreferences(userId, preferences) {
         preferences.safe_mode_enabled || false,
         preferences.require_confirmation_for_mature || false,
         preferences.animated_background || false,
+        preferences.background_theme || "none",
         preferences.ui_theme || "default",
       ],
     );

@@ -118,7 +118,7 @@ export async function load({ request, cookies }) {
         rommAvailable: false,
         rommServerUrl: null,
         customNavItems: [],
-        ambientBackground: false,
+        backgroundTheme: "none",
         uiTheme: "default",
         authMethod,
         needsSetup: true,
@@ -153,8 +153,8 @@ export async function load({ request, cookies }) {
     };
 
     let rommAvailable = false;
-    let ambientBackground = false;
     let uiTheme = "default";
+    let backgroundTheme = "none";
 
     // Get additional data if user is authenticated
     if (user) {
@@ -187,18 +187,18 @@ export async function load({ request, cookies }) {
           `appearance-${userId}`,
           async () => {
             const result = await query(
-              "SELECT animated_background, ui_theme FROM ggr_user_preferences WHERE user_id = $1",
+              "SELECT background_theme, ui_theme FROM ggr_user_preferences WHERE user_id = $1",
               [userId],
             );
             return {
-              ambientBackground: result.rows[0]?.animated_background === true,
+              backgroundTheme: result.rows[0]?.background_theme || "none",
               uiTheme: result.rows[0]?.ui_theme || "default",
             };
           },
           PREFERENCE_CACHE_TTL_MS,
         );
 
-        ambientBackground = appearance.ambientBackground;
+        backgroundTheme = appearance.backgroundTheme;
         uiTheme = appearance.uiTheme;
       } catch (prefError) {
         // Never fatal — both are cosmetic. Log the reason so an upgrade that
@@ -265,7 +265,7 @@ export async function load({ request, cookies }) {
       userPermissions,
       rommAvailable,
       rommServerUrl,
-      ambientBackground,
+      backgroundTheme,
       uiTheme,
       customNavItems,
       authMethod,
@@ -280,7 +280,7 @@ export async function load({ request, cookies }) {
       userPermissions: { isAdmin: false },
       rommAvailable: false,
       rommServerUrl: null,
-      ambientBackground: false,
+      backgroundTheme: "none",
       uiTheme: "default",
       customNavItems: [],
       authMethod,

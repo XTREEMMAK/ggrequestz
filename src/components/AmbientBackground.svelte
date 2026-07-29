@@ -7,9 +7,17 @@
    *
    * The original had no performance guards at all. This version adds the ones a
    * decorative, always-running animation needs — see the constants below. It is
-   * opt-in per user (`animated_background`), so the default cost is zero.
+   * opt-in per user (`background_theme`), so the default cost is zero.
    */
   import { onMount } from "svelte";
+
+  /**
+   * Which background to render. "drifty-stars" is the only effect today; the
+   * prop exists so a second one is a branch here plus a value in the settings
+   * list, rather than a refactor. The layout does not mount this component at
+   * all when the preference is "none".
+   */
+  let { variant = "drifty-stars" } = $props();
 
   let canvas = $state(null);
 

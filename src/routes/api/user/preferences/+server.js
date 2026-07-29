@@ -63,6 +63,7 @@ export async function POST({ request, cookies }) {
       "safe_mode_enabled",
       "require_confirmation_for_mature",
       "animated_background",
+      "background_theme",
       "ui_theme",
     ];
 

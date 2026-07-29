@@ -20,7 +20,7 @@ const { getUserPreferences, saveUserPreferences, DEFAULT_PREFERENCES } =
 
 // Every preference the UI can set. Additions here are deliberate: a new
 // preference should fail this suite until it is wired through all the layers.
-const PERSISTED = ["animated_background", "ui_theme"];
+const PERSISTED = ["animated_background", "background_theme", "ui_theme"];
 
 beforeEach(() => {
   query.mockReset();
@@ -29,12 +29,12 @@ beforeEach(() => {
 describe("preference round-trip", () => {
   it("returns every persisted preference from the database row", async () => {
     query.mockResolvedValueOnce({
-      rows: [{ animated_background: true, ui_theme: "glass" }],
+      rows: [{ background_theme: "drifty-stars", ui_theme: "glass" }],
     });
 
     const prefs = await getUserPreferences(1);
 
-    expect(prefs.animated_background).toBe(true);
+    expect(prefs.background_theme).toBe("drifty-stars");
     expect(prefs.ui_theme).toBe("glass");
   });
 
@@ -43,7 +43,7 @@ describe("preference round-trip", () => {
 
     await saveUserPreferences(1, {
       ...DEFAULT_PREFERENCES,
-      animated_background: true,
+      background_theme: "drifty-stars",
       ui_theme: "glass",
     });
 
@@ -57,7 +57,7 @@ describe("preference round-trip", () => {
     }
 
     expect(values).toContain("glass");
-    expect(values).toContain(true);
+    expect(values).toContain("drifty-stars");
   });
 
   it("placeholder count matches the number of bound values", async () => {
@@ -74,14 +74,14 @@ describe("preference round-trip", () => {
     expect(highest).toBe(values.length);
   });
 
-  it("falls back to the default theme when the column is null", async () => {
+  it("falls back to the defaults when the columns are null", async () => {
     query.mockResolvedValueOnce({
-      rows: [{ animated_background: null, ui_theme: null }],
+      rows: [{ background_theme: null, ui_theme: null }],
     });
 
     const prefs = await getUserPreferences(1);
 
     expect(prefs.ui_theme).toBe("default");
-    expect(prefs.animated_background).toBe(false);
+    expect(prefs.background_theme).toBe("none");
   });
 });
