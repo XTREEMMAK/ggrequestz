@@ -201,4 +201,81 @@ describe("applyRequestStatusChange", () => {
     const [, , , setNotes] = params;
     expect(setNotes).toBe(false);
   });
+
+  // notify(): the notification must only ever carry notes this transition
+  // actually wrote. row.admin_notes is the persisted column, which on the
+  // "caller omitted notes" path is deliberately left untouched -- it can
+  // still hold text an earlier, unrelated transition wrote (e.g. a prior
+  // rejection reason). Presenting that as if it explains *this* transition
+  // would be wrong, and is worst on the cancellation path where it renders
+  // as "reason:", implying it's why the request was cancelled.
+
+  const STALE_NOTE = "STALE-NOTE-FROM-A-PREVIOUS-REJECTION";
+
+  it("does not carry a stale stored note when the caller omits notes on a normal transition", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          ...ROW,
+          status: "approved",
+          previous_status: "pending",
+          admin_notes: STALE_NOTE,
+        },
+      ],
+    });
+    const { applyRequestStatusChange } = await freshModule();
+
+    await applyRequestStatusChange({ id: "req-1", to: "approved" });
+    await settle();
+
+    expect(sendRequestStatusNotification).toHaveBeenCalledTimes(1);
+    const [payload] = sendRequestStatusNotification.mock.calls[0];
+    expect(payload.admin_notes).not.toBe(STALE_NOTE);
+    expect(payload.admin_notes).toBeUndefined();
+  });
+
+  it("does not present a stale stored note as the cancellation reason when the caller omits notes", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          ...ROW,
+          status: "cancelled",
+          previous_status: "pending",
+          admin_notes: STALE_NOTE,
+        },
+      ],
+    });
+    const { applyRequestStatusChange } = await freshModule();
+
+    await applyRequestStatusChange({ id: "req-1", to: "cancelled" });
+    await settle();
+
+    expect(sendRequestCancelledDeletedNotification).toHaveBeenCalledTimes(1);
+    const [payload] = sendRequestCancelledDeletedNotification.mock.calls[0];
+    expect(payload.reason).not.toContain(STALE_NOTE);
+  });
+
+  it("carries the exact notes the caller supplied", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          ...ROW,
+          status: "approved",
+          previous_status: "pending",
+          admin_notes: "looks good",
+        },
+      ],
+    });
+    const { applyRequestStatusChange } = await freshModule();
+
+    await applyRequestStatusChange({
+      id: "req-1",
+      to: "approved",
+      adminNotes: "looks good",
+    });
+    await settle();
+
+    const [payload] = sendRequestStatusNotification.mock.calls[0];
+    expect(payload.admin_notes).toBe("looks good");
+  });
 });
