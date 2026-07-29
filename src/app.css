@@ -235,15 +235,23 @@ body {
   /* --bg-secondary at ~55%, so the background reads through without the text
      losing its contrast floor. */
   background-color: rgb(45 55 72 / 0.55);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  /* A single filter function on purpose. The CSS minifier strips the space
+     between functions, so `blur(16px) saturate(140%)` ships as
+     `blur(16px)saturate(140%)` — an invalid filter list that browsers discard
+     entirely, leaving a translucent sidebar with no blur. The @supports
+     fallback below cannot catch that, because support is not the problem.
+
+     Prefixing is left to the build. Writing `-webkit-backdrop-filter` by hand
+     alongside this made the minifier collapse the pair and keep only the
+     prefixed form, which Firefox does not support. */
+  backdrop-filter: blur(16px);
   border-right: 1px solid rgb(255 255 255 / 0.08);
 }
 
 .theme-glass .mobile-header {
   background-color: rgb(26 32 44 / 0.55);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  /* Single function — see the note on .sidebar above. */
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid rgb(255 255 255 / 0.08);
 }
 
