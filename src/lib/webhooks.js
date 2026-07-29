@@ -1,9 +1,18 @@
 /**
  * Webhook utility functions for notifications
+ *
+ * Browser-side helpers. Both post to the relative URL "/api/webhooks", so they
+ * only work from a component -- calling either from a server route silently
+ * targets nothing. Server-side callers want $lib/webhooks.server.js, which
+ * dispatches to the configured receiver directly.
  */
 
 /**
  * Send game request notification via webhook
+ *
+ * Not used by request submission: POST /api/request dispatches through
+ * $lib/webhooks.server.js instead, so the webhook fires whether the request
+ * arrived from the UI or from the API.
  */
 export async function sendGameRequestNotification(requestData) {
   return await fetch("/api/webhooks", {

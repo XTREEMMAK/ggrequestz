@@ -4,6 +4,7 @@
 
 import { json, error } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
+import { requestWebhookUrl, sendRequestWebhook } from "$lib/webhooks.server.js";
 
 export async function POST({ request }) {
   try {
@@ -114,44 +115,6 @@ async function sendGotifyNotification({ title, message, priority, extras }) {
   return await response.json();
 }
 
-/**
- * The configured outbound webhook URL.
- *
- * REQUEST_WEBHOOK_URL is preferred; N8N_WEBHOOK_URL keeps working so existing
- * installs need no change.
- */
-function requestWebhookUrl() {
-  return (
-    env.REQUEST_WEBHOOK_URL ||
-    process.env.REQUEST_WEBHOOK_URL ||
-    env.N8N_WEBHOOK_URL ||
-    process.env.N8N_WEBHOOK_URL
-  );
-}
-
-/**
- * Send the outbound request webhook.
- */
-async function sendRequestWebhook(payload) {
-  const response = await fetch(requestWebhookUrl(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request webhook error: ${response.statusText}`);
-  }
-
-  // Receivers return whatever they like; a non-JSON body is still a success.
-  try {
-    return await response.json();
-  } catch {
-    return { status: "sent", statusCode: response.status };
-  }
-}
-
-// Helper function for common notification types (moved to lib/webhooks.js)
-// This function should be imported from $lib/webhooks.js instead
+// The URL resolution and the dispatch itself live in $lib/webhooks.server.js,
+// which /api/request also uses. Both paths therefore emit an identical payload,
+// and a receiver need not care which one produced it.
