@@ -143,8 +143,10 @@ REQUEST_WEBHOOK_URL=https://automation.example.com/hook/ggrequestz
 `N8N_WEBHOOK_URL` is still honoured as a deprecated alias, so existing installs
 need no change. When both are set, `REQUEST_WEBHOOK_URL` wins.
 
-The app sends its own outbound webhooks from `/api/webhooks`; failures are
-logged and do not block the request that triggered them.
+Submitting a request dispatches one. Failures are logged and never block the
+submission — by the time the webhook is sent the request is already saved, so a
+receiver that is slow, rejecting or absent cannot cost a user their request.
+Receivers get five seconds to respond.
 
 ### Payload
 
@@ -156,10 +158,10 @@ logged and do not block the request that triggered them.
   "priority": 5,
   "timestamp": "2026-01-01T00:00:00.000Z",
   "data": {
-    "request_id": 42,
-    "user_id": 7,
+    "request_id": "eac1cd44-5f6e-4f49-8ac1-9936066105a6",
+    "user_id": "12",
     "game_title": "Chrono Trigger",
-    "igdb_id": 1234,
+    "igdb_id": "1234",
     "platforms": ["Super Nintendo"],
     "request_type": "game"
   }
@@ -169,6 +171,13 @@ logged and do not block the request that triggered them.
 `data.game_title` and `data.platforms` are what a receiver needs to act on a
 request. `igdb_id` identifies the title unambiguously where the receiver also
 speaks IGDB.
+
+`request_id` is a UUID; `user_id` and `igdb_id` are strings, matching how they
+are stored. `platforms` is always an array, empty when the requester named no
+platform. `request_type` is `game`, `update` or `fix`.
+
+`priority` maps the request's own priority onto a 1-10 scale: `low` 3,
+`medium` 5, `high` 8, `urgent` 9.
 
 ---
 

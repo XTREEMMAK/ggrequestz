@@ -7,6 +7,7 @@ import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { sendNewRequestNotification } from "$lib/gotify.js";
+import { sendGameRequestWebhook } from "$lib/webhooks.server.js";
 import { invalidateCache } from "$lib/cache.js";
 
 /**
@@ -299,6 +300,14 @@ export async function POST({ request, cookies }) {
     }).catch((error) => {
       console.warn("Failed to send Gotify notification:", error);
       // Don't fail the request if notification fails
+    });
+
+    // Announce the request to whatever automation is configured, for the same
+    // reason and in the same way as the Gotify call above: the row is already
+    // committed, so a slow or absent receiver must not turn a successful
+    // submission into an error for the user.
+    sendGameRequestWebhook(insertedRequest).catch((error) => {
+      console.warn("Failed to send request webhook:", error.message);
     });
 
     return json(
