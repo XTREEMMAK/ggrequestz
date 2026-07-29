@@ -90,6 +90,41 @@ export function getOidcConfig() {
 }
 
 /**
+ * Warn when a configured URL is not absolute.
+ *
+ * A value such as `192.0.2.10:5174/api/auth/callback` — the scheme omitted —
+ * flows through to the authorization request unchanged, and the only feedback is
+ * the provider's generic "missing, invalid, or mismatching redirection URI".
+ * Naming the variable and the offending value turns that into a one-line fix.
+ *
+ * Warn rather than throw: an operator whose unusual-but-working value trips this
+ * check must not be locked out of their own login by a diagnostic.
+ *
+ * @param {string} name - Environment variable the value came from
+ * @param {string} value - Configured value
+ * @param {string} example - A correctly formed example
+ */
+function warnIfNotAbsoluteUrl(name, value, example) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    console.warn(
+      `⚠️ ${name} is not an absolute URL: "${value}". It is sent to the identity ` +
+        `provider as-is and will be rejected. Expected something like "${example}".`,
+    );
+    return;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    console.warn(
+      `⚠️ ${name} uses an unsupported scheme "${parsed.protocol}": "${value}". ` +
+        `Expected something like "${example}".`,
+    );
+  }
+}
+
+/**
  * Resolve the redirect URI to send to the provider.
  *
  * This must match what is registered at the IdP exactly. `url.origin` alone is
@@ -105,10 +140,18 @@ export function getOidcConfig() {
  */
 export function resolveRedirectUri(requestUrl) {
   const explicit = cfg("OIDC_REDIRECT_URI");
-  if (explicit) return explicit;
+  if (explicit) {
+    warnIfNotAbsoluteUrl(
+      "OIDC_REDIRECT_URI",
+      explicit,
+      "https://example.com/api/auth/callback",
+    );
+    return explicit;
+  }
 
   const siteUrl = cfg("PUBLIC_SITE_URL");
   if (siteUrl) {
+    warnIfNotAbsoluteUrl("PUBLIC_SITE_URL", siteUrl, "https://example.com");
     return `${siteUrl.replace(/\/+$/, "")}/api/auth/callback`;
   }
 
