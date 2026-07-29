@@ -46,7 +46,12 @@ vi.mock("$lib/gotify.js", () => ({
   sendNewRequestNotification: vi.fn(async () => {}),
 }));
 vi.mock("$lib/cache.js", () => ({ invalidateCache: vi.fn(async () => {}) }));
-vi.mock("$lib/requestPolicy.server.js", () => ({ findOpenDuplicate }));
+vi.mock("$lib/requestPolicy.server.js", () => ({
+  findOpenDuplicate,
+  // The route reads this too; default to the un-approved path so these tests
+  // stay about duplicates only.
+  mayAutoApprove: vi.fn(async () => false),
+}));
 
 async function submit(body = {}) {
   vi.resetModules();

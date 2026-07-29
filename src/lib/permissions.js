@@ -15,6 +15,7 @@ export const PERMISSIONS = {
   REQUEST_EDIT: "request.edit",
   REQUEST_DELETE: "request.delete",
   REQUEST_APPROVE: "request.approve",
+  REQUEST_AUTO_APPROVE: "request.auto_approve",
   REQUEST_VIEW_ALL: "request.view_all",
 
   // User management permissions

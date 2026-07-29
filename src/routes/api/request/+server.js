@@ -9,7 +9,10 @@ import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { sendNewRequestNotification } from "$lib/gotify.js";
 import { sendGameRequestWebhook } from "$lib/webhooks.server.js";
 import { invalidateCache } from "$lib/cache.js";
-import { findOpenDuplicate } from "$lib/requestPolicy.server.js";
+import {
+  findOpenDuplicate,
+  mayAutoApprove,
+} from "$lib/requestPolicy.server.js";
 
 /**
  * Submit a new game request
@@ -169,7 +172,7 @@ export async function POST({ request, cookies }) {
       platforms: JSON.stringify(requestData.platforms || []),
       priority: priority,
       description: requestData.description || "",
-      status: "pending",
+      status: (await mayAutoApprove(localUserId)) ? "approved" : "pending",
     };
 
     // If an igdb_id is provided, try to cache the game first (non-blocking)

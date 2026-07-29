@@ -6,10 +6,15 @@
  */
 
 import { query } from "$lib/database.js";
+import { userHasPermission } from "$lib/userProfile.js";
 
 // A request still in play. A rejected, cancelled or fulfilled request must not
 // block a new one, so a failed fetch can be retried.
 const OPEN_STATUSES = ["pending", "approved"];
+
+// Stored by admin/settings/+page.svelte as the bare string "true"/"false", and
+// absent from the table until that form is first saved.
+const AUTO_APPROVE_SETTING_KEY = "request.auto_approve";
 
 /**
  * Find an open request already covering the same game.
@@ -48,4 +53,27 @@ export async function findOpenDuplicate({ igdbId, title, requestType }) {
     [title, requestType, OPEN_STATUSES],
   );
   return result.rows[0] ?? null;
+}
+
+/**
+ * Whether this user's requests skip the approval queue.
+ *
+ * Two independent switches: a per-role permission for trusted users, and a
+ * global setting meaning "everyone". userHasPermission already returns true for
+ * any is_admin user, so administrators need no explicit grant.
+ *
+ * @param {string|number} userId - Local ggr_users id
+ * @returns {Promise<boolean>}
+ */
+export async function mayAutoApprove(userId) {
+  if (await userHasPermission(userId, "request.auto_approve")) {
+    return true;
+  }
+
+  const result = await query(
+    "SELECT value FROM ggr_system_settings WHERE key = $1",
+    [AUTO_APPROVE_SETTING_KEY],
+  );
+
+  return result.rows[0]?.value === "true";
 }
