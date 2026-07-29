@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ Breaking Changes
+
+- **API key scopes are now enforced, so existing narrow-scoped keys may start
+  failing.** Any key that was created with less than full access has been
+  operating with more privilege than it was granted; it now receives
+  `403 Insufficient scope` on endpoints outside its scopes. Keys holding `*` are
+  unaffected. If an integration breaks after upgrading, the 403 body names the
+  scope it needed — either add that scope to the key or reissue it. See the
+  scope table in [docs/API.md](docs/API.md).
+
+### 🔒 Security
+
+- **API key scopes were recorded but never checked.** Every key stored the scopes
+  selected when it was created, the admin UI presented them as permissions, and
+  `docs/API.md` told administrators to "use the minimum required scopes for each
+  key" — but no route ever consulted them. `verifyScopes()` in
+  `src/lib/apiKeys.js` and its `checkApiScopes()` wrapper in
+  `src/lib/auth.server.js` both had zero callers, so a key stamped `games:read`
+  carried its owner's full privileges, including writes. Anyone who delegated a
+  restricted key handed over more access than they intended. Scopes are now
+  resolved per route and method in `src/lib/apiScopes.js` and enforced centrally
+  in `src/hooks.server.js`, with unmapped routes denied to API keys by default so
+  new endpoints are closed until they are classified. Exploiting this required
+  already holding a valid API key.
+
 ## [1.3.0] - 2026-07-27
 
 ### ⚠️ Breaking Changes

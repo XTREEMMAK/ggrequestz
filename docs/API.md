@@ -63,6 +63,49 @@ Content-Type: application/json
 - `admin:write` - Manage users, requests, and system settings
 - `*` - Full access to all API endpoints
 
+**Scope Required Per Endpoint:**
+
+Scopes are enforced for API keys on every `/api/*` route. A key missing the
+required scope receives `403 Insufficient scope`, with the scope it needed named
+in the response body. A key holding `*` satisfies every row below. Session
+(cookie) authentication does not use scopes — browser access is governed by the
+user permission system instead.
+
+| Endpoint                     | Method       | Required scope    |
+| ---------------------------- | ------------ | ----------------- |
+| `/api/request`               | `GET`        | `requests:read`   |
+| `/api/request`               | `POST`       | `requests:write`  |
+| `/api/request/rescind`       | `POST`       | `requests:write`  |
+| `/api/watchlist/status/{id}` | `GET`        | `watchlist:read`  |
+| `/api/watchlist/batch`       | `POST`       | `watchlist:read`  |
+| `/api/watchlist/add`         | `POST`       | `watchlist:write` |
+| `/api/watchlist/remove`      | `POST`       | `watchlist:write` |
+| `/api/user/preferences`      | `GET`        | `user:read`       |
+| `/api/user/preferences`      | `POST`       | `user:write`      |
+| `/api/games/*`               | `GET`        | `games:read`      |
+| `/api/browse/*`              | `GET`        | `games:read`      |
+| `/api/search`                | `GET` `POST` | `games:read`      |
+| `/api/igdb`                  | `GET` `POST` | `games:read`      |
+| `/api/romm/recent`           | `GET`        | `games:read`      |
+| `/api/romm/cross-reference`  | `POST`       | `games:read`      |
+| `/api/cache/stats`           | `GET`        | `admin:read`      |
+| `/api/cache/stats`           | `DELETE`     | `admin:write`     |
+| `/api/cache/clear`           | `POST`       | `admin:write`     |
+| `/api/cache/cleanup`         | `POST`       | `admin:write`     |
+| `/api/romm/clear-cache`      | `POST`       | `admin:write`     |
+| `/api/admin/*`               | `POST`       | `admin:write`     |
+
+`/api/search`, `/api/igdb`, `/api/romm/cross-reference` and
+`/api/watchlist/batch` accept `POST` but only read — they take a query or a list
+of IDs in the body — so they require the corresponding `:read` scope.
+
+Endpoints not listed here are unavailable to API keys and return `403`,
+regardless of the key's scopes. This includes the public routes
+(`/api/health`, `/api/version`, `/api/webhooks`, `/api/auth/*`), which need no
+authentication at all, and the `/admin/api/*` routes behind the admin UI, which
+accept only session cookies. The source of truth is
+`src/lib/apiScopes.js`.
+
 **Security Best Practices:**
 
 - Store API keys securely (use environment variables, never commit to git)
@@ -1250,10 +1293,29 @@ All endpoints return consistent error responses:
 - `200` - Success
 - `400` - Bad Request (validation error)
 - `401` - Unauthorized
-- `403` - Forbidden
+- `403` - Forbidden (including an API key missing the required scope)
 - `404` - Not Found
 - `429` - Rate Limited
 - `500` - Internal Server Error
+
+### Insufficient Scope
+
+An API key calling an endpoint it lacks the scope for receives `403` and names
+the scope it needed:
+
+```json
+{
+  "success": false,
+  "error": "Insufficient scope",
+  "message": "This API key lacks the 'requests:write' scope required for POST /api/request.",
+  "required_scope": "requests:write"
+}
+```
+
+`required_scope` is `null` when the endpoint is not available to API keys at
+all. Fix either by minting a key with the scope listed in the table under
+[Authentication](#api-key-authentication-recommended-for-programmatic-access),
+or by using a `*` key.
 
 ## Rate Limiting
 

@@ -22,7 +22,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "API Key",
-        "description": "API key authentication with format: `ggr_<your-api-key>`"
+        "description": "API key authentication with format: `ggr_<your-api-key>`. Scopes are enforced per endpoint: a key missing the required scope receives 403 with the scope named in `required_scope`, and endpoints not listed in the scope table are unavailable to API keys entirely. A key with the `*` scope satisfies every endpoint. See the scope table in docs/API.md; the source of truth is src/lib/apiScopes.js. (OpenAPI cannot express scopes for `http bearer` schemes, so they are not declared per operation here.)"
       },
       "cookieAuth": {
         "type": "apiKey",

@@ -6,6 +6,8 @@ import { sequence } from "@sveltejs/kit/hooks";
 import { redirect } from "@sveltejs/kit";
 import { getSession } from "$lib/auth.server.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
+import { verifyScopes } from "$lib/apiKeys.js";
+import { resolveRequiredScope } from "$lib/apiScopes.js";
 import { warmUpCache } from "$lib/gameCache.js";
 import { warmPool } from "$lib/database.js";
 import { probeRommAvailability } from "$lib/romm.server.js";
@@ -226,6 +228,39 @@ const authGuard = async ({ event, resolve }) => {
         headers: { "Content-Type": "application/json" },
       },
     );
+  }
+
+  // Enforce API key scopes.
+  //
+  // Scopes were recorded on every key and offered in the admin UI, but no route
+  // ever checked them, so a key stamped `games:read` still carried its owner's
+  // full privileges. Only API keys are subject to this — cookie sessions carry
+  // no scopes and are governed by the permission system instead.
+  if (user?.auth_type === "api_key" && url.pathname.startsWith("/api/")) {
+    const requiredScope = resolveRequiredScope(url.pathname, request.method);
+    const keyScopes = Array.isArray(user.scopes) ? user.scopes : [];
+
+    // A null scope means the route has no entry in the table. Deny rather than
+    // allow, so a route added later is closed until it is classified.
+    const permitted =
+      requiredScope !== null && verifyScopes(keyScopes, [requiredScope]);
+
+    if (!permitted) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Insufficient scope",
+          message: requiredScope
+            ? `This API key lacks the '${requiredScope}' scope required for ${request.method} ${url.pathname}.`
+            : `This endpoint is not available to API keys.`,
+          required_scope: requiredScope,
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
   }
 
   // For regular pages (not API), redirect to login if not authenticated
