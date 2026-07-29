@@ -17,6 +17,7 @@
 import { browser } from "$app/environment";
 import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
 import { env } from "$env/dynamic/private";
+import { env as publicEnv } from "$env/dynamic/public";
 import { fetchWithTimeout } from "$lib/utils.js";
 
 if (browser) {
@@ -28,10 +29,25 @@ const IDP_TIMEOUT_MS = 8000;
 // Discovery documents are effectively static; re-read hourly.
 const DISCOVERY_TTL_MS = 60 * 60 * 1000;
 
-/** Read a config value, preferring the new name over the legacy one. */
+/**
+ * Read a config value, preferring the new name over the legacy one.
+ *
+ * Three sources, because no single one carries everything:
+ *
+ * - `$env/dynamic/private` omits anything with the public prefix by design, so
+ *   `PUBLIC_SITE_URL` is never visible here.
+ * - `$env/dynamic/public` carries exactly those, and is where
+ *   `PUBLIC_SITE_URL` actually lives.
+ * - `process.env` holds both under adapter-node, and in development via the
+ *   `load-env.js` preload.
+ *
+ * Reading only the first and last happened to work, because Compose and
+ * `load-env.js` both populate `process.env` — but that made resolution depend
+ * on one of those running rather than on consulting the correct source.
+ */
 function cfg(...names) {
   for (const name of names) {
-    const value = env[name] ?? process.env[name];
+    const value = env[name] ?? publicEnv[name] ?? process.env[name];
     if (value !== undefined && value !== "") return value;
   }
   return undefined;

@@ -6,6 +6,11 @@ import { sveltekit } from "@sveltejs/kit/vite";
 const alias = {
   "$env/dynamic/private": new URL("./src/tests/mocks/env.js", import.meta.url)
     .pathname,
+  // PUBLIC_-prefixed variables live here, not in the private module.
+  "$env/dynamic/public": new URL(
+    "./src/tests/mocks/env-public.js",
+    import.meta.url,
+  ).pathname,
 };
 
 export default defineConfig({
