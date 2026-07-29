@@ -15,6 +15,7 @@ import {
   sendRequestCancelledDeletedNotification,
 } from "$lib/gotify.js";
 import { invalidateCache } from "$lib/cache.js";
+import { sendGameRequestWebhook } from "$lib/webhooks.server.js";
 
 /**
  * Change a request's status and perform everything that follows from it.
@@ -86,6 +87,12 @@ export async function applyRequestStatusChange({
     notes: setNotes ? row.admin_notes : undefined,
   });
 
+  if (to === "approved") {
+    // `from !== to` is guaranteed above, so an approved request being re-saved
+    // never reaches here.
+    onRequestApproved(row);
+  }
+
   // Fire and forget, as every caller did before: the row is committed and a
   // cold cache must not turn a successful action into an error.
   invalidateCache(cacheKeysFor(row)).catch((error) => {
@@ -93,6 +100,25 @@ export async function applyRequestStatusChange({
   });
 
   return { row, from, to, changed: true };
+}
+
+/**
+ * A request has entered `approved`. Announce it to configured automation.
+ *
+ * The one dispatch point. Reached from auto-approved creation and from an
+ * admin approving, so a receiver sees one event per approval regardless of
+ * which door the request came through.
+ *
+ * Fire and forget: the row is already committed, so a slow or absent receiver
+ * must not turn a successful approval into an error.
+ *
+ * @param {Object} row - The ggr_game_requests row, as stored
+ * @returns {void}
+ */
+export function onRequestApproved(row) {
+  sendGameRequestWebhook(row).catch((error) => {
+    console.warn("Failed to send request webhook:", error.message);
+  });
 }
 
 /** Cache keys a request's status change can stale. */

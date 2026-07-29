@@ -10,6 +10,12 @@
  * This pins the wiring rather than the payload: that POST /api/request itself
  * dispatches, and that it stays fire-and-forget so a broken receiver cannot
  * fail a submission the database has already accepted.
+ *
+ * Creation-time dispatch is now gated on approval (see
+ * request-approval-dispatch.test.js for the transition rule itself), so the
+ * default here is a request that is auto-approved on the way in -- otherwise
+ * a "dispatches on submission" assertion would describe a scenario that no
+ * longer dispatches. The two tests at the bottom pin that gate directly.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,11 +38,19 @@ const INSERTED_ROW = {
 
 const getAuthenticatedUser = vi.fn(async () => USER);
 const sendNewRequestNotification = vi.fn(async () => true);
+const mayAutoApprove = vi.fn(async () => false);
+
+// $10 / index 9 in the INSERT's column list below is `status`. The row
+// returned here must echo whatever the route actually decided to insert --
+// mirroring what a real INSERT ... RETURNING * would give back -- rather than
+// a value hardcoded independent of mayAutoApprove, or the dispatch gate below
+// would be exercised against a status the route never computed.
+const STATUS_PARAM_INDEX = 9;
 
 // Route the two statements the handler runs before it reaches the webhook.
-const query = vi.fn(async (sql) => {
+const query = vi.fn(async (sql, params) => {
   if (sql.includes("INSERT INTO ggr_game_requests")) {
-    return { rows: [INSERTED_ROW] };
+    return { rows: [{ ...INSERTED_ROW, status: params[STATUS_PARAM_INDEX] }] };
   }
   if (sql.includes("FROM ggr_users")) {
     return { rows: [{ id: "12", username: "alice", email: "a@example.test" }] };
@@ -51,6 +65,10 @@ vi.mock("$lib/database.js", () => ({
 vi.mock("$lib/auth.server.js", () => ({ getAuthenticatedUser }));
 vi.mock("$lib/gotify.js", () => ({ sendNewRequestNotification }));
 vi.mock("$lib/cache.js", () => ({ invalidateCache: vi.fn(async () => {}) }));
+vi.mock("$lib/requestPolicy.server.js", () => ({
+  findOpenDuplicate: vi.fn(async () => null),
+  mayAutoApprove,
+}));
 
 /** Submit a request through the real handler. */
 async function submitRequest(body = {}) {
@@ -95,6 +113,12 @@ describe("POST /api/request webhook dispatch", () => {
       statusText: "OK",
       json: async () => ({ received: true }),
     }));
+    // Default this suite to the auto-approved path. Dispatch now only fires
+    // for a request that is approved on the way in, and every test above the
+    // approval-gating block below is about the dispatch itself, not about
+    // who may skip the queue -- that belongs to
+    // request-approval-dispatch.test.js and request-creation-status.test.js.
+    mayAutoApprove.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -158,5 +182,22 @@ describe("POST /api/request webhook dispatch", () => {
     await submitRequest();
 
     expect(sendNewRequestNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not dispatch on submission when auto-approve is off", async () => {
+    mayAutoApprove.mockResolvedValue(false);
+
+    const response = await submitRequest();
+
+    expect(response.status).toBe(201);
+    expect(webhookCalls()).toHaveLength(0);
+  });
+
+  it("dispatches on submission when the request is auto-approved", async () => {
+    mayAutoApprove.mockResolvedValue(true);
+
+    await submitRequest();
+
+    expect(webhookCalls()).toHaveLength(1);
   });
 });
