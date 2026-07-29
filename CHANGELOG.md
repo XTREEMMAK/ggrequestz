@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unaffected. If an integration breaks after upgrading, the 403 body names the
   scope it needed — either add that scope to the key or reissue it. See the
   scope table in [docs/API.md](docs/API.md).
+- **`POST /api/webhooks` now requires the `admin:write` scope.** The endpoint was
+  listed among the server's public routes, but as `/api/webhooks/` with a
+  trailing slash that never matched the real path, so it had in fact always
+  required authentication. Scope enforcement then left it unmapped and denied
+  every API key. It is mapped to `admin:write` because the caller chooses the
+  title, message and priority that land in the operator's notifications.
 
 ### 🔒 Security
 
@@ -55,6 +61,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shipped in 1.3.0, rather than a single on/off checkbox. Existing opt-ins are
   carried across by the migration, so anyone who had the background enabled keeps
   it. Selecting None mounts nothing at all, so the default still costs nothing.
+
+### 🐛 Bug Fixes
+
+- **The outbound request webhook never fired when a request was submitted.**
+  `sendGameRequestNotification` posted to the relative URL `/api/webhooks`, which
+  only resolves in a browser, and nothing imported it — `POST /api/request`
+  notified Gotify and stopped. So the webhook dispatched only for whoever POSTed
+  to `/api/webhooks` directly, which nothing did. Dispatch now happens
+  server-side from the request handler, sharing one sender with `/api/webhooks`
+  so both paths emit an identical payload, with a 5s deadline on the receiver.
+  Thanks to [@BlizzHacker](https://github.com/BlizzHacker), who found it while
+  building against the documented behaviour.
+- **`urgent` ranked below `high` in the webhook payload.** The priority mapping
+  was `high → 8, low → 3, else → 5`, so `urgent` — a value the database
+  explicitly allows — fell through to the medium score. Now `low` 3, `medium` 5,
+  `high` 8, `urgent` 9.
+- **The documented payload had the wrong id types.** `request_id` was shown as an
+  integer and `igdb_id` as a number; `ggr_game_requests.id` is a `UUID` and
+  `igdb_id` is `TEXT`. A receiver written against integers would break on its
+  first real payload.
 
 ### 🔧 Technical Changes
 
