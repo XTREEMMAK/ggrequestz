@@ -73,6 +73,20 @@ const ROUTE_SCOPES = [
   { prefix: "/api/cache/cleanup", methods: ["POST"], scope: "admin:write" },
   { prefix: "/api/romm/clear-cache", methods: ["POST"], scope: "admin:write" },
   { prefix: "/api/admin", methods: ["POST"], scope: "admin:write" },
+
+  // Relays a notification to Gotify and the outbound webhook receiver.
+  //
+  // `admin:write` is a judgement call rather than an obvious fit: the endpoint
+  // triggers outbound messages instead of acting on a resource, so no scope
+  // matches it cleanly. It gets the strictest one because a caller chooses the
+  // title, message and priority that land in the operator's Gotify — that is
+  // closer to an administrative capability than to writing a request.
+  //
+  // It needs an entry at all because it is *not* public, despite what
+  // hooks.server.js once implied: `publicApiRoutes` lists "/api/webhooks/" with
+  // a trailing slash, which never matches "/api/webhooks". Left unmapped, the
+  // default-deny below rejected every API key that used to reach it.
+  { prefix: "/api/webhooks", methods: ["POST"], scope: "admin:write" },
 ];
 
 // Longest prefix first, so `/api/request/rescind` is considered before

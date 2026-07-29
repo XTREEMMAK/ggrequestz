@@ -94,17 +94,23 @@ user permission system instead.
 | `/api/cache/cleanup`         | `POST`       | `admin:write`     |
 | `/api/romm/clear-cache`      | `POST`       | `admin:write`     |
 | `/api/admin/*`               | `POST`       | `admin:write`     |
+| `/api/webhooks`              | `POST`       | `admin:write`     |
 
 `/api/search`, `/api/igdb`, `/api/romm/cross-reference` and
 `/api/watchlist/batch` accept `POST` but only read — they take a query or a list
 of IDs in the body — so they require the corresponding `:read` scope.
 
+`/api/webhooks` relays a caller-supplied title, message and priority to Gotify
+and the outbound webhook receiver. It requires `admin:write` because the caller
+chooses what lands in the operator's notifications. It is **not** a public
+endpoint, despite an entry in the server's public-route list that never matches
+it.
+
 Endpoints not listed here are unavailable to API keys and return `403`,
-regardless of the key's scopes. This includes the public routes
-(`/api/health`, `/api/version`, `/api/webhooks`, `/api/auth/*`), which need no
-authentication at all, and the `/admin/api/*` routes behind the admin UI, which
-accept only session cookies. The source of truth is
-`src/lib/apiScopes.js`.
+regardless of the key's scopes. This includes the genuinely public routes
+(`/api/health`, `/api/version`, `/api/auth/*`), which need no authentication at
+all, and the `/admin/api/*` routes behind the admin UI, which accept only session
+cookies. The source of truth is `src/lib/apiScopes.js`.
 
 **Security Best Practices:**
 

@@ -74,6 +74,13 @@ describe("resolveRequiredScope", () => {
     expect(resolveRequiredScope("/api/request", "HEAD")).toBe("requests:read");
   });
 
+  it("maps the webhook relay, which is not the public route it looks like", () => {
+    // hooks.server.js lists "/api/webhooks/" as public, but the real path has no
+    // trailing slash so it never matched and the route has always been
+    // authenticated. Unmapped, default-deny rejected every API key that used it.
+    expect(resolveRequiredScope("/api/webhooks", "POST")).toBe("admin:write");
+  });
+
   it("denies unmapped paths and unmapped methods", () => {
     expect(resolveRequiredScope("/api/some-future-route", "GET")).toBeNull();
     // /api/request has no DELETE rule; falling through to null means deny.

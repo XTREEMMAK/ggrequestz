@@ -146,7 +146,16 @@ const authGuard = async ({ event, resolve }) => {
     "/api/auth/", // Auth endpoints
     "/api/version", // Version endpoint
     "/api/images/proxy", // Image proxy
-    "/api/webhooks/", // Webhooks from external services
+    // Matches nothing: the route is "/api/webhooks", which does not start with
+    // "/api/webhooks/". So the endpoint has always required authentication,
+    // contrary to what this entry suggests.
+    //
+    // Deliberately left ineffective. It relays a caller-supplied title, message
+    // and priority to Gotify and the outbound webhook receiver, so opening it up
+    // would hand anyone an unauthenticated push channel to the operator. If an
+    // external service ever does need to post here, give it an API key with
+    // `admin:write` rather than making the route public.
+    "/api/webhooks/",
     "/api/docs", // API documentation
     "/api/openapi.json", // OpenAPI spec (needed for API docs)
     "/api/setup/", // Setup endpoints (needed during initial setup)
