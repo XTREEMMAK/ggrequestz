@@ -22,6 +22,9 @@
 	let needsSetup = $derived(data?.needsSetup || false);
 	let basicAuthEnabled = $derived(data?.basicAuthEnabled || false);
 	let ambientBackground = $derived(data?.ambientBackground || false);
+	// Chrome theme, independent of the background above. Unknown values fall
+	// back to the default styling rather than rendering unthemed chrome.
+	let uiTheme = $derived(data?.uiTheme === 'glass' ? 'glass' : 'default');
 	
 	// Check for URL parameters that indicate we should refresh user state
 	onMount(() => {
@@ -245,7 +248,7 @@
 	 must be transparent, or it paints straight over the fixed canvas behind it
 	 no matter what z-index that canvas uses. -->
 <div
-	class="min-h-screen"
+	class="min-h-screen {uiTheme === 'glass' ? 'theme-glass' : ''}"
 	style={ambientBackground ? '' : 'background-color: var(--bg-primary);'}
 	onclick={handleClickOutside}
 >
@@ -577,7 +580,7 @@
 
 	<!-- Mobile header with menu button and search -->
 	{#if shouldShowMobileHeader}
-	<div class="lg:hidden fixed top-0 left-0 right-0 z-30 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800">
+	<div class="mobile-header lg:hidden fixed top-0 left-0 right-0 z-30 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800">
 		<div class="flex items-center justify-between p-4">
 			<button
 				onclick={toggleSidebar}

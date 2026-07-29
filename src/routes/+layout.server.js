@@ -119,6 +119,7 @@ export async function load({ request, cookies }) {
         rommServerUrl: null,
         customNavItems: [],
         ambientBackground: false,
+        uiTheme: "default",
         authMethod,
         needsSetup: true,
         basicAuthEnabled: false,
@@ -153,6 +154,7 @@ export async function load({ request, cookies }) {
 
     let rommAvailable = false;
     let ambientBackground = false;
+    let uiTheme = "default";
 
     // Get additional data if user is authenticated
     if (user) {
@@ -168,32 +170,42 @@ export async function load({ request, cookies }) {
         userPermissions = { isAdmin: false };
       }
 
-      // Opt-in ambient background. Read here because it has to apply to every
-      // authenticated page, and cached because this load runs on all of them.
-      // Deliberately inside the `if (user)` branch: the unauthenticated /login
-      // must not gain a database round-trip for a decorative preference.
+      // Opt-in appearance preferences. Read here because they have to apply to
+      // every authenticated page, and cached because this load runs on all of
+      // them. Deliberately inside the `if (user)` branch: the unauthenticated
+      // /login must not gain a database round-trip for decorative preferences.
+      //
+      // Both columns come from one query. They are separate preferences — the
+      // chrome theme is independent of the background — but they are always
+      // needed together, so a second round-trip would buy nothing.
       try {
         const { getUserIdFromAuth } = await import("$lib/getUserId.js");
         const { query } = await import("$lib/database.js");
         const userId = await getUserIdFromAuth(user, query);
 
-        ambientBackground = await withCache(
-          `ambient-background-${userId}`,
+        const appearance = await withCache(
+          `appearance-${userId}`,
           async () => {
             const result = await query(
-              "SELECT animated_background FROM ggr_user_preferences WHERE user_id = $1",
+              "SELECT animated_background, ui_theme FROM ggr_user_preferences WHERE user_id = $1",
               [userId],
             );
-            return result.rows[0]?.animated_background === true;
+            return {
+              ambientBackground: result.rows[0]?.animated_background === true,
+              uiTheme: result.rows[0]?.ui_theme || "default",
+            };
           },
           PREFERENCE_CACHE_TTL_MS,
         );
+
+        ambientBackground = appearance.ambientBackground;
+        uiTheme = appearance.uiTheme;
       } catch (prefError) {
-        // Never fatal — the background is cosmetic. Log the reason so an
-        // upgrade that skipped migration 008 is diagnosable rather than just
-        // silently never showing the effect.
+        // Never fatal — both are cosmetic. Log the reason so an upgrade that
+        // skipped migration 008 or 009 is diagnosable rather than just silently
+        // never showing the effect.
         console.warn(
-          "Failed to read animated_background preference:",
+          "Failed to read appearance preferences:",
           prefError?.message || prefError,
         );
       }
@@ -254,6 +266,7 @@ export async function load({ request, cookies }) {
       rommAvailable,
       rommServerUrl,
       ambientBackground,
+      uiTheme,
       customNavItems,
       authMethod,
       needsSetup,
@@ -268,6 +281,7 @@ export async function load({ request, cookies }) {
       rommAvailable: false,
       rommServerUrl: null,
       ambientBackground: false,
+      uiTheme: "default",
       customNavItems: [],
       authMethod,
       needsSetup: authMethod === "basic" ? true : false, // Force setup for basic auth on errors

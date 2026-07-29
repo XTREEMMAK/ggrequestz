@@ -221,6 +221,45 @@ body {
   border-right: 1px solid var(--border-color);
 }
 
+/* ---------------------------------------------------------------- themes ---
+ * Applied as a class on the layout wrapper, so a new theme is a block here
+ * rather than conditionals threaded through the markup.
+ *
+ * Scoped to the chrome — sidebar and mobile header — on purpose. Cards, modals
+ * and form controls keep full opacity: translucent inputs over a moving
+ * background are the usual accessibility complaint, and content needs its
+ * contrast more than it needs the effect.
+ */
+
+.theme-glass .sidebar {
+  /* --bg-secondary at ~55%, so the background reads through without the text
+     losing its contrast floor. */
+  background-color: rgb(45 55 72 / 0.55);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-right: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.theme-glass .mobile-header {
+  background-color: rgb(26 32 44 / 0.55);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+/* Without backdrop-filter these are simply see-through panels over an animated
+   canvas, which is unreadable rather than merely unstyled. Fall back to the
+   solid chrome instead. */
+@supports not (backdrop-filter: blur(1px)) {
+  .theme-glass .sidebar {
+    background-color: var(--bg-secondary);
+  }
+
+  .theme-glass .mobile-header {
+    background-color: var(--bg-primary);
+  }
+}
+
 /* Force hide main sidebar on admin pages */
 body:has([data-admin-page]) .sidebar {
   display: none !important;
