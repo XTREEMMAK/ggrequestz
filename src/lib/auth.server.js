@@ -61,8 +61,8 @@ function getBaseUrl() {
   }
 
   // Extract the base domain from the issuer URL
-  // AUTHENTIK_ISSUER might be like "https://auth.keyjaycompound.com/application/o/gg-requestz"
-  // We need to get "https://auth.keyjaycompound.com"
+  // AUTHENTIK_ISSUER might be like "https://auth.example.com/application/o/your-app"
+  // We need to get "https://auth.example.com"
   const url = new URL(AUTHENTIK_ISSUER);
   return `${url.protocol}//${url.host}`;
 }
