@@ -143,8 +143,8 @@ ROMM_API_TOKEN=your_client_api_token
 GOTIFY_URL=http://your-gotify-server
 GOTIFY_TOKEN=your_token
 
-# n8n Webhooks
-N8N_WEBHOOK_URL=https://your-n8n-webhook
+# Outbound request webhook (any JSON receiver)
+REQUEST_WEBHOOK_URL=https://your-webhook-endpoint
 ```
 
 ## Troubleshooting
@@ -209,7 +209,8 @@ useful as you add:
 | **Redis**      | `REDIS_URL`                            | Falls back to an in-memory cache, per PM2 worker |
 | **OIDC**       | `OIDC_*`                               | Basic auth only (which is the default anyway)    |
 | **ROMM**       | `ROMM_SERVER_URL` + `ROMM_API_TOKEN`   | No library section                               |
-| **Gotify/n8n** | `GOTIFY_*`, `N8N_WEBHOOK_URL`          | No outbound notifications                        |
+| **Gotify**     | `GOTIFY_*`                             | No push notifications                            |
+| **Webhook**    | `REQUEST_WEBHOOK_URL`                  | No outbound request events                       |
 
 Get IGDB credentials from the [Twitch Developer Console](https://dev.twitch.tv/console)
 — register an application with OAuth redirect URL `http://localhost:5174`, then
@@ -238,7 +239,7 @@ fixtures, see [TESTING.md](TESTING.md).
 - [Database Setup](DATABASE_SETUP.md) - PostgreSQL and migrations
 - [Authentication Setup](OIDC_SETUP.md) - OIDC, Authentik, basic auth
 - [Custom Navigation](../guides/NAVIGATION.md) - Role-based navigation links
-- [Integrations](../guides/INTEGRATIONS.md) - ROMM, Gotify, n8n
+- [Integrations](../guides/INTEGRATIONS.md) - ROMM, Gotify, outbound webhooks
 - [Architecture Overview](../ARCHITECTURE.md) - System design and components
 - [API Documentation](../API.md) - REST API reference
 - [Contributing Guide](../../CONTRIBUTING.md) - Development guidelines

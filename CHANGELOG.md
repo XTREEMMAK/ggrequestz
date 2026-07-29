@@ -32,6 +32,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new endpoints are closed until they are classified. Exploiting this required
   already holding a valid API key.
 
+### ✨ New Features
+
+- **The outbound webhook is named for what it does, not for one receiver.**
+  `REQUEST_WEBHOOK_URL` replaces `N8N_WEBHOOK_URL`. The payload was always
+  provider-neutral JSON that any receiver could consume, but the variable and the
+  guide both said n8n, so the capability read as n8n-only. `N8N_WEBHOOK_URL`
+  still works as a deprecated alias and existing installs need no change; when
+  both are set, `REQUEST_WEBHOOK_URL` wins. Thanks to
+  [@BlizzHacker](https://github.com/BlizzHacker) for the change. The response
+  from `/api/webhooks` still keys this result `n8n`, which would break existing
+  consumers if renamed.
+- **A glass theme for the application chrome.** A new UI Theme setting adds a
+  translucent, blurred sidebar and header. It is separate from the animated
+  background, so either can be used without the other, and it falls back to solid
+  chrome where `backdrop-filter` is unsupported. Scoped to the chrome
+  deliberately — cards, modals and form controls keep full opacity.
+
+### 🔧 Technical Changes
+
+- **`PUBLIC_SITE_URL` is read from the correct environment module.** OIDC
+  redirect-URI resolution consulted `$env/dynamic/private`, which by design omits
+  PUBLIC\_-prefixed variables. It worked only because Docker Compose and the dev
+  server's `load-env.js` both populate `process.env`.
+- **A malformed `OIDC_REDIRECT_URI` now warns.** A value missing its scheme was
+  passed to the provider verbatim, where the only symptom was a generic
+  "missing, invalid, or mismatching redirection URI". The warning names the
+  variable, the value and a correct example. It warns rather than throws, so an
+  unusual-but-working value cannot lock an operator out.
+
+### 📚 Documentation
+
+- Content Preferences is now **Settings**, split into Content, Themes and Genres
+  sub-tabs rather than one long scroll, with icons on the profile tabs.
+- `REQUEST_WEBHOOK_URL` documented across `.env.example`, `docker-compose.yml`,
+  `docs/CONFIGURATION.md` and `docs/setup/QUICKSTART.md`.
+- Example hostnames replace a real deployment's identity-provider address in
+  `src/lib/auth.server.js` comments.
+
 ## [1.3.0] - 2026-07-27
 
 ### ⚠️ Breaking Changes

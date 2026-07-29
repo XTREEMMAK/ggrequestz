@@ -133,11 +133,19 @@ library request.
 | `GOTIFY_URL`   | Gotify server URL | -       |
 | `GOTIFY_TOKEN` | Gotify app token  | -       |
 
-#### n8n Webhooks
+#### Outbound Request Webhook
 
-| Variable          | Description          | Default |
-| ----------------- | -------------------- | ------- |
-| `N8N_WEBHOOK_URL` | n8n webhook endpoint | -       |
+Posts request events as JSON to any endpoint that accepts them — n8n, a download
+automation service, a script, a chat bridge. See
+[Integrations](guides/INTEGRATIONS.md) for the payload.
+
+| Variable              | Description                                    | Default |
+| --------------------- | ---------------------------------------------- | ------- |
+| `REQUEST_WEBHOOK_URL` | Endpoint receiving request events              | -       |
+| `N8N_WEBHOOK_URL`     | Deprecated alias for the above; still honoured | -       |
+
+`N8N_WEBHOOK_URL` continues to work, so existing installs need no change. When
+both are set, `REQUEST_WEBHOOK_URL` wins.
 
 ## Docker Compose Configuration
 

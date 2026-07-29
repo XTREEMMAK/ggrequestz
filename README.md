@@ -76,7 +76,7 @@ docker compose up -d
 
 ### Guides
 
-- [Integrations](docs/guides/INTEGRATIONS.md) — ROMM, Gotify, n8n
+- [Integrations](docs/guides/INTEGRATIONS.md) — ROMM, Gotify, outbound webhooks
 - [Custom Navigation](docs/guides/NAVIGATION.md) — role-based navigation links
 - [Content Filtering](#global-content-filtering) — user and global filtering options
 - [API Documentation](docs/API.md) — REST API reference

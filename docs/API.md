@@ -1265,6 +1265,10 @@ X-Webhook-Secret: <configured-secret>
 }
 ```
 
+The outbound webhook result is still keyed `n8n` even though the variable is now
+`REQUEST_WEBHOOK_URL`. Renaming it would break any existing consumer of this
+response, so it stays.
+
 ## Error Responses
 
 All endpoints return consistent error responses:
@@ -1557,7 +1561,7 @@ GG Requestz integrates with:
 - **IGDB API** - Game data and search
 - **ROMM** - Personal ROM library management
 - **Gotify** - Push notifications
-- **n8n** - Workflow automation
+- **Outbound webhook** - Request events posted as JSON to any receiver
 - **Redis** - Caching and session storage
 
 See [Integrations](guides/INTEGRATIONS.md) for detailed setup instructions.
