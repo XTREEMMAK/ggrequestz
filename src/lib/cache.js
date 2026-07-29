@@ -106,6 +106,20 @@ class SimpleCache {
         }
         this.redisConnected = false;
       }
+
+      // A miss in a healthy Redis means "not cached" — do not consult this
+      // worker's memory.
+      //
+      // `set` writes to both stores but `delete` can only reach the memory of
+      // the worker handling that request, so with PM2 running one process per
+      // core, invalidation clears Redis and one worker. Falling through to
+      // memory here served the other workers' stale copies, which is why a
+      // saved preference appeared to apply only sometimes: it depended on which
+      // worker answered the next request.
+      //
+      // Memory stays the fallback for an actual outage — `redisConnected` goes
+      // false on error, and this branch is then skipped entirely.
+      if (this.redisConnected) return null;
     }
 
     // Fallback to memory cache
