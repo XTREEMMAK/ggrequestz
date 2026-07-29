@@ -7,7 +7,7 @@
 -- (admin/api/requests/update, the edit page, the requests UI) but it was never
 -- inserted, so only is_admin users -- who bypass permission checks entirely --
 -- could approve. Seeding the row without granting it to any role changes no
--- behaviour; it only lets an administrator hand it out.
+-- behaviour: it only lets an administrator hand it out.
 
 INSERT INTO ggr_permissions (name, display_name, description, category) VALUES
     ('request.approve', 'Approve Requests',
