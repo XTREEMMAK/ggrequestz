@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚡ Performance
+
+- **ROMM requests no longer pay for two aggregates the app never reads.** Every
+  `/roms` call let ROMM compute its A–Z jump index (`char_index`) and the facet
+  lists behind its filter sidebar (`filter_values`). Both aggregate over the
+  entire roms table, so `limit=1` could not make them cheaper, and nothing in this
+  codebase has ever read either one. Measured against a 72,162-rom library, opting
+  out took the ROMM availability probe from **30.5s to 2.3s**. On a large library
+  this never presented as slowness: the call outlived its own timeout, which trips
+  the availability breaker and caches the result for minutes, so a perfectly
+  healthy ROMM reported as `Could not reach the ROMM server`. The per-attempt
+  timeout also rises from 5s to 10s and the total retry budget from 12s to 30s, so
+  the first — cold, and much slower — probe after a container start has room to
+  finish. A genuinely dead ROMM consequently takes longer to declare dead; the
+  breaker caches that verdict, so the cost is paid once per interval per worker
+  rather than per request. Thanks to
+  [@BlizzHacker](https://github.com/BlizzHacker), who found and measured this.
+
+### 🐛 Bug Fixes
+
+- **The homepage declared ROMM unreachable whenever the check took over 1.5s.**
+  It raced a live availability probe against its own 1500ms ceiling — 2250ms under
+  the Docker multiplier — which sat far below the ROMM client's request budget. Any
+  library big enough to need seconds rather than milliseconds lost that race on
+  every load, so the "New in Library" shelf showed an outage message, the
+  in-library badges never appeared on any card, and the raised budgets above could
+  not help the one page that displays the library. Three further faults in the same
+  block: the abandoned probe kept running uncancelled with its result discarded;
+  the reported reason was read from an availability snapshot that path never wrote,
+  so a cold worker claimed `unreachable` without having observed anything; and the
+  5-minute cache wrapped around it stored nothing on failure, so every load
+  re-raced a fresh probe. Availability is now read from the background-refreshed
+  snapshot, as the root layout and `/api/games/popular` already did, and is
+  optimistic until a probe has actually failed — the shelf streams, so a real
+  failure still arrives with an accurate reason once the request settles.
+
+### 🔧 Technical Changes
+
+- **`scripts/create-release.sh` no longer aborts one step before tagging.**
+  `package.json` is bumped in the release commit, so by the time the script ran
+  there was nothing left to stage and `git commit` exited non-zero — under
+  `set -e` that ended the run just before `git tag`, reporting no error of its
+  own. This would have affected every release from 1.4.0 onward.
+- **The live `isRommAvailable()` probe is gone.** It had no callers left after the
+  homepage fix above, and each one it ever had ended up racing it against a
+  deadline too short to win. Render paths use `getRommAvailabilitySnapshot()`,
+  which never touches the network; out-of-band callers use
+  `probeRommAvailability()`, which records what it finds so the breaker and the UI
+  both learn from the result.
+
 ## [1.4.0] - 2026-07-29
 
 ### ⚠️ Breaking Changes
