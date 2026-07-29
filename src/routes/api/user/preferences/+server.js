@@ -9,7 +9,7 @@ import {
   getUserPreferences,
 } from "$lib/userPreferences.js";
 import { getAuthenticatedUser } from "$lib/auth.server.js";
-import { invalidateCache } from "$lib/cache.js";
+import { invalidateCache, appearanceCacheKey } from "$lib/cache.js";
 import { query } from "$lib/database.js";
 
 export async function POST({ request, cookies }) {
@@ -93,10 +93,13 @@ export async function POST({ request, cookies }) {
       // Invalidate any user-specific caches
       invalidateCache(`user-session-${userId}`),
       invalidateCache(`user-permissions-${userId}`),
-      // The root layout caches this to avoid a query per authenticated page
-      // view; without invalidation the toggle would appear not to work until
-      // the TTL expired.
-      invalidateCache(`ambient-background-${userId}`),
+      // The root layout caches the appearance preferences to avoid a query per
+      // authenticated page view. Without this, a theme or background change
+      // appears not to apply until the TTL expires. The key comes from
+      // cache.js so it cannot drift from the one the layout writes —
+      // invalidating a key nothing wrote is not an error, it just silently
+      // does nothing.
+      invalidateCache(appearanceCacheKey(userId)),
     ]);
 
     return json({

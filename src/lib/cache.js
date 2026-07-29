@@ -328,6 +328,20 @@ export const cacheAuthCredentials = (key, fn) =>
   withCache(`auth-${key}`, fn, 15 * 60 * 1000);
 
 /**
+ * Cache key for a user's appearance preferences (background and chrome theme).
+ *
+ * Exported because two modules have to agree on it: the root layout writes it,
+ * and the preferences endpoint invalidates it on save. When those drifted apart,
+ * the endpoint cleared a key nothing wrote and a theme change silently did not
+ * apply until the TTL expired — invalidating a missing key is not an error.
+ * Deriving both from here removes the opportunity.
+ *
+ * @param {number|string} userId - Local user ID
+ * @returns {string} - Cache key
+ */
+export const appearanceCacheKey = (userId) => `appearance-${userId}`;
+
+/**
  * Invalidate specific cache entries
  * @param {string|Array} keys - Cache key(s) to invalidate
  * @returns {Promise<void>}

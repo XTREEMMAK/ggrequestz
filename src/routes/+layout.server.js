@@ -18,7 +18,7 @@ import {
   isBasicAuthEnabled,
   getBasicAuthUser,
 } from "$lib/basicAuth.js";
-import { withCache } from "$lib/cache.js";
+import { withCache, appearanceCacheKey } from "$lib/cache.js";
 
 // Short enough that toggling the setting feels immediate on the next
 // navigation, long enough that it is not a query per page view.
@@ -184,7 +184,7 @@ export async function load({ request, cookies }) {
         const userId = await getUserIdFromAuth(user, query);
 
         const appearance = await withCache(
-          `appearance-${userId}`,
+          appearanceCacheKey(userId),
           async () => {
             const result = await query(
               "SELECT background_theme, ui_theme FROM ggr_user_preferences WHERE user_id = $1",
