@@ -9,6 +9,7 @@ import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { sendNewRequestNotification } from "$lib/gotify.js";
 import { sendGameRequestWebhook } from "$lib/webhooks.server.js";
 import { invalidateCache } from "$lib/cache.js";
+import { findOpenDuplicate } from "$lib/requestPolicy.server.js";
 
 /**
  * Submit a new game request
@@ -235,6 +236,26 @@ export async function POST({ request, cookies }) {
         break;
     }
 
+    // Reject a game that is already requested and still open. Checked here for
+    // a useful message; migration 009's partial unique indexes are the backstop
+    // for two submissions racing.
+    const duplicate = await findOpenDuplicate({
+      igdbId: insertData.igdb_id,
+      title: insertData.title,
+      requestType: insertData.request_type,
+    });
+
+    if (duplicate) {
+      return json(
+        {
+          success: false,
+          error: `"${insertData.title}" has already been requested and is ${duplicate.status}.`,
+          existing_request_id: duplicate.id,
+        },
+        { status: 409 },
+      );
+    }
+
     // Insert into database
     const result = await query(
       `
@@ -354,7 +375,7 @@ export async function POST({ request, cookies }) {
       return json(
         {
           success: false,
-          error: "You have already submitted a similar request.",
+          error: "That game has already been requested by someone.",
         },
         { status: 409 },
       );
