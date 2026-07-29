@@ -73,7 +73,18 @@ export async function applyRequestStatusChange({
     return { row, from, to, changed: false };
   }
 
-  notify({ row, from, to, actor });
+  // Only carry notes into the notification when this transition actually
+  // wrote them. When the caller omitted adminNotes, the column is left
+  // untouched -- row.admin_notes may hold text a previous, unrelated
+  // transition wrote (e.g. an earlier rejection reason), and presenting
+  // that as the reason for *this* transition would be wrong.
+  notify({
+    row,
+    from,
+    to,
+    actor,
+    notes: setNotes ? row.admin_notes : undefined,
+  });
 
   // Fire and forget, as every caller did before: the row is committed and a
   // cold cache must not turn a successful action into an error.
@@ -94,8 +105,14 @@ function cacheKeysFor(row) {
   return keys;
 }
 
-/** Announce the transition. Never allowed to fail the transition. */
-function notify({ row, from, to, actor }) {
+/**
+ * Announce the transition. Never allowed to fail the transition.
+ *
+ * `notes` is the admin notes this transition wrote, or `undefined` when the
+ * caller didn't set any -- never the persisted column read unconditionally,
+ * since that could resurface a stale note from an earlier transition.
+ */
+function notify({ row, from, to, actor, notes }) {
   const failed = (error) => {
     console.warn("Failed to send request status notification:", error.message);
   };
@@ -106,7 +123,7 @@ function notify({ row, from, to, actor }) {
       title: row.title,
       user_name: row.user_name,
       action: "cancelled",
-      reason: row.admin_notes || "",
+      reason: notes || "",
       admin_name: actor || "Admin",
     }).catch(failed);
     return;
@@ -118,6 +135,6 @@ function notify({ row, from, to, actor }) {
     old_status: from,
     new_status: to,
     user_name: row.user_name,
-    admin_notes: row.admin_notes,
+    admin_notes: notes,
   }).catch(failed);
 }
