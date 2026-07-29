@@ -161,7 +161,11 @@ async function testROMM() {
     // instead, which is what the app actually calls.
     const response = rommToken
       ? await fetchWithTimeout(
-          `${rommUrl}/api/roms?group_by_meta_id=false&limit=1&offset=0`,
+          `${rommUrl}/api/roms?group_by_meta_id=false&limit=1&offset=0` +
+            // Skip the char index and filter facets: this only checks
+            // that the token works, and both aggregate over the whole
+            // library. See romm.server.js for the measurements.
+            "&with_char_index=false&with_filter_values=false",
           {
             headers: {
               Authorization: `Bearer ${rommToken}`,

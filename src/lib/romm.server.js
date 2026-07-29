@@ -11,13 +11,55 @@ import { fetchWithTimeout, isTimeoutOrNetworkError } from "./utils.js";
 // reached over a public URL, so a slow or unreachable instance previously
 // stalled every request that touched it.
 const AUTH_TIMEOUT_MS = 5000;
-const REQUEST_TIMEOUT_MS = 5000;
+// These were tuned against a small library, where /roms answered in well under
+// a second. On a 72,000-rom library the same call takes a few seconds even with
+// the aggregate opt-out below, so a 5s per-attempt budget had no headroom: the
+// first probe after startup aborted and tripped the circuit breaker, which
+// reports as "ROMM is unreachable" -- indistinguishable from the service being
+// down, and the reason a healthy instance looked broken for five minutes at a
+// time.
+const REQUEST_TIMEOUT_MS = 10000;
 // Hard ceiling across all retries for a single logical request.
-const TOTAL_BUDGET_MS = 12000;
+const TOTAL_BUDGET_MS = 30000;
 
 // Renew this far ahead of the stated expiry so a request never leaves carrying
 // a token that dies in transit.
 const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
+
+// ROMM computes two aggregates for every /roms call unless told otherwise: an
+// A-Z jump index (`char_index`) and the facet lists behind its filter sidebar
+// (`filter_values`). Both are computed over the entire roms table, so `limit`
+// cannot make them cheaper -- an aggregate over everything is the whole point
+// of one. On a large library they dominate the request.
+//
+// Nothing in this codebase reads either one; every caller destructures `items`
+// and `total`. Measured against a 72,162-rom library, opting out took the
+// availability probe from 30.5s to 2.3s. With the 5s budget above, that is the
+// difference between a working integration and a permanent "ROMM is
+// unreachable" -- which is how this presented, since a timeout looks identical
+// to a service being down.
+const ROMM_UNUSED_AGGREGATES = {
+  with_char_index: "false",
+  with_filter_values: "false",
+};
+
+/**
+ * Opt a /roms request out of aggregates this client never reads.
+ * @param {string} endpoint - API endpoint, with or without a query string
+ * @returns {string} - The endpoint, with the opt-out applied
+ */
+function withoutUnusedAggregates(endpoint) {
+  const [path, query = ""] = endpoint.split("?");
+  // Only the collection endpoint computes them; /roms/{id} has none to skip.
+  if (path !== "/roms") return endpoint;
+
+  const params = new URLSearchParams(query);
+  for (const [key, value] of Object.entries(ROMM_UNUSED_AGGREGATES)) {
+    // Never override a caller that asked for one deliberately.
+    if (!params.has(key)) params.set(key, value);
+  }
+  return `${path}?${params}`;
+}
 // RomM's password grant issues a 30-minute token. When the response omits the
 // lifetime, assume less than that rather than more.
 const DEFAULT_TOKEN_TTL_MS = 25 * 60 * 1000;
@@ -387,7 +429,7 @@ async function rommAttempt(
   }
 
   const fetchOptions = { ...options, headers };
-  const url = `${ROMM_SERVER_URL}/api${endpoint}`;
+  const url = `${ROMM_SERVER_URL}/api${withoutUnusedAggregates(endpoint)}`;
 
   /** Wait for the backoff, but never past the overall deadline. */
   const backoff = async () => {

@@ -21,10 +21,14 @@ vi.mock("../../src/lib/gameCache.js", () => ({
 
 const ROMM_URL = "http://romm.test";
 const TOKEN_URL = `${ROMM_URL}/api/token`;
-const LIBRARY_PATH = "/api/roms?group_by_meta_id=false&limit=1&offset=0";
+// The client opts every /roms call out of ROMM's char-index and filter-value
+// aggregates, which it never reads. See romm-query-shape.test.js.
+const LIBRARY_PATH =
+  "/api/roms?group_by_meta_id=false&limit=1&offset=0" +
+  "&with_char_index=false&with_filter_values=false";
 
 // Tests that let the retry loop run to exhaustion wait out the real 1s + 2s +
-// 4s backoff, bounded by the client's own 12s TOTAL_BUDGET_MS.
+// 4s backoff, well inside the client's own TOTAL_BUDGET_MS.
 const RETRY_BUDGET_TEST_TIMEOUT = 20000;
 
 /** Build a minimal Response-alike for the fetch mock. */
