@@ -163,6 +163,25 @@
   let loadingNewReleases = $state(false);
   let loadingPopular = $state(false);
 
+  // How many card placeholders to render while a Load More request is in flight.
+  // Previously the grid simply grew when the data arrived, so the interval between
+  // the click and the response was blank canvas — which reads as a rendering fault
+  // rather than as loading. Each skeleton is replaced one-for-one as its card
+  // lands, so the region is never both reserved and empty.
+  let pendingNewInLibrary = $state(0);
+  let pendingNewReleases = $state(0);
+  let pendingPopular = $state(0);
+
+  // Cards already on screen when the current batch started. The grid's entry
+  // transition is keyed on absolute index, so without this an appended card waits
+  // `index * 50`ms on top of its insertion delay — 1.6s for card 32, growing with
+  // every page. Cards at or past this mark get no transition delay and take their
+  // stagger from the insertion loop alone.
+  let staggerFrom = $state(Infinity);
+
+  // Both staggers collapse to a single frame when the OS asks for less motion.
+  let reducedMotion = $state(false);
+
   // Track if we just invalidated to prioritize server data
   let justInvalidated = $state(false);
 
@@ -485,7 +504,20 @@
       };
       window.addEventListener('resize', handleDeviceResize);
 
-      return () => window.removeEventListener('resize', handleDeviceResize);
+      // Track the motion preference live rather than reading it once: someone can
+      // change it while the page is open, and the OS-level toggle is exactly the
+      // kind of setting people flip when animation bothers them.
+      const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      reducedMotion = motionQuery.matches;
+      const handleMotionChange = (event) => {
+        reducedMotion = event.matches;
+      };
+      motionQuery.addEventListener('change', handleMotionChange);
+
+      return () => {
+        window.removeEventListener('resize', handleDeviceResize);
+        motionQuery.removeEventListener('change', handleMotionChange);
+      };
     }
   });
 
@@ -597,8 +629,19 @@
 
 
   // Helper function for staggered card loading animation with duplicate prevention
-  async function addGamesWithStagger(games, existingGames, updateFunction) {
-    const STAGGER_DELAY = 150; // ms between each card
+  /**
+   * Append games one at a time so the mount and layout cost spreads across frames
+   * instead of landing in one.
+   *
+   * `onEach` fires after every insertion — callers use it to retire one skeleton
+   * per card, which is what keeps the placeholder count honest as the batch lands.
+   *
+   * The delay was 150ms, which over a 16-item page meant 2.4s of drip with the
+   * button still spinning. At 60ms the sequence still reads as progress and the
+   * batch completes in about a second.
+   */
+  async function addGamesWithStagger(games, existingGames, updateFunction, onEach = null) {
+    const STAGGER_DELAY = 60; // ms between each card
     let currentGames = [...existingGames];
 
     // Filter out duplicates before adding - compare by igdb_id or id
@@ -614,9 +657,11 @@
       // Add one new game at a time to the existing array
       currentGames = [...currentGames, uniqueGames[i]];
       updateFunction(currentGames);
+      onEach?.();
 
-      // Wait before adding next card (except for the last one)
-      if (i < uniqueGames.length - 1) {
+      // Wait before adding next card (except for the last one). Someone who asked
+      // for reduced motion gets the whole batch in one frame instead.
+      if (!reducedMotion && i < uniqueGames.length - 1) {
         await new Promise(resolve => setTimeout(resolve, STAGGER_DELAY));
       }
     }
@@ -1058,6 +1103,8 @@
     // If we need cards from API, fetch them
     if (cardsNeededFromAPI > 0) {
       loadingNewInLibrary = true;
+      staggerFrom = newInLibrary.length;
+      pendingNewInLibrary = cardsNeededFromAPI;
       try {
         // Use the higher of the two page counters to avoid duplicates
         const nextPage = Math.max(newInLibraryPage, newInLibraryAutoPage) + 1;
@@ -1079,7 +1126,19 @@
             });
 
             if (newGames.length > 0) {
-              newInLibrary = [...newInLibrary, ...newGames];
+              // Right-size the placeholders to what actually arrived, then retire
+              // them one at a time as their cards take their place.
+              pendingNewInLibrary = newGames.length;
+              await addGamesWithStagger(
+                newGames,
+                newInLibrary,
+                (updatedGames) => {
+                  newInLibrary = updatedGames;
+                },
+                () => {
+                  if (pendingNewInLibrary > 0) pendingNewInLibrary -= 1;
+                }
+              );
             }
 
             // Update both page counters to keep them in sync
@@ -1092,6 +1151,7 @@
       } catch (error) {
         toasts.add('Failed to load more games from library', 'error');
       } finally {
+        pendingNewInLibrary = 0;
         loadingNewInLibrary = false;
       }
     }
@@ -1148,6 +1208,8 @@
     }
 
     loadingNewReleases = true;
+    staggerFrom = newReleases.length;
+    pendingNewReleases = ITEMS_PER_PAGE;
     try {
       // Performance timing for load more operation
       const startTime = performance.now();
@@ -1174,14 +1236,23 @@
         });
         
         // Add games one by one with staggered animation
-        await addGamesWithStagger(data.games, newReleases, (updatedGames) => {
-          newReleases = updatedGames;
-        });
+        pendingNewReleases = data.games.length;
+        await addGamesWithStagger(
+          data.games,
+          newReleases,
+          (updatedGames) => {
+            newReleases = updatedGames;
+          },
+          () => {
+            if (pendingNewReleases > 0) pendingNewReleases -= 1;
+          }
+        );
         newReleasesPage += 1;
       }
-      
+
     } catch (error) {
     } finally {
+      pendingNewReleases = 0;
       loadingNewReleases = false;
     }
   }
@@ -1197,6 +1268,8 @@
     }
 
     loadingPopular = true;
+    staggerFrom = popularGames.length;
+    pendingPopular = ITEMS_PER_PAGE;
     try {
       // Performance timing for load more operation
       const startTime = performance.now();
@@ -1232,21 +1305,30 @@
         });
         
         // Add games one by one with staggered animation
-        await addGamesWithStagger(data.games, popularGames, (updatedGames) => {
-          popularGames = updatedGames;
-        });
+        pendingPopular = data.games.length;
+        await addGamesWithStagger(
+          data.games,
+          popularGames,
+          (updatedGames) => {
+            popularGames = updatedGames;
+          },
+          () => {
+            if (pendingPopular > 0) pendingPopular -= 1;
+          }
+        );
         popularPage += 1;
-        
+
         // Clear the cache for the page we just loaded to prevent stale data
         if (typeof sessionStorage !== 'undefined') {
           sessionStorage.removeItem(currentCacheKey);
         }
       }
-      
+
       // Log performance timing
       const duration = performance.now() - startTime;
     } catch (error) {
     } finally {
+      pendingPopular = 0;
       loadingPopular = false;
     }
   }
@@ -1853,7 +1935,7 @@
         >
           {#each displayedRomms as game, index}
             <div
-              in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
+              in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index < staggerFrom ? index * 50 : 0, start: 0.8 }}
             >
               <GameCard
                 {game}
@@ -1867,6 +1949,12 @@
                 on:click={handleGameCardClick}
                 on:view-details={handleGameCardClick}
               />
+            </div>
+          {/each}
+          <!-- Placeholders for a Load More batch still in flight. Each is retired as its card arrives. -->
+          {#each Array(pendingNewInLibrary) as _, i}
+            <div class="skeleton-enter" style="animation-delay: {reducedMotion ? 0 : i * 60}ms;">
+              <SkeletonLoader variant="card" rounded="lg" />
             </div>
           {/each}
         </div>
@@ -1888,7 +1976,7 @@
           in:slide={{ duration: 300, easing: quintOut }}
         >
           {#each displayedRomms as game, index}
-            <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
+            <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index < staggerFrom ? index * 30 : 0, duration: 200 }}>
               <GameCard
                 {game}
                 {user}
@@ -1901,6 +1989,12 @@
                 on:click={handleGameCardClick}
                 on:view-details={handleGameCardClick}
               />
+            </div>
+          {/each}
+          <!-- Placeholders for a Load More batch still in flight. Each is retired as its card arrives. -->
+          {#each Array(pendingNewInLibrary) as _, i}
+            <div class="flex-shrink-0 w-48 skeleton-enter" style="animation-delay: {reducedMotion ? 0 : i * 60}ms;">
+              <SkeletonLoader variant="card" rounded="lg" />
             </div>
           {/each}
         </div>
@@ -1999,7 +2093,7 @@
           >
             {#each displayedNewReleases as game, index}
               <div 
-                in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
+                in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index < staggerFrom ? index * 50 : 0, start: 0.8 }}
               >
                 <GameCard 
                   {game} 
@@ -2012,6 +2106,12 @@
                 />
               </div>
             {/each}
+            <!-- Placeholders for a Load More batch still in flight. Each is retired as its card arrives. -->
+            {#each Array(pendingNewReleases) as _, i}
+              <div class="skeleton-enter" style="animation-delay: {reducedMotion ? 0 : i * 60}ms;">
+                <SkeletonLoader variant="card" rounded="lg" />
+              </div>
+            {/each}
           </div>
 
         {:else}
@@ -2022,7 +2122,7 @@
             in:slide={{ duration: 300, easing: quintOut }}
           >
             {#each newReleases as game, index}
-              <div class="flex-shrink-0 w-62" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
+              <div class="flex-shrink-0 w-62" in:fade={skipAnimations ? { duration: 0 } : { delay: index < staggerFrom ? index * 30 : 0, duration: 200 }}>
                 <GameCard 
                   {game} 
                   {user}
@@ -2032,6 +2132,12 @@
                   on:watchlist={handleWatchlist}
                       on:show-modal={handleShowModal}
                 />
+              </div>
+            {/each}
+            <!-- Placeholders for a Load More batch still in flight. Each is retired as its card arrives. -->
+            {#each Array(pendingNewReleases) as _, i}
+              <div class="flex-shrink-0 w-62 skeleton-enter" style="animation-delay: {reducedMotion ? 0 : i * 60}ms;">
+                <SkeletonLoader variant="card" rounded="lg" />
               </div>
             {/each}
           </div>
@@ -2093,7 +2199,7 @@
           >
             {#each displayedPopular as game, index}
               <div 
-                in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index * 50, start: 0.8 }}
+                in:scale={skipAnimations || isRestoringState ? { duration: 0 } : { duration: 400, easing: backOut, delay: index < staggerFrom ? index * 50 : 0, start: 0.8 }}
               >
                 <GameCard 
                   {game} 
@@ -2106,6 +2212,12 @@
                 />
               </div>
             {/each}
+            <!-- Placeholders for a Load More batch still in flight. Each is retired as its card arrives. -->
+            {#each Array(pendingPopular) as _, i}
+              <div class="skeleton-enter" style="animation-delay: {reducedMotion ? 0 : i * 60}ms;">
+                <SkeletonLoader variant="card" rounded="lg" />
+              </div>
+            {/each}
           </div>
         {:else}
           <!-- Default horizontal scrolling layout -->
@@ -2115,7 +2227,7 @@
             in:slide={{ duration: 300, easing: quintOut }}
           >
             {#each displayedPopular as game, index}
-              <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index * 30, duration: 200 }}>
+              <div class="flex-shrink-0 w-48" in:fade={skipAnimations ? { duration: 0 } : { delay: index < staggerFrom ? index * 30 : 0, duration: 200 }}>
                 <GameCard 
                   {game} 
                   {user}
@@ -2125,6 +2237,12 @@
                   on:watchlist={handleWatchlist}
                       on:show-modal={handleShowModal}
                 />
+              </div>
+            {/each}
+            <!-- Placeholders for a Load More batch still in flight. Each is retired as its card arrives. -->
+            {#each Array(pendingPopular) as _, i}
+              <div class="flex-shrink-0 w-48 skeleton-enter" style="animation-delay: {reducedMotion ? 0 : i * 60}ms;">
+                <SkeletonLoader variant="card" rounded="lg" />
               </div>
             {/each}
           </div>
@@ -2315,6 +2433,38 @@
   .scrollbar-hide {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+  }
+
+  /*
+    Load More placeholders. `both` fill mode holds the from-state during the
+    delay, so each skeleton is genuinely absent until its turn rather than all of
+    them appearing at once and then animating. Driven by an index-based inline
+    delay, which costs no timers and lets the compositor spread the work.
+  */
+  .skeleton-enter {
+    animation: skeleton-enter 220ms ease-out both;
+  }
+
+  @keyframes skeleton-enter {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /*
+    The inline delay is computed as 0 when `reducedMotion` is set, but the media
+    query is what covers the first paint before the listener has run, and it is
+    the authority either way.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-enter {
+      animation: none;
+    }
   }
 
   /* Responsive grid with dynamic columns - much smaller max to prevent oversized covers */
