@@ -165,6 +165,53 @@ async function query(text, params) {
 }
 
 /**
+ * Run several statements as one all-or-nothing unit.
+ *
+ * `query` takes a fresh pooled client per call, so two consecutive calls are
+ * two implicit transactions: the first can commit while the second fails. This
+ * pins one client for the whole callback and wraps it in BEGIN/COMMIT, so a
+ * caller writing more than one row -- or a row plus its status transition --
+ * cannot leave half of it committed.
+ *
+ * The callback receives a `query`-shaped function bound to that client. Use it
+ * for every statement that belongs to the unit; anything issued through the
+ * module-level `query` instead runs outside the transaction and will not roll
+ * back with it.
+ *
+ * Side effects that are not database writes (webhooks, push notifications)
+ * must not be fired from inside the callback: the transaction can still roll
+ * back afterwards, and a dispatched webhook cannot be. Return them to the
+ * caller and run them after this resolves.
+ *
+ * @param {(query: (text: string, params?: Array) => Promise<Object>) => Promise<any>} fn
+ *   Callback receiving the transaction-scoped query function
+ * @returns {Promise<any>} - Whatever the callback returned
+ */
+async function withTransaction(fn) {
+  const poolInstance = await getPool();
+  const client = await poolInstance.connect();
+  try {
+    await client.query("BEGIN");
+    const scopedQuery = (text, params) => client.query(text, params);
+    const result = await fn(scopedQuery);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    // A failed statement leaves the transaction aborted, so ROLLBACK is the
+    // only command Postgres will still accept. If even that fails the
+    // connection is unusable -- surface the original error, not this one.
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      console.warn("Failed to roll back transaction:", rollbackError.message);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Helper function to format game data from database rows
  * @param {Array} rows - Database rows
  * @returns {Array} - Formatted game data
@@ -1369,4 +1416,4 @@ export const apiKeys = {
 };
 
 // Export direct query function for advanced usage
-export { query, warmPool };
+export { query, warmPool, withTransaction };
