@@ -1368,5 +1368,35 @@ export const apiKeys = {
   },
 };
 
+/**
+ * Run `fn` against one pooled client, released when `fn` settles.
+ *
+ * `query()` above checks out a client per call and releases it in a `finally`,
+ * so consecutive calls are not guaranteed to land on the same backend
+ * connection. Anything session-scoped therefore cannot be built out of it:
+ * PostgreSQL advisory locks, temporary tables and `SET`/`LISTEN` all belong to
+ * the session that issued them. An advisory lock is the sharpest case, because
+ * `pg_advisory_unlock` on the wrong session returns false with a *warning*
+ * rather than raising, so the mismatch is silent and the lock stays held for
+ * the life of the connection.
+ *
+ * Deliberately no transaction. The caller decides: a long pass that commits
+ * per statement must not hold one open for its whole duration, and a caller
+ * that does want one can issue BEGIN/COMMIT itself on the client it is given.
+ *
+ * @param {(clientQuery: (text: string, params?: Array) => Promise<Object>) => Promise<any>} fn
+ *   Receives a `query`-shaped function bound to the checked-out client.
+ * @returns {Promise<any>} - Whatever `fn` resolves to
+ */
+async function withClient(fn) {
+  const poolInstance = await getPool();
+  const client = await poolInstance.connect();
+  try {
+    return await fn((text, params) => client.query(text, params));
+  } finally {
+    client.release();
+  }
+}
+
 // Export direct query function for advanced usage
-export { query, warmPool };
+export { query, withClient, warmPool };
