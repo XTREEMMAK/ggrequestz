@@ -1,10 +1,20 @@
 /**
  * Splitting a migration file into statements.
  *
- * Extracted from db-manager.js so it can be tested without importing the CLI,
- * which connects to a database on import.
+ * Extracted from db-manager.js so it can be tested without importing the CLI.
+ *
+ * The hard part is knowing which characters are structural and which are just
+ * text. A semicolon inside a string literal, a dollar-quoted function body, or
+ * a comment is not a statement separator, and an apostrophe inside a comment is
+ * not the start of a string.
  */
 
+/**
+ * Split a SQL script into individual statements.
+ *
+ * @param {string} sql - The full text of a migration file
+ * @returns {string[]} - Statements, comments retained, empties dropped
+ */
 export function splitSQLStatements(sql) {
   const statements = [];
   let current = "";
@@ -13,9 +23,49 @@ export function splitSQLStatements(sql) {
   let inDollarQuote = false;
   let dollarTag = "";
   let inFunction = false;
+  let inLineComment = false;
+  let inBlockComment = false;
 
   for (let i = 0; i < sql.length; i++) {
     const char = sql[i];
+    const next = sql[i + 1];
+
+    // Comments are copied through untouched but never interpreted. Without
+    // this, an apostrophe in a comment ("the route's handler") flipped quote
+    // tracking for the remainder of the file, collapsing every later statement
+    // into one, and a semicolon in a comment split it mid-sentence and handed
+    // Postgres the tail as a bare statement -- which, since AUTO_MIGRATE runs
+    // at container start, failed the boot.
+    if (inLineComment) {
+      current += char;
+      if (char === "\n") inLineComment = false;
+      continue;
+    }
+
+    if (inBlockComment) {
+      current += char;
+      if (char === "*" && next === "/") {
+        current += next;
+        i += 1;
+        inBlockComment = false;
+      }
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote && !inDollarQuote) {
+      if (char === "-" && next === "-") {
+        current += char + next;
+        i += 1;
+        inLineComment = true;
+        continue;
+      }
+      if (char === "/" && next === "*") {
+        current += char + next;
+        i += 1;
+        inBlockComment = true;
+        continue;
+      }
+    }
 
     current += char;
 
