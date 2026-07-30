@@ -5,14 +5,50 @@
  * short must sweep nothing: a partial enumeration read as "the rest of the
  * library is gone" would empty the index and, once availability sync
  * exists, walk every fulfilled request backwards.
+ *
+ * Two structural properties are pinned here as well, because both fail
+ * silently. The pass must run on ONE client, since the advisory lock is
+ * session-scoped and releasing it on another connection warns instead of
+ * raising. And the sweep boundary must stay on the database clock, since a JS
+ * Date into a `timestamp without time zone` comparison is shifted by the app
+ * container's UTC offset.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * The module-level query, which checks a client out and releases it per call.
+ * The sync must not use it at all -- these tests assert that.
+ */
 const query = vi.fn(async () => ({ rows: [] }));
 const syncEntries = vi.fn(async () => {});
 
-vi.mock("$lib/database.js", () => ({ query }));
+/** Every client withClient has handed out during the current test. */
+const clients = [];
+let lockGranted = true;
+
+/** One checked-out client, recording every statement issued on it. */
+function checkOutClient() {
+  const calls = [];
+  return {
+    calls,
+    query: vi.fn(async (text, params) => {
+      calls.push([text, params]);
+      if (text.includes("pg_try_advisory_lock")) {
+        return { rows: [{ locked: lockGranted }] };
+      }
+      return { rows: [] };
+    }),
+  };
+}
+
+const withClient = vi.fn(async (fn) => {
+  const client = checkOutClient();
+  clients.push(client);
+  return fn(client.query);
+});
+
+vi.mock("$lib/database.js", () => ({ query, withClient }));
 vi.mock("$lib/library/index.js", () => ({
   getLibrary: () => ({
     kind: () => "romm",
@@ -23,12 +59,7 @@ vi.mock("$lib/library/index.js", () => ({
 
 /** Answer pg_try_advisory_lock with `granted`, and default everything else. */
 function lockReturns(granted) {
-  query.mockImplementation(async (sql) => {
-    if (sql.includes("pg_try_advisory_lock")) {
-      return { rows: [{ locked: granted }] };
-    }
-    return { rows: [] };
-  });
+  lockGranted = granted;
 }
 
 async function run(options = {}) {
@@ -39,12 +70,22 @@ async function run(options = {}) {
 
 /** SQL statements issued, for asserting on what did and did not happen. */
 function sql() {
-  return query.mock.calls.map(([text]) => text);
+  return clients.flatMap((client) => client.calls.map(([text]) => text));
+}
+
+/** The first statement whose SQL contains `fragment`, as [text, params]. */
+function statement(fragment) {
+  for (const client of clients) {
+    const call = client.calls.find(([text]) => text.includes(fragment));
+    if (call) return call;
+  }
+  throw new Error(`no statement containing ${JSON.stringify(fragment)}`);
 }
 
 describe("syncLibrary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clients.length = 0;
     lockReturns(true);
     syncEntries.mockImplementation(async () => {});
   });
@@ -165,6 +206,123 @@ describe("syncLibrary", () => {
         text.includes("last_completed_at"),
     );
     expect(completed).toHaveLength(0);
+  });
+
+  it("takes and releases the lock on one client, not through the pool", async () => {
+    await run();
+
+    // pg_try_advisory_lock is session-scoped. Taken through query() and
+    // released through query() they are two different sessions: the release
+    // returns false with a WARNING rather than raising, so nothing catches it
+    // and nothing logs, and the real lock is held until the worker exits --
+    // after which every cycle forever reports `locked`.
+    expect(withClient).toHaveBeenCalledTimes(1);
+    expect(clients).toHaveLength(1);
+
+    const issued = clients[0].calls.map(([text]) => text);
+    expect(issued.some((text) => text.includes("pg_try_advisory_lock"))).toBe(
+      true,
+    );
+    expect(issued.some((text) => text.includes("pg_advisory_unlock"))).toBe(
+      true,
+    );
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("runs the whole pass on that client, sweep and state writes included", async () => {
+    syncEntries.mockImplementation(async ({ onBatch }) => {
+      await onBatch([{ id: "1", name: "a" }]);
+    });
+
+    await run();
+
+    expect(clients).toHaveLength(1);
+    const issued = clients[0].calls.map(([text]) => text);
+    expect(
+      issued.some((text) =>
+        text.includes("INSERT INTO ggr_library_sync_state"),
+      ),
+    ).toBe(true);
+    expect(
+      issued.some((text) => text.includes("INSERT INTO ggr_library_entries")),
+    ).toBe(true);
+    expect(issued.some((text) => text.includes("SET removed_at"))).toBe(true);
+    expect(issued.some((text) => text.includes("last_completed_at"))).toBe(
+      true,
+    );
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("writes last_started_at with NOW(), not with the app's clock", async () => {
+    await run();
+
+    const [text, params] = statement("INSERT INTO ggr_library_sync_state");
+    expect(text).toContain("last_started_at, last_error");
+    expect(text).toContain("NOW()");
+    // Only the kind. A JS Date here is the sweep boundary on the wrong clock.
+    expect(params).toEqual(["romm"]);
+  });
+
+  it("takes the sweep boundary from the database, never from a JS clock", async () => {
+    syncEntries.mockImplementation(async ({ onBatch }) => {
+      await onBatch([{ id: "1", name: "a" }]);
+    });
+
+    await run();
+
+    const [text, params] = statement("SET removed_at");
+    // node-postgres serialises a Date with the process's UTC offset and a
+    // `timestamp without time zone` column discards it. With the app east of
+    // Postgres, `synced_at < startedAt` is true for every row the pass just
+    // inserted, so the first completed pass marks the whole library removed.
+    expect(text).toContain("SELECT last_started_at");
+    expect(text).toContain("FROM ggr_library_sync_state");
+    expect(params).toEqual(["romm"]);
+    expect(params.some((param) => param instanceof Date)).toBe(false);
+  });
+
+  it("collapses a library_id that appears twice in one batch", async () => {
+    // ON CONFLICT DO UPDATE cannot touch the same row twice: Postgres raises
+    // "command cannot affect row a second time", the statement aborts, the pass
+    // aborts, and last_completed_at is never written -- so the index stays
+    // unreadable forever. RomM pages by id and cannot hit it; a backend that
+    // has to enumerate per platform sees a multi-platform title twice.
+    syncEntries.mockImplementation(async ({ onBatch }) => {
+      await onBatch([
+        { id: "7", name: "first", platformName: "SNES" },
+        { id: "8", name: "other", platformName: "Genesis" },
+        { id: "7", name: "second", platformName: "Genesis" },
+      ]);
+    });
+
+    await run();
+
+    const [, params] = statement("INSERT INTO ggr_library_entries");
+    const [, ids, , names, platforms] = params;
+    expect(ids).toEqual(["7", "8"]);
+    // Last occurrence wins, which is what ON CONFLICT DO UPDATE would have
+    // left behind had the statement been legal.
+    expect(names).toEqual(["second", "other"]);
+    expect(platforms).toEqual(["Genesis", "Genesis"]);
+  });
+
+  it("sends added_at as UTC so all three timestamp columns share one clock", async () => {
+    syncEntries.mockImplementation(async ({ onBatch }) => {
+      await onBatch([
+        { id: "1", name: "a", addedAt: new Date("2026-03-01T12:34:56.000Z") },
+        { id: "2", name: "b", addedAt: null },
+      ]);
+    });
+
+    await run();
+
+    const [, params] = statement("INSERT INTO ggr_library_entries");
+    // A Date is serialised with the process's UTC offset, which added_at then
+    // discards -- landing it on the app's local clock while first_seen_at and
+    // synced_at are on the server's, and COALESCE(added_at, first_seen_at)
+    // straddles both.
+    expect(params[8]).toEqual(["2026-03-01T12:34:56.000Z", null]);
+    expect(params[8].some((value) => value instanceof Date)).toBe(false);
   });
 
   it("refuses a backend that cannot enumerate itself", async () => {
