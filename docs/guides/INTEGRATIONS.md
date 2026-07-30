@@ -143,19 +143,29 @@ REQUEST_WEBHOOK_URL=https://automation.example.com/hook/ggrequestz
 `N8N_WEBHOOK_URL` is still honoured as a deprecated alias, so existing installs
 need no change. When both are set, `REQUEST_WEBHOOK_URL` wins.
 
-Approving a request dispatches one. With `request.auto_approve` enabled — as a
-global setting or a per-role permission — requests are approved on submission,
-so the webhook fires immediately and behaves as it did before approval gating.
-With it disabled, nothing is dispatched until an admin approves, which is what
-makes the approval queue meaningful.
+A request dispatches when it enters `approved`, and only then. With
+`request.auto_approve` enabled — as a global setting or a per-role permission —
+requests are approved on submission, so the webhook fires immediately and
+behaves as it did before approval gating. With it disabled, nothing is
+dispatched until an admin approves, which is what makes the approval queue
+meaningful.
+
+Note that **any `is_admin` user auto-approves unconditionally**, regardless of
+the global setting and without holding `request.auto_approve`: admins bypass
+permission checks entirely. Their own requests therefore never sit in the
+queue, and dispatch on submission. That is independent of both switches — if
+you want an admin's requests to be reviewed, they need a non-admin account.
 
 Re-opening a fulfilled request dispatches again, since the game needs fetching
-a second time.
+a second time. That re-dispatch is marked in the payload — see
+[Re-dispatch](#re-dispatch) — because it carries the same `request_id` as the
+first one.
 
-Failures are logged and never block the submission — by the time the webhook
-is sent the request is already saved, so a receiver that is slow, rejecting or
-absent cannot cost a user their request. Receivers get five seconds to
-respond.
+Failures are logged and never block the transition that triggered them,
+whether that is a submission or an admin approval. By the time the webhook is
+sent the row is already committed, so a receiver that is slow, rejecting or
+absent cannot cost a user their request or leave an approval half-applied.
+Receivers get five seconds to respond.
 
 ### Payload
 
@@ -187,6 +197,60 @@ platform. `request_type` is `game`, `update` or `fix`.
 
 `priority` maps the request's own priority onto a 1-10 scale: `low` 3,
 `medium` 5, `high` 8, `urgent` 9.
+
+### Re-dispatch
+
+`type` is always `game_request` and `request_id` is always the same for a given
+request, including when it is approved a second time. A re-dispatch adds two
+keys inside `data`:
+
+```json
+{
+  "data": {
+    "request_id": "eac1cd44-5f6e-4f49-8ac1-9936066105a6",
+    "redispatch": true,
+    "previous_status": "fulfilled"
+  }
+}
+```
+
+A first dispatch carries neither key, so nothing changes for a receiver that
+does not look for them.
+
+**A receiver that deduplicates on `request_id` alone must also consider
+`redispatch`**, or it will silently drop the re-fetch — the request is
+re-approved, the operator is told it dispatched, and nothing arrives. Dedupe on
+the pair instead, or treat `redispatch: true` as a cache-buster.
+
+`previous_status` is the status the request left: `fulfilled` for the documented
+re-open, `rejected` or `cancelled` for a request being re-opened out of those
+states. One case is not detectable and carries no marker: approving, demoting
+to `pending`, then approving again dispatches twice, and the second dispatch is
+indistinguishable from a first.
+
+### Duplicate suppression is best-effort
+
+One open request per game is the intent — `status IN ('pending','approved')`,
+matched on `igdb_id` when present and on the normalised title when it is not —
+so two people wanting the same game produce one request and one dispatch. A
+submission that loses to it gets `409` with the existing request's id, and an
+admin re-opening a request into a game that is already open gets `409` too.
+
+It is a suppression, not a guarantee, and it will not save you from a double
+download on its own:
+
+- The two backing indexes are partitioned on whether `igdb_id` is null, which
+  makes them **different keys**. A request carrying an `igdb_id` and one
+  carrying none can both be open for the same title, and both dispatch.
+  `igdb_id` is client-supplied, so this is reachable deliberately as well as by
+  accident.
+- Matching is exact after lowercasing and trimming. "Chrono Trigger" and
+  "Chrono Trigger (USA)" are different keys.
+- `rejected`, `cancelled` and `fulfilled` requests deliberately do not block a
+  new one, so a game can legitimately be requested and fetched again.
+
+If duplicate fetches are expensive for your receiver, deduplicate on your own
+side using `data.igdb_id` and `data.game_title` rather than relying on this.
 
 ---
 

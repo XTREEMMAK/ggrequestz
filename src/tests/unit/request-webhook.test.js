@@ -204,6 +204,79 @@ describe("outbound request webhook", () => {
     });
   });
 
+  // Re-opening a fulfilled request approves it again, so the same request_id
+  // dispatches twice with the same `type` and the same title. Without a marker
+  // a receiver deduping on request_id silently drops the re-fetch the docs
+  // promise, and one that does not treats it as a brand new request. `type` is
+  // deliberately left alone -- changing it would break existing receivers -- so
+  // the marker lives in `data`, and only on the repeat, keeping a first
+  // dispatch byte-identical to what receivers already parse.
+  describe("re-dispatch marker", () => {
+    beforeEach(() => {
+      process.env.REQUEST_WEBHOOK_URL = "http://receiver.test/hook";
+    });
+
+    it("marks a re-open of a fulfilled request as a re-dispatch", async () => {
+      const { sendGameRequestWebhook } = await freshWebhooks();
+
+      await sendGameRequestWebhook(requestRow({ status: "approved" }), {
+        previousStatus: "fulfilled",
+      });
+
+      const { data } = dispatchedPayload();
+      expect(data.redispatch).toBe(true);
+      expect(data.previous_status).toBe("fulfilled");
+    });
+
+    it("leaves a first approval unmarked, so existing receivers see no change", async () => {
+      const { sendGameRequestWebhook } = await freshWebhooks();
+
+      await sendGameRequestWebhook(requestRow({ status: "approved" }), {
+        previousStatus: "pending",
+      });
+
+      const { data } = dispatchedPayload();
+      expect(data).not.toHaveProperty("redispatch");
+      expect(data).not.toHaveProperty("previous_status");
+    });
+
+    it("leaves an auto-approved creation unmarked, which has no previous status", async () => {
+      const { sendGameRequestWebhook } = await freshWebhooks();
+
+      await sendGameRequestWebhook(requestRow({ status: "approved" }));
+
+      const { data } = dispatchedPayload();
+      expect(data).not.toHaveProperty("redispatch");
+      expect(data).not.toHaveProperty("previous_status");
+    });
+
+    it("marks a re-open out of rejected or cancelled too", async () => {
+      const { sendGameRequestWebhook } = await freshWebhooks();
+
+      for (const previousStatus of ["rejected", "cancelled"]) {
+        global.fetch.mockClear();
+        await sendGameRequestWebhook(requestRow({ status: "approved" }), {
+          previousStatus,
+        });
+
+        expect(dispatchedPayload().data).toMatchObject({
+          redispatch: true,
+          previous_status: previousStatus,
+        });
+      }
+    });
+
+    it("keeps type unchanged on a re-dispatch, which receivers switch on", async () => {
+      const { sendGameRequestWebhook } = await freshWebhooks();
+
+      await sendGameRequestWebhook(requestRow({ status: "approved" }), {
+        previousStatus: "fulfilled",
+      });
+
+      expect(dispatchedPayload().type).toBe("game_request");
+    });
+  });
+
   describe("failure handling", () => {
     beforeEach(() => {
       process.env.REQUEST_WEBHOOK_URL = "http://receiver.test/hook";
