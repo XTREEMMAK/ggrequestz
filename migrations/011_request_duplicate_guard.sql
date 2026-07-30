@@ -34,7 +34,7 @@ UPDATE ggr_game_requests r
    SET status = 'cancelled',
        admin_notes = concat_ws(
            E'\n', r.admin_notes,
-           'Auto-cancelled by migration 009: duplicate of an older open request for the same game.'
+           'Auto-cancelled by migration 011: duplicate of an older open request for the same game.'
        ),
        updated_at = NOW()
   FROM ranked
@@ -55,7 +55,7 @@ UPDATE ggr_game_requests r
    SET status = 'cancelled',
        admin_notes = concat_ws(
            E'\n', r.admin_notes,
-           'Auto-cancelled by migration 009: duplicate of an older open request for the same title.'
+           'Auto-cancelled by migration 011: duplicate of an older open request for the same title.'
        ),
        updated_at = NOW()
   FROM ranked
