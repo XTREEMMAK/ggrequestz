@@ -96,6 +96,12 @@ services:
       LIBRARY_USERNAME: ${LIBRARY_USERNAME:-}
       LIBRARY_PASSWORD: ${LIBRARY_PASSWORD:-}
 
+      # Index sync, so the live stack can exercise a pass end to end. Off unless
+      # exactly "true", same as production.
+      LIBRARY_SYNC_ENABLED: ${LIBRARY_SYNC_ENABLED:-}
+      LIBRARY_SYNC_INTERVAL_MS: ${LIBRARY_SYNC_INTERVAL_MS:-}
+      LIBRARY_SYNC_BATCH: ${LIBRARY_SYNC_BATCH:-}
+
       # Optional; the app runs without these, games just will not populate.
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
