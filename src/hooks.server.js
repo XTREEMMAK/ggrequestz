@@ -21,9 +21,16 @@ import { syncLibrary } from "$lib/library/sync.js";
  * behaves identically after upgrading.
  *
  * A cycle that throws is logged and dropped. It must not reject out of the
- * timer callback: an unhandled rejection there ends the interval, and the index
- * would then silently stop updating until the next restart -- the same shape of
- * bug as the cache warm-up that used to re-run on every request.
+ * timer callback: an unhandled rejection from an async setInterval callback
+ * does not stop the timer -- it terminates the *process*, as Node has done for
+ * unhandled rejections since v15. The catch is what keeps one unreachable
+ * backend from killing the server on the next tick.
+ *
+ * Started at most once. init() is its only caller and adapter-node calls that
+ * once per process, but SvelteKit's prerender pass also constructs a Server and
+ * calls init, and a second interval would be two timers racing for the same
+ * advisory lock for the life of the process. Same lesson as the "already
+ * warmed" flag below.
  *
  * The first cycle runs immediately rather than one interval from now, so a
  * fresh install is not stuck on indexBuilding for fifteen minutes. Nothing
@@ -32,7 +39,11 @@ import { syncLibrary } from "$lib/library/sync.js";
  * previous slow cycle in this one -- because syncLibrary takes a session
  * advisory lock and a loser returns immediately.
  */
+let librarySyncStarted = false;
+
 function startLibrarySync() {
+  if (librarySyncStarted) return;
+
   let config;
   try {
     config = resolveLibraryConfig();
@@ -45,15 +56,28 @@ function startLibrarySync() {
 
   if (!config.syncEnabled) return;
 
+  librarySyncStarted = true;
+
+  // Logged on change only. With PM2_INSTANCES=max and a pass that outlives the
+  // interval, every worker but the winner reports `locked` on every tick for as
+  // long as the process lives -- one line per core per interval, forever,
+  // saying nothing new. The first is worth having; the rest bury everything
+  // else in the log.
+  let lastSkipReason = null;
+
   const cycle = async () => {
     try {
       const result = await syncLibrary({ batchSize: config.syncBatchSize });
       if (result.completed) {
+        lastSkipReason = null;
         console.log(
           `📚 Library sync: ${result.upserted} indexed, ${result.removed} marked removed`,
         );
       } else if (result.reason) {
-        console.log(`📚 Library sync skipped: ${result.reason}`);
+        if (result.reason !== lastSkipReason) {
+          console.log(`📚 Library sync skipped: ${result.reason}`);
+        }
+        lastSkipReason = result.reason;
       }
     } catch (error) {
       console.error(
