@@ -153,35 +153,19 @@ function dedupeByLibraryId(entries) {
 }
 
 /**
- * A timestamp the database cannot misread.
- *
- * added_at is `timestamp without time zone`. node-postgres serialises a JS
- * Date using the *process's* UTC offset, and the column then discards that
- * offset -- so what lands is the app container's local wall clock, while
- * first_seen_at and synced_at are written by NOW() on the server. That puts
- * `COALESCE(added_at, first_seen_at)` across two clocks, and the recency shelf
- * with it.
- *
- * A UTC ISO string keeps the whole column in the database's own domain: the
- * digits are already UTC, so the offset Postgres discards is the one that has
- * already been applied.
- *
- * @param {Date|string|number|null|undefined} value
- * @returns {string|null} - e.g. "2026-07-30T18:04:11.000Z"
- */
-function toUtcTimestamp(value) {
-  if (value === null || value === undefined || value === "") return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
-/**
  * Upsert one batch in a single statement.
  *
  * One INSERT per entry would mean a round trip per ROM -- 72,000 of them on a
  * large library, per pass. `unnest` turns the batch into a relation so the
  * whole thing is one statement regardless of size.
+ *
+ * added_at goes in as the Date normalizeEntry produced, with no conversion.
+ * The column is TIMESTAMPTZ, so node-postgres sends the instant with its
+ * offset and Postgres keeps the instant -- correct whatever zone either side
+ * is in. It was briefly a UTC ISO string instead, to keep the right digits out
+ * of the reach of a `timestamp without time zone` column; that fixed the write
+ * and left the read wrong by the app container's offset, because the driver
+ * reapplies the local zone when it builds a Date from naive digits.
  *
  * @param {Function} query - Bound to the pass's single client
  * @param {string} kind - Library kind
@@ -201,7 +185,7 @@ async function upsertBatch(query, kind, rawEntries) {
             entry.platform_name, entry.size_bytes, entry.cover_url,
             entry.path, entry.added_at, NOW(), NULL
        FROM unnest($2::text[], $3::text[], $4::text[], $5::text[],
-                   $6::bigint[], $7::text[], $8::text[], $9::timestamp[])
+                   $6::bigint[], $7::text[], $8::text[], $9::timestamptz[])
          AS entry(library_id, igdb_id, name, platform_name,
                   size_bytes, cover_url, path, added_at)
      ON CONFLICT (library_kind, library_id)
@@ -224,7 +208,7 @@ async function upsertBatch(query, kind, rawEntries) {
       entries.map((entry) => entry.sizeBytes ?? null),
       entries.map((entry) => entry.coverUrl ?? null),
       entries.map((entry) => entry.path ?? null),
-      entries.map((entry) => toUtcTimestamp(entry.addedAt)),
+      entries.map((entry) => entry.addedAt ?? null),
     ],
   );
 
@@ -239,10 +223,9 @@ async function upsertBatch(query, kind, rawEntries) {
  *
  * The boundary is read back out of the table *in SQL*. It cannot be passed as
  * a parameter: synced_at is written by NOW() on the server, and a JS Date sent
- * into a `timestamp without time zone` comparison arrives shifted by the app
- * container's UTC offset -- unset in the image, so inherited from the host.
- * West of the database that makes the sweep a no-op for the length of the
- * offset. East of it -- an app on Europe/Berlin against a default-UTC
+ * into that comparison arrives on the app container's clock rather than the
+ * database's. West of the database that makes the sweep a no-op for the length
+ * of the offset. East of it -- an app on Europe/Berlin against a default-UTC
  * Postgres, an entirely ordinary self-hosted pairing -- every row the pass
  * just inserted satisfies `synced_at < startedAt`, so the first completed pass
  * marks the whole library removed. Round-tripping the value through JS to
