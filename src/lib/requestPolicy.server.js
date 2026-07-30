@@ -12,9 +12,14 @@ import { userHasPermission } from "$lib/userProfile.js";
 // block a new one, so a failed fetch can be retried.
 const OPEN_STATUSES = ["pending", "approved"];
 
-// Stored by admin/settings/+page.svelte as the bare string "true"/"false", and
-// absent from the table until that form is first saved.
-const AUTO_APPROVE_SETTING_KEY = "request.auto_approve";
+// One string, used twice on purpose: the per-role permission name and the
+// global settings key are deliberately identical, so the two switches read as
+// one concept in the admin UI and in migration 010, which seeds both. Kept in a
+// single const so they cannot drift apart.
+//
+// As a setting it is stored by admin/settings/+page.svelte as the bare string
+// "true"/"false", and is absent from the table until that form is first saved.
+const AUTO_APPROVE_KEY = "request.auto_approve";
 
 /**
  * Find an open request already covering the same game.
@@ -66,13 +71,13 @@ export async function findOpenDuplicate({ igdbId, title, requestType }) {
  * @returns {Promise<boolean>}
  */
 export async function mayAutoApprove(userId) {
-  if (await userHasPermission(userId, "request.auto_approve")) {
+  if (await userHasPermission(userId, AUTO_APPROVE_KEY)) {
     return true;
   }
 
   const result = await query(
     "SELECT value FROM ggr_system_settings WHERE key = $1",
-    [AUTO_APPROVE_SETTING_KEY],
+    [AUTO_APPROVE_KEY],
   );
 
   return result.rows[0]?.value === "true";

@@ -95,7 +95,14 @@ async function submit(body = {}) {
   });
 }
 
-/** The status bound to the most recent INSERT INTO ggr_game_requests call. */
+/**
+ * The status bound to the first INSERT INTO ggr_game_requests call.
+ *
+ * `.find()`, not a scan for the last one: each test calls submit() once, which
+ * inserts at most once, and `vi.clearAllMocks()` in beforeEach means the first
+ * match is that submission's. If a test ever submits twice, assert per call
+ * rather than widening this.
+ */
 function insertedStatus() {
   const insertCall = query.mock.calls.find(([sql]) =>
     sql.includes("INSERT INTO ggr_game_requests"),
