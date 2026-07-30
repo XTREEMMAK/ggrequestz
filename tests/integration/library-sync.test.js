@@ -10,8 +10,8 @@
  * silently. The pass must run on ONE client, since the advisory lock is
  * session-scoped and releasing it on another connection warns instead of
  * raising. And the sweep boundary must stay on the database clock, since a JS
- * Date into a `timestamp without time zone` comparison is shifted by the app
- * container's UTC offset.
+ * Date into that comparison arrives on the app container's clock rather than
+ * the server's.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -306,23 +306,28 @@ describe("syncLibrary", () => {
     expect(platforms).toEqual(["Genesis", "Genesis"]);
   });
 
-  it("sends added_at as UTC so all three timestamp columns share one clock", async () => {
+  it("sends added_at as an instant, into a column that stores instants", async () => {
+    const addedAt = new Date("2026-03-01T12:34:56.000Z");
     syncEntries.mockImplementation(async ({ onBatch }) => {
       await onBatch([
-        { id: "1", name: "a", addedAt: new Date("2026-03-01T12:34:56.000Z") },
+        { id: "1", name: "a", addedAt },
         { id: "2", name: "b", addedAt: null },
       ]);
     });
 
     await run();
 
-    const [, params] = statement("INSERT INTO ggr_library_entries");
-    // A Date is serialised with the process's UTC offset, which added_at then
-    // discards -- landing it on the app's local clock while first_seen_at and
-    // synced_at are on the server's, and COALESCE(added_at, first_seen_at)
-    // straddles both.
-    expect(params[8]).toEqual(["2026-03-01T12:34:56.000Z", null]);
-    expect(params[8].some((value) => value instanceof Date)).toBe(false);
+    const [text, params] = statement("INSERT INTO ggr_library_entries");
+    // The Date normalizeEntry produced, unconverted, into a timestamptz.
+    // Both halves matter and this assertion replaces one that pinned the
+    // opposite. added_at was `timestamp without time zone` and took a UTC ISO
+    // string, which put the right digits in the column -- and node-postgres
+    // builds a Date from naive digits using the *process's* zone, so the
+    // read-back came out shifted by the app container's UTC offset. Fixing the
+    // write could not fix the read; only the column type could.
+    expect(text).toContain("$9::timestamptz[]");
+    expect(params[8]).toEqual([addedAt, null]);
+    expect(params[8][0]).toBeInstanceOf(Date);
   });
 
   it("refuses a backend that cannot enumerate itself", async () => {
