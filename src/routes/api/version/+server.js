@@ -2,12 +2,15 @@ import { json } from "@sveltejs/kit";
 import { version } from "$app/environment";
 import packageJson from "../../../../package.json";
 import { getVersionHistory } from "$lib/changelog.server.js";
+import { getUpdateSnapshot } from "$lib/updateCheck.server.js";
 
 export async function GET() {
   const buildTime = new Date().toISOString();
 
-  // The history is inlined at build time, so this endpoint stays as cheap as it
-  // was when it only read package.json.
+  // Neither of these reaches the network on this request. The history is inlined
+  // at build time and the update status is a background-refreshed snapshot, so
+  // this endpoint stays as cheap as it was when it only read package.json.
+  const update = getUpdateSnapshot();
 
   return json({
     version: packageJson.version || "1.0.0",
@@ -15,6 +18,12 @@ export async function GET() {
     environment: process.env.NODE_ENV || "development",
     buildTime: process.env.BUILD_TIME || buildTime,
     history: getVersionHistory(10),
+    update: {
+      enabled: update.enabled,
+      available: update.updateAvailable,
+      latest: update.latest,
+      url: update.url,
+    },
     features: {
       oidc: true,
       basicAuth: true,

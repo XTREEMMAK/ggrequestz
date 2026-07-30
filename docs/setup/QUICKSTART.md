@@ -147,6 +147,15 @@ GOTIFY_TOKEN=your_token
 REQUEST_WEBHOOK_URL=https://your-webhook-endpoint
 ```
 
+The update check is the one thing that is on by default rather than opt-in. It asks
+the GitHub releases API whether a newer version exists, at most every six hours, and
+shows an indicator beside the version number in the sidebar. Turn it off if the app
+should not reach out:
+
+```bash
+UPDATE_CHECK_ENABLED=false
+```
+
 ## Troubleshooting
 
 ### Port Already in Use

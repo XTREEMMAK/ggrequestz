@@ -6,21 +6,30 @@ Complete reference for all GG Requestz configuration options.
 
 ### System Configuration
 
-| Variable           | Description                                   | Default                 | Required       |
-| ------------------ | --------------------------------------------- | ----------------------- | -------------- |
-| `PUID`             | User ID for file permissions                  | `1000`                  | No             |
-| `PGID`             | Group ID for file permissions                 | `1000`                  | No             |
-| `TZ`               | Timezone                                      | `UTC`                   | No             |
-| `APP_PORT`         | Application port                              | `3000`                  | No             |
-| `NODE_ENV`         | Environment mode                              | `production`            | No             |
-| `PM2_INSTANCES`    | PM2 worker instances                          | `max`                   | No             |
-| `PM2_CRON_RESTART` | Cron expression for scheduled worker restarts | -                       | No             |
-| `PUBLIC_SITE_URL`  | Public URL for API docs and external links    | `http://localhost:3000` | No             |
-| `ORIGIN`           | Canonical origin for CSRF and OIDC redirects  | `PUBLIC_SITE_URL`       | Behind a proxy |
+| Variable               | Description                                   | Default                 | Required       |
+| ---------------------- | --------------------------------------------- | ----------------------- | -------------- |
+| `PUID`                 | User ID for file permissions                  | `1000`                  | No             |
+| `PGID`                 | Group ID for file permissions                 | `1000`                  | No             |
+| `TZ`                   | Timezone                                      | `UTC`                   | No             |
+| `APP_PORT`             | Application port                              | `3000`                  | No             |
+| `NODE_ENV`             | Environment mode                              | `production`            | No             |
+| `PM2_INSTANCES`        | PM2 worker instances                          | `max`                   | No             |
+| `PM2_CRON_RESTART`     | Cron expression for scheduled worker restarts | -                       | No             |
+| `PUBLIC_SITE_URL`      | Public URL for API docs and external links    | `http://localhost:3000` | No             |
+| `ORIGIN`               | Canonical origin for CSRF and OIDC redirects  | `PUBLIC_SITE_URL`       | Behind a proxy |
+| `UPDATE_CHECK_ENABLED` | Check GitHub for newer releases               | `true`                  | No             |
 
 `ORIGIN` matters more than it looks. `adapter-node` rejects any form submission
 whose `Origin` header disagrees with it, so a wrong value makes logins fail with
 "Cross-site POST form submissions are forbidden" while GET requests work fine.
+
+`UPDATE_CHECK_ENABLED` controls the only outbound call the app makes on its own
+behalf: an unauthenticated request to the GitHub releases API, at most once every
+six hours, backing off to 24 hours while it keeps failing. Set it to `false` on an
+air-gapped install or anywhere the app should not reach out — the sidebar simply
+shows no update indicator. Failures never affect a page render; they are logged
+with their status code and nothing is shown to the user. `false`, `0`, `no` and
+`off` all disable it.
 
 ### Database Configuration
 

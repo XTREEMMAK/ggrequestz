@@ -81,6 +81,8 @@ services:
       PM2_CRON_RESTART: ${PM2_CRON_RESTART:-}
       NODE_ENV: production
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      # Set false to stop the app checking GitHub for newer releases.
+      UPDATE_CHECK_ENABLED: ${UPDATE_CHECK_ENABLED:-true}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
       # Tells adapter-node the app's public URL. Without it adapter-node assumes
       # https, which breaks CSRF origin checks and OIDC redirect URIs on http

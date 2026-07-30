@@ -74,6 +74,7 @@
 				.then(data => {
 					appVersion = data.version;
 					versionHistory = data.history ?? [];
+					updateInfo = data.update ?? null;
 				})
 				.catch(() => {
 					// Silently fail - version display is not critical
@@ -99,6 +100,10 @@
 	let windowWidth = $state(0);
 	let appVersion = $state(null);
 	let versionHistory = $state([]);
+	// null until /api/version answers, and `enabled: false` when the operator has
+	// opted out. Both cases render no indicator at all.
+	let updateInfo = $state(null);
+	let updateAvailable = $derived(updateInfo?.enabled === true && updateInfo?.available === true);
 
 	// Reset sidebar collapse when switching to mobile view
 	$effect(() => {
@@ -544,10 +549,21 @@
 					<div class="text-center app-details-container">
 						<button
 							onclick={toggleAppDetails}
-							class="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer px-2 py-1 rounded hover:bg-gray-700"
-							title="App Details"
+							class="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors cursor-pointer px-2 py-1 rounded hover:bg-gray-700"
+							title={updateAvailable ? `Version ${updateInfo.latest} is available` : 'App Details'}
 						>
 							v{appVersion}
+							{#if updateAvailable}
+								<!--
+									Indicator only, never a blocker: an unreachable or rate-limited
+									GitHub leaves updateInfo.available false and nothing renders.
+								-->
+								<span class="relative flex h-2 w-2" aria-hidden="true">
+									<span class="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 motion-safe:animate-ping"></span>
+									<span class="relative inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
+								</span>
+								<span class="sr-only">Update available: version {updateInfo.latest}</span>
+							{/if}
 						</button>
 					</div>
 				{/if}
@@ -713,6 +729,18 @@
 				<div class="text-center mb-6">
 					<p class="text-gray-400 mb-1">Version {appVersion}</p>
 					<p class="text-sm text-gray-500">A modern game discovery and request management platform</p>
+
+					{#if updateAvailable}
+						<a
+							href={updateInfo.url || 'https://github.com/XTREEMMAK/ggrequestz/releases'}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:text-blue-200 hover:bg-blue-600/30 text-sm transition-colors"
+						>
+							<Icon icon="heroicons:arrow-up-circle" class="w-4 h-4" />
+							Version {updateInfo.latest} is available
+						</a>
+					{/if}
 				</div>
 
 				<!-- Release history, parsed from CHANGELOG.md at build time. Absent
