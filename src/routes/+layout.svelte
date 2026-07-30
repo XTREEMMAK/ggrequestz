@@ -749,32 +749,41 @@
 				{#if versionHistory.length > 0}
 					<div class="mb-6">
 						<h3 class="text-sm font-semibold text-gray-300 mb-2">Release History</h3>
-						<ul class="border border-gray-700 rounded-lg divide-y divide-gray-700 overflow-hidden">
-							{#each versionHistory as release}
-								<li>
-									<a
-										href={release.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="flex items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-gray-700/60 transition-colors group"
-									>
-										<span class="font-medium {release.version === appVersion ? 'text-white' : 'text-gray-300'}">
-											v{release.version}
-											{#if release.version === appVersion}
-												<span class="ml-1 text-xs text-gray-500">(current)</span>
-											{/if}
-										</span>
-										<span class="flex items-center gap-2 text-xs text-gray-500">
-											{release.date}
-											<Icon
-												icon="heroicons:arrow-top-right-on-square"
-												class="w-3.5 h-3.5 opacity-40 group-hover:opacity-100"
-											/>
-										</span>
-									</a>
-								</li>
-							{/each}
-						</ul>
+						<!--
+							Fixed-height scroll region, so the modal stays the same size whether
+							the changelog holds three releases or thirty. The reader is capped at
+							ten server-side as well; this makes the layout independent of that
+							number rather than dependent on it. `.custom-scrollbar` is the app's
+							existing dark scrollbar theming, from app.css.
+						-->
+						<div class="release-history custom-scrollbar max-h-56 overflow-y-auto border border-gray-700 rounded-lg">
+							<ul class="divide-y divide-gray-700">
+								{#each versionHistory as release}
+									<li>
+										<a
+											href={release.url}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="flex items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-gray-700/60 transition-colors group"
+										>
+											<span class="font-medium {release.version === appVersion ? 'text-white' : 'text-gray-300'}">
+												v{release.version}
+												{#if release.version === appVersion}
+													<span class="ml-1 text-xs text-gray-500">(current)</span>
+												{/if}
+											</span>
+											<span class="flex items-center gap-2 text-xs text-gray-500">
+												{release.date}
+												<Icon
+													icon="heroicons:arrow-top-right-on-square"
+													class="w-3.5 h-3.5 opacity-40 group-hover:opacity-100"
+												/>
+											</span>
+										</a>
+										</li>
+									{/each}
+							</ul>
+						</div>
 					</div>
 				{/if}
 
@@ -844,3 +853,16 @@
 
 <!-- Toast notifications -->
 <Toast />
+
+<style>
+	/*
+		`.custom-scrollbar` in app.css styles only the WebKit pseudo-elements, so
+		Firefox would render a default light scrollbar against the dark modal. These
+		two properties are the standard equivalents; scoped here rather than added to
+		the shared class, which is used elsewhere and would change appearance there.
+	*/
+	.release-history {
+		scrollbar-width: thin;
+		scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
+	}
+</style>
