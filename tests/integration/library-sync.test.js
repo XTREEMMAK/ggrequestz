@@ -6,12 +6,16 @@
  * library is gone" would empty the index and, once availability sync
  * exists, walk every fulfilled request backwards.
  *
- * Two structural properties are pinned here as well, because both fail
- * silently. The pass must run on ONE client, since the advisory lock is
- * session-scoped and releasing it on another connection warns instead of
- * raising. And the sweep boundary must stay on the database clock, since a JS
- * Date into that comparison arrives on the app container's clock rather than
- * the server's.
+ * Completing is necessary and not sufficient. A backend can answer a page
+ * honestly and answer it empty -- its database reset, its volume unmounted --
+ * and that pass completes with the whole index older than the boundary. The
+ * plausibility guard is pinned here too.
+ *
+ * Two structural properties are pinned as well, because both fail silently.
+ * The pass must run on ONE client, since the advisory lock is session-scoped
+ * and releasing it on another connection warns instead of raising. And the
+ * sweep boundary must stay on the database clock, since a JS Date into that
+ * comparison arrives on the app container's clock rather than the server's.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +31,15 @@ const syncEntries = vi.fn(async () => {});
 const clients = [];
 let lockGranted = true;
 
+/**
+ * What the sweep's plausibility count answers.
+ *
+ * Strings, because that is what node-postgres gives back for count(): the
+ * result is bigint, and the driver will not silently narrow one to a Number.
+ * A guard that compared those strings would be comparing lexically.
+ */
+let sweepCounts = { live: "0", stale: "0" };
+
 /** One checked-out client, recording every statement issued on it. */
 function checkOutClient() {
   const calls = [];
@@ -37,9 +50,17 @@ function checkOutClient() {
       if (text.includes("pg_try_advisory_lock")) {
         return { rows: [{ locked: lockGranted }] };
       }
+      if (text.includes("count(*) AS live")) {
+        return { rows: [sweepCounts] };
+      }
       return { rows: [] };
     }),
   };
+}
+
+/** How much of the index the next sweep will find live, and how much stale. */
+function sweepFinds({ live, stale }) {
+  sweepCounts = { live: String(live), stale: String(stale) };
 }
 
 const withClient = vi.fn(async (fn) => {
@@ -48,14 +69,17 @@ const withClient = vi.fn(async (fn) => {
   return fn(client.query);
 });
 
-vi.mock("$lib/database.js", () => ({ query, withClient }));
-vi.mock("$lib/library/index.js", () => ({
-  getLibrary: () => ({
+/** The backend the suite syncs against, named so a test can put it back. */
+function defaultLibrary() {
+  return {
     kind: () => "romm",
     capabilities: () => new Set(["SYNC"]),
     syncEntries,
-  }),
-}));
+  };
+}
+
+vi.mock("$lib/database.js", () => ({ query, withClient }));
+vi.mock("$lib/library/index.js", () => ({ getLibrary: defaultLibrary }));
 
 /** Answer pg_try_advisory_lock with `granted`, and default everything else. */
 function lockReturns(granted) {
@@ -87,6 +111,7 @@ describe("syncLibrary", () => {
     vi.clearAllMocks();
     clients.length = 0;
     lockReturns(true);
+    sweepFinds({ live: 0, stale: 0 });
     syncEntries.mockImplementation(async () => {});
   });
 
@@ -346,5 +371,124 @@ describe("syncLibrary", () => {
     expect(result.ran).toBe(false);
     expect(result.reason).toBe("unsupported");
     vi.doUnmock("$lib/library/index.js");
+  });
+});
+
+/**
+ * The sweep's plausibility guard.
+ *
+ * Gating on the pass completing covers a pass that broke. It does not cover a
+ * pass that worked: rommRequest throws on breaker-open, non-2xx and timeout, so
+ * a failed page cannot arrive as an empty one -- but a real `200 {items: []}`
+ * can, and RomM produces one whenever its own database has been reset, its ROM
+ * volume is unmounted before a rescan, or LIBRARY_URL has been repointed at a
+ * fresh instance. That pass enumerates the whole library, which is nothing,
+ * completes, and every row in the index is older than the boundary. Soft-delete
+ * means the next good pass heals it; until then every read filters
+ * `removed_at IS NULL` and the entire library reports absent.
+ */
+describe("syncLibrary sweep plausibility guard", () => {
+  beforeEach(() => {
+    // Re-registered per test, not inherited. The suite above ends by calling
+    // vi.doUnmock on this module, which cancels the hoisted vi.mock as well --
+    // so without this every run() here would import the real library seam and
+    // try to reach a real backend, and every test would sit there until vitest
+    // timed it out.
+    vi.doMock("$lib/library/index.js", () => ({ getLibrary: defaultLibrary }));
+
+    vi.clearAllMocks();
+    clients.length = 0;
+    lockReturns(true);
+    sweepFinds({ live: 0, stale: 0 });
+    // The catastrophe: a completed pass that saw nothing.
+    syncEntries.mockImplementation(async ({ onBatch }) => {
+      await onBatch([]);
+    });
+  });
+
+  it("sweeps nothing when one pass would remove more than the ratio", async () => {
+    sweepFinds({ live: 72162, stale: 72162 });
+
+    const result = await run({ maxSweepRatio: 0.5 });
+
+    expect(result.completed).toBe(true);
+    expect(result.sweepBlocked).toBe(true);
+    expect(result.removed).toBe(0);
+    expect(sql().some((text) => text.includes("SET removed_at"))).toBe(false);
+  });
+
+  it("still marks the index ready, because the enumeration did complete", async () => {
+    // Refusing the flag would send every read back to its backend fallback, or
+    // to indexBuilding for a backend that has none. That is a worse outcome
+    // than one stale removed_at on rows that are still readable.
+    sweepFinds({ live: 72162, stale: 72162 });
+
+    await run({ maxSweepRatio: 0.5 });
+
+    expect(sql().some((text) => text.includes("last_completed_at"))).toBe(true);
+  });
+
+  it("records the refusal in last_error, naming both counts", async () => {
+    // Visible in the table, not only in a container log nobody is tailing.
+    sweepFinds({ live: 72162, stale: 72162 });
+
+    await run({ maxSweepRatio: 0.5 });
+
+    const [text, params] = statement("last_completed_at");
+    expect(text).toContain("last_error = $3");
+    expect(params[2]).toContain("72162 of 72162");
+    expect(params[2]).toContain("LIBRARY_SYNC_MAX_SWEEP_RATIO=0.5");
+  });
+
+  it("does not trip on an ordinary removal", async () => {
+    sweepFinds({ live: 72162, stale: 12 });
+
+    const result = await run({ maxSweepRatio: 0.5 });
+
+    expect(result.sweepBlocked).toBe(false);
+    expect(sql().some((text) => text.includes("SET removed_at"))).toBe(true);
+  });
+
+  it("does not trip on a first sync, where nothing is live yet", async () => {
+    // Both counts are taken after the upserts, so a first pass has just written
+    // everything it saw and stale is 0 -- but live is 0 too on a genuinely
+    // empty index, and a share of zero is not a number.
+    sweepFinds({ live: 0, stale: 0 });
+
+    const result = await run({ maxSweepRatio: 0.5 });
+
+    expect(result.sweepBlocked).toBe(false);
+    expect(sql().some((text) => text.includes("SET removed_at"))).toBe(true);
+    const [, params] = statement("last_completed_at");
+    expect(params).toEqual(["romm", 0]);
+  });
+
+  it("allows a removal exactly at the ratio, and refuses above it", async () => {
+    sweepFinds({ live: 100, stale: 50 });
+    expect((await run({ maxSweepRatio: 0.5 })).sweepBlocked).toBe(false);
+
+    clients.length = 0;
+    sweepFinds({ live: 100, stale: 51 });
+    expect((await run({ maxSweepRatio: 0.5 })).sweepBlocked).toBe(true);
+  });
+
+  it("guards a caller that passed no ratio at all", async () => {
+    // syncLibrary is callable directly. Forgetting the option must not mean an
+    // unguarded sweep.
+    sweepFinds({ live: 100, stale: 100 });
+
+    expect((await run()).sweepBlocked).toBe(true);
+  });
+
+  it("counts both sides in one statement in the pass, never in JS", async () => {
+    sweepFinds({ live: 100, stale: 1 });
+
+    await run({ maxSweepRatio: 0.5 });
+
+    const [text, params] = statement("count(*) AS live");
+    expect(text).toContain("FILTER");
+    expect(text).toContain("last_started_at");
+    expect(text).toContain("removed_at IS NULL");
+    expect(params).toEqual(["romm"]);
   });
 });

@@ -17,6 +17,16 @@ const DEFAULT_SYNC_INTERVAL_MS = 900000;
 /** Entries per upsert statement. */
 const DEFAULT_SYNC_BATCH = 500;
 
+/**
+ * Largest share of the live index one completed pass may sweep away.
+ *
+ * Half. A backend that legitimately loses more than half its library between
+ * two passes is not a case worth optimising for; a backend that answers
+ * `200 {items: []}` because its database was reset or its ROM volume was
+ * unmounted is, and looks exactly the same from here.
+ */
+const DEFAULT_MAX_SWEEP_RATIO = 0.5;
+
 /** Runtime env first: a container is configured at start, not at build. */
 function read(...names) {
   for (const name of names) {
@@ -52,6 +62,36 @@ function readPositiveInt(name, fallback) {
 }
 
 /**
+ * A proportion in (0, 1], or the default when it is unset or unusable.
+ *
+ * 1 is allowed and means "never refuse": nothing can exceed the whole of the
+ * live index, so the guard can no longer trip. That is the escape hatch for an
+ * operator who genuinely does replace their library wholesale.
+ *
+ * 0 is rejected rather than read as "never sweep". It would make any removal
+ * at all trip the guard, which is a real setting nobody asks for by typing a
+ * zero -- it is what a misunderstanding or a truncated value looks like, and
+ * silently never reclaiming a removed entry is not a failure that announces
+ * itself.
+ *
+ * @param {string} name - Environment variable name
+ * @param {number} fallback - Value to use when the variable is unusable
+ * @returns {number}
+ */
+function readRatio(name, fallback) {
+  const raw = read(name);
+  if (raw === undefined) return fallback;
+
+  const value = Number.parseFloat(raw);
+  if (Number.isFinite(value) && value > 0 && value <= 1) return value;
+
+  console.warn(
+    `⚠️ ${name}=${JSON.stringify(raw)} is not a proportion greater than 0 and at most 1; using ${fallback}`,
+  );
+  return fallback;
+}
+
+/**
  * Resolve the library configuration.
  *
  * Deliberately no timeout setting here. LIBRARY_CHECK_TIMEOUT_MS was resolved
@@ -63,7 +103,8 @@ function readPositiveInt(name, fallback) {
  * @returns {{kind: string, url: string|undefined, publicUrl: string|undefined,
  *   apiToken: string|undefined, username: string|undefined,
  *   password: string|undefined, syncEnabled: boolean,
- *   syncIntervalMs: number, syncBatchSize: number}}
+ *   syncIntervalMs: number, syncBatchSize: number,
+ *   syncMaxSweepRatio: number}}
  * @throws {Error} When LIBRARY_KIND names a backend this build does not have
  */
 export function resolveLibraryConfig() {
@@ -102,5 +143,9 @@ export function resolveLibraryConfig() {
       DEFAULT_SYNC_INTERVAL_MS,
     ),
     syncBatchSize: readPositiveInt("LIBRARY_SYNC_BATCH", DEFAULT_SYNC_BATCH),
+    syncMaxSweepRatio: readRatio(
+      "LIBRARY_SYNC_MAX_SWEEP_RATIO",
+      DEFAULT_MAX_SWEEP_RATIO,
+    ),
   };
 }

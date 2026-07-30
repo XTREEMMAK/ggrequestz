@@ -71,6 +71,10 @@ CREATE INDEX IF NOT EXISTS ggr_library_entries_recent_idx
 -- library without throwing, which is the same event that authorises the
 -- deletion sweep.
 --
+-- last_error carries the sweep plausibility refusal as well as a real failure.
+-- A refused sweep is not an enumeration error, but it is the outcome an
+-- operator most needs to see without reading container logs.
+--
 -- These two stay naive on purpose. Neither value is ever handed to the
 -- application -- router.js only asks whether last_completed_at IS NULL -- and
 -- last_started_at is written by NOW() and compared against synced_at inside

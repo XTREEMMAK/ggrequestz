@@ -101,6 +101,7 @@ services:
       LIBRARY_SYNC_ENABLED: ${LIBRARY_SYNC_ENABLED:-}
       LIBRARY_SYNC_INTERVAL_MS: ${LIBRARY_SYNC_INTERVAL_MS:-}
       LIBRARY_SYNC_BATCH: ${LIBRARY_SYNC_BATCH:-}
+      LIBRARY_SYNC_MAX_SWEEP_RATIO: ${LIBRARY_SYNC_MAX_SWEEP_RATIO:-}
 
       # Optional; the app runs without these, games just will not populate.
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
