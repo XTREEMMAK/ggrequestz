@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sendRequestStatusNotification = vi.fn(async () => true);
 const sendRequestCancelledDeletedNotification = vi.fn(async () => true);
+const sendBulkRequestStatusNotification = vi.fn(async () => true);
 const invalidateCache = vi.fn(async () => {});
 
 const ROW = {
@@ -31,9 +32,13 @@ const ROW = {
 const query = vi.fn(async () => ({ rows: [ROW] }));
 
 vi.mock("$lib/database.js", () => ({ query }));
+// A vi.mock factory replaces the module wholesale, so every export
+// requestStatus.server.js imports from gotify.js has to be here -- including
+// the bulk summary sender, or the module fails to link.
 vi.mock("$lib/gotify.js", () => ({
   sendRequestStatusNotification,
   sendRequestCancelledDeletedNotification,
+  sendBulkRequestStatusNotification,
 }));
 vi.mock("$lib/cache.js", () => ({ invalidateCache }));
 

@@ -30,6 +30,7 @@ vi.mock("$lib/database.js", () => ({ query }));
 vi.mock("$lib/gotify.js", () => ({
   sendRequestStatusNotification: vi.fn(async () => true),
   sendRequestCancelledDeletedNotification: vi.fn(async () => true),
+  sendBulkRequestStatusNotification: vi.fn(async () => true),
 }));
 vi.mock("$lib/cache.js", () => ({ invalidateCache: vi.fn(async () => {}) }));
 vi.mock("$lib/webhooks.server.js", () => ({ sendGameRequestWebhook }));
@@ -74,6 +75,30 @@ describe("dispatch on the approval transition", () => {
     transition = { status: "approved", previous_status: "fulfilled" };
     await apply("approved");
     expect(sendGameRequestWebhook).toHaveBeenCalledTimes(1);
+  });
+
+  // The re-dispatch carries the same request_id as the first one, so the
+  // sender needs the transition to mark it as a repeat. Passing the status the
+  // request left is how it gets that -- without it the payload cannot say
+  // "again" and a receiver deduping on request_id drops the re-fetch.
+
+  it("tells the sender which status the request left", async () => {
+    transition = { status: "approved", previous_status: "fulfilled" };
+    await apply("approved");
+
+    expect(sendGameRequestWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "req-1" }),
+      { previousStatus: "fulfilled" },
+    );
+  });
+
+  it("reports a first approval as coming from pending, not from nowhere", async () => {
+    transition = { status: "approved", previous_status: "pending" };
+    await apply("approved");
+
+    expect(sendGameRequestWebhook.mock.calls[0][1]).toEqual({
+      previousStatus: "pending",
+    });
   });
 
   it("does not fail the transition when the receiver rejects", async () => {

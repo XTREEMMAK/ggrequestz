@@ -7,7 +7,10 @@ import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
-import { applyRequestStatusChange } from "$lib/requestStatus.server.js";
+import {
+  applyRequestStatusChange,
+  requestConflictMessage,
+} from "$lib/requestStatus.server.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -123,12 +126,31 @@ export async function POST({ request, cookies }) {
     // admin_notes is passed through as-is: absent from the request body it
     // is `undefined` (owner keeps the existing value); present -- including
     // "" -- the owner writes it (and normalises "" to null).
-    const { row: updatedRequest } = await applyRequestStatusChange({
+    const { row: updatedRequest, conflict } = await applyRequestStatusChange({
       id: request_id,
       to: status,
       actor: user.name || user.email,
       adminNotes: admin_notes,
     });
+
+    // Re-opening a rejected, cancelled or fulfilled request can collide with
+    // another request that is already open for the same game. Answering 409
+    // with the blocking id -- the same field the submission 409 uses -- is what
+    // makes that recoverable: a bare 500 left the row permanently unable to
+    // return to pending or approved with no in-app way to find out why.
+    if (conflict) {
+      return json(
+        {
+          success: false,
+          error: requestConflictMessage(
+            conflict,
+            `moving this request to ${status}`,
+          ),
+          existing_request_id: conflict.existing_request_id,
+        },
+        { status: 409 },
+      );
+    }
 
     if (!updatedRequest) {
       return json(

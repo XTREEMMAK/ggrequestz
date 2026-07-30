@@ -2,11 +2,16 @@
  * Admin request edit page data loader and form handler
  */
 
-import { error, redirect } from "@sveltejs/kit";
-import { query } from "$lib/database.js";
+import { error, fail, redirect } from "@sveltejs/kit";
+import { query, withTransaction } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
-import { applyRequestStatusChange } from "$lib/requestStatus.server.js";
+import {
+  applyRequestStatusChange,
+  describeRequestConflict,
+  isDuplicateRequestViolation,
+  RequestConflictError,
+} from "$lib/requestStatus.server.js";
 
 export async function load({ params, parent }) {
   const { userPermissions } = await parent();
@@ -194,36 +199,90 @@ export const actions = {
         RETURNING *
       `;
 
-      const updateResult = await query(updateQuery, [
-        title,
-        description || null,
-        reason || null,
-        priority || null,
-        JSON.stringify(platforms),
-        adminNotes || null,
-        requestId,
-      ]);
+      // The field edits and the status transition are two statements, so they
+      // run in one transaction: this form used to be a single atomic UPDATE,
+      // and splitting the status out meant a failing status change left the
+      // field edits committed while the admin was told the whole save failed.
+      //
+      // Nothing is dispatched inside the transaction -- a webhook cannot be
+      // rolled back -- so the status change's side effects come back deferred
+      // and run below, after commit.
+      let saved;
+      try {
+        saved = await withTransaction(async (tx) => {
+          let updateResult;
+          try {
+            updateResult = await tx(updateQuery, [
+              title,
+              description || null,
+              reason || null,
+              priority || null,
+              JSON.stringify(platforms),
+              adminNotes || null,
+              requestId,
+            ]);
+          } catch (updateError) {
+            // `title` is itself part of the open-title unique index for rows
+            // with no igdb_id, so renaming such a request onto a title another
+            // open request already holds raises 23505 on this statement.
+            if (!isDuplicateRequestViolation(updateError)) throw updateError;
+            throw new RequestConflictError(
+              await describeRequestConflict({ id: requestId, title }),
+              "renaming this request",
+            );
+          }
 
-      if (updateResult.rows.length === 0) {
+          if (updateResult.rows.length === 0) return { notFound: true };
+
+          // Captured before any status change below, since this query never
+          // touches the status column.
+          const previousStatus = updateResult.rows[0].status;
+
+          // Status is routed through the owner so this path notifies and
+          // invalidates cache like the others. It previously did neither.
+          // admin_notes is deliberately omitted here (left undefined): this
+          // form's own UPDATE above already owns title/priority/notes, so the
+          // owner must not write admin_notes a second time on this path.
+          let statusChange = null;
+          if (status) {
+            statusChange = await applyRequestStatusChange({
+              id: requestId,
+              to: status,
+              actor: user.name || user.email,
+              tx,
+              deferSideEffects: true,
+            });
+
+            // Throwing is what rolls the field edits back with it.
+            if (statusChange.conflict) {
+              throw new RequestConflictError(
+                statusChange.conflict,
+                `moving this request to ${status}`,
+              );
+            }
+          }
+
+          return { row: updateResult.rows[0], previousStatus, statusChange };
+        });
+      } catch (transactionError) {
+        if (transactionError instanceof RequestConflictError) {
+          return fail(409, {
+            success: false,
+            error: transactionError.message,
+            existing_request_id: transactionError.conflict.existing_request_id,
+          });
+        }
+        throw transactionError;
+      }
+
+      if (saved.notFound) {
         return { success: false, error: "Request not found" };
       }
 
-      // Captured before any status change below, since this query never
-      // touches the status column.
-      const previousStatus = updateResult.rows[0].status;
+      const { row: updatedRow, previousStatus } = saved;
 
-      // Status is routed through the owner so this path notifies and
-      // invalidates cache like the others. It previously did neither.
-      // admin_notes is deliberately omitted here (left undefined): this
-      // form's own UPDATE above already owns title/priority/notes, so the
-      // owner must not write admin_notes a second time on this path.
-      if (status) {
-        await applyRequestStatusChange({
-          id: requestId,
-          to: status,
-          actor: user.name || user.email,
-        });
-      }
+      // Committed. Notify, invalidate cache, and dispatch if this approved it.
+      saved.statusChange?.runSideEffects();
 
       // Log the action for analytics
       try {
@@ -238,10 +297,9 @@ export const actions = {
             JSON.stringify({
               request_id: requestId,
               changes: {
-                title: title !== updateResult.rows[0].title,
+                title: title !== updatedRow.title,
                 status: status && status !== previousStatus,
-                priority:
-                  priority && priority !== updateResult.rows[0].priority,
+                priority: priority && priority !== updatedRow.priority,
               },
             }),
           ],
