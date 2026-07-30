@@ -79,6 +79,13 @@ services:
       LIBRARY_API_TOKEN: ${LIBRARY_API_TOKEN:-}
       LIBRARY_USERNAME: ${LIBRARY_USERNAME:-}
       LIBRARY_PASSWORD: ${LIBRARY_PASSWORD:-}
+      # Local library index. Off unless set to exactly "true"; enabling it walks
+      # the whole library on a timer. Listed here because compose forwards only
+      # what it names -- a setting the app reads and compose omits is a setting
+      # that does not exist in a container.
+      LIBRARY_SYNC_ENABLED: ${LIBRARY_SYNC_ENABLED:-}
+      LIBRARY_SYNC_INTERVAL_MS: ${LIBRARY_SYNC_INTERVAL_MS:-}
+      LIBRARY_SYNC_BATCH: ${LIBRARY_SYNC_BATCH:-}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
       REQUEST_WEBHOOK_URL: ${REQUEST_WEBHOOK_URL:-}
 

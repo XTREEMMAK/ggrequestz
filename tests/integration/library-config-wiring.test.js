@@ -29,6 +29,9 @@ const KEYS = [
   "ROMM_API_TOKEN",
   "ROMM_USERNAME",
   "ROMM_PASSWORD",
+  "LIBRARY_SYNC_ENABLED",
+  "LIBRARY_SYNC_INTERVAL_MS",
+  "LIBRARY_SYNC_BATCH",
 ];
 
 /** A fresh romm.server.js: it caches the resolved configuration in module scope. */
@@ -156,5 +159,71 @@ describe("library configuration reaches the RomM client", () => {
     ]);
 
     expect(game.library_url).toBe("https://library.example.com/rom/7");
+  });
+});
+
+/**
+ * The index sync settings.
+ *
+ * These existed nowhere at all until the sync was wired into init(): the code
+ * that fills ggr_library_entries had no caller and no configuration, so the
+ * index could never become ready. The default matters most -- an existing
+ * install must not start walking its whole library on a timer because it
+ * upgraded.
+ */
+describe("library sync settings", () => {
+  beforeEach(() => {
+    for (const key of KEYS) delete process.env[key];
+  });
+
+  async function config() {
+    vi.resetModules();
+    const { resolveLibraryConfig } = await import(
+      "../../src/lib/library/config.js"
+    );
+    return resolveLibraryConfig();
+  }
+
+  it("leaves the sync off, with usable defaults, when nothing is set", async () => {
+    const resolved = await config();
+
+    expect(resolved.syncEnabled).toBe(false);
+    expect(resolved.syncIntervalMs).toBe(900000);
+    expect(resolved.syncBatchSize).toBe(500);
+  });
+
+  it("enables the sync only for the literal string true", async () => {
+    process.env.LIBRARY_SYNC_ENABLED = "true";
+    expect((await config()).syncEnabled).toBe(true);
+  });
+
+  it("treats every other value as off, including a truthy 'false'", async () => {
+    // Any non-empty string is truthy, so coercing rather than comparing would
+    // have made LIBRARY_SYNC_ENABLED=false enable it.
+    for (const value of ["false", "0", "yes", "TRUE", "1"]) {
+      process.env.LIBRARY_SYNC_ENABLED = value;
+      expect((await config()).syncEnabled).toBe(false);
+    }
+  });
+
+  it("reads the interval and batch size", async () => {
+    process.env.LIBRARY_SYNC_INTERVAL_MS = "60000";
+    process.env.LIBRARY_SYNC_BATCH = "100";
+
+    const resolved = await config();
+
+    expect(resolved.syncIntervalMs).toBe(60000);
+    expect(resolved.syncBatchSize).toBe(100);
+  });
+
+  it("falls back rather than accepting zero or nonsense", async () => {
+    // 0ms is a hot loop and a batch of 0 is a walk that never advances.
+    process.env.LIBRARY_SYNC_INTERVAL_MS = "0";
+    process.env.LIBRARY_SYNC_BATCH = "fifteen";
+
+    const resolved = await config();
+
+    expect(resolved.syncIntervalMs).toBe(900000);
+    expect(resolved.syncBatchSize).toBe(500);
   });
 });
