@@ -3,11 +3,14 @@
  */
 
 import { json } from "@sveltejs/kit";
-import { query } from "$lib/database.js";
+import { query, withTransaction } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
-import { applyRequestStatusChange } from "$lib/requestStatus.server.js";
+import {
+  applyRequestStatusChangeBatch,
+  RequestConflictError,
+} from "$lib/requestStatus.server.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -145,20 +148,55 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    const results = [];
-    for (const requestId of request_ids) {
-      // admin_notes passed through as-is: absent from the request body it
-      // is `undefined` (owner keeps the existing value per row); present --
-      // including "" -- the owner writes it (and normalises "" to null).
-      const outcome = await applyRequestStatusChange({
-        id: requestId,
-        to: status,
-        actor: user.name || user.email,
-        adminNotes: admin_notes,
+    // One transaction for the whole batch. The rows are written one at a time
+    // -- per-row atomicity is what makes each transition's from/to detection
+    // correct -- but they commit or roll back together. Without that, a row
+    // losing to the duplicate guard left rows 1..k-1 committed with their
+    // webhooks already dispatched (real downloads in flight) while the client
+    // saw a bare 500 and no indication anything had succeeded.
+    //
+    // Nothing is dispatched inside the transaction: a webhook cannot be rolled
+    // back, so the side effects come back deferred and run after commit.
+    //
+    // admin_notes passed through as-is: absent from the request body it is
+    // `undefined` (owner keeps the existing value per row); present --
+    // including "" -- the owner writes it (and normalises "" to null).
+    let batch;
+    try {
+      batch = await withTransaction(async (tx) => {
+        const outcome = await applyRequestStatusChangeBatch({
+          ids: request_ids,
+          to: status,
+          actor: user.name || user.email,
+          adminNotes: admin_notes,
+          tx,
+        });
+
+        // Throwing is what rolls the batch back.
+        if (outcome.conflict) {
+          throw new RequestConflictError(
+            outcome.conflict,
+            `moving these requests to ${status}`,
+          );
+        }
+
+        return outcome;
       });
-      if (outcome.row) results.push(outcome.row);
+    } catch (transactionError) {
+      if (transactionError instanceof RequestConflictError) {
+        return json(
+          {
+            success: false,
+            error: transactionError.message,
+            existing_request_id: transactionError.conflict.existing_request_id,
+          },
+          { status: 409 },
+        );
+      }
+      throw transactionError;
     }
-    const updatedRequests = results;
+
+    const updatedRequests = batch.rows;
     const updatedCount = updatedRequests.length;
 
     if (updatedCount === 0) {
@@ -167,6 +205,10 @@ export async function POST({ request, cookies }) {
         { status: 404 },
       );
     }
+
+    // Committed. Now the one summary notification, the single cache
+    // invalidation, and the per-row approval dispatches.
+    batch.runSideEffects();
 
     // Log the bulk action for analytics
     try {
