@@ -32,6 +32,7 @@ const KEYS = [
   "LIBRARY_SYNC_ENABLED",
   "LIBRARY_SYNC_INTERVAL_MS",
   "LIBRARY_SYNC_BATCH",
+  "LIBRARY_SYNC_MAX_SWEEP_RATIO",
 ];
 
 /** A fresh romm.server.js: it caches the resolved configuration in module scope. */
@@ -225,5 +226,31 @@ describe("library sync settings", () => {
 
     expect(resolved.syncIntervalMs).toBe(900000);
     expect(resolved.syncBatchSize).toBe(500);
+  });
+
+  it("defaults the sweep ceiling to half the live index", async () => {
+    expect((await config()).syncMaxSweepRatio).toBe(0.5);
+  });
+
+  it("reads a fractional sweep ceiling", async () => {
+    process.env.LIBRARY_SYNC_MAX_SWEEP_RATIO = "0.05";
+    expect((await config()).syncMaxSweepRatio).toBe(0.05);
+  });
+
+  it("accepts 1, which is the way to turn the guard off", async () => {
+    // Nothing can exceed the whole of the live index, so the guard can never
+    // trip. That is the escape hatch for a library that really is replaced
+    // wholesale.
+    process.env.LIBRARY_SYNC_MAX_SWEEP_RATIO = "1";
+    expect((await config()).syncMaxSweepRatio).toBe(1);
+  });
+
+  it("falls back on a ratio outside (0, 1] or on nonsense", async () => {
+    // 0 is rejected rather than read as "never sweep": it makes any removal at
+    // all trip the guard, which is what a typo looks like, not a setting.
+    for (const value of ["0", "-0.5", "1.5", "50%", "half", ""]) {
+      process.env.LIBRARY_SYNC_MAX_SWEEP_RATIO = value;
+      expect((await config()).syncMaxSweepRatio).toBe(0.5);
+    }
   });
 });

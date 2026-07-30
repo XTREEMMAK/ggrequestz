@@ -2,9 +2,10 @@
  * Filling the library index.
  *
  * A backend enumerates itself, batch by batch, and each batch is upserted.
- * Deletion is the dangerous half and is gated on the pass completing: a
- * partial enumeration must never be read as "the rest of the library is
- * gone".
+ * Deletion is the dangerous half and is gated twice: on the pass completing, so
+ * a partial enumeration is never read as "the rest of the library is gone",
+ * and on the size of what it is about to remove, so a pass that completed
+ * against an empty backend cannot empty the index either.
  *
  * Two rules hold the whole pass together, and both were learned the hard way.
  * The pass runs on ONE connection, because the advisory lock that serialises
@@ -26,6 +27,15 @@ export const ADVISORY_LOCK_KEY = 4919002;
 const DEFAULT_BATCH_SIZE = 500;
 
 /**
+ * The sweep's plausibility ceiling, when a caller does not supply one.
+ *
+ * Duplicated from config.js on purpose: syncLibrary is callable directly, and a
+ * caller that forgot the option must still get a guarded sweep rather than an
+ * unguarded one.
+ */
+const DEFAULT_MAX_SWEEP_RATIO = 0.5;
+
+/**
  * Run one sync pass, if this worker wins the lock.
  *
  * The entire pass -- the lock, every upsert, the sweep, the state writes and
@@ -39,10 +49,15 @@ const DEFAULT_BATCH_SIZE = 500;
  *
  * @param {Object} [options]
  * @param {number} [options.batchSize] - Entries per upsert
+ * @param {number} [options.maxSweepRatio] - Largest share of the live index one
+ *   pass may remove before the sweep refuses
  * @returns {Promise<{ran: boolean, completed: boolean, upserted: number,
- *   removed: number, reason: string|null}>}
+ *   removed: number, sweepBlocked: boolean, reason: string|null}>}
  */
-export async function syncLibrary({ batchSize = DEFAULT_BATCH_SIZE } = {}) {
+export async function syncLibrary({
+  batchSize = DEFAULT_BATCH_SIZE,
+  maxSweepRatio = DEFAULT_MAX_SWEEP_RATIO,
+} = {}) {
   const library = getLibrary();
   const kind = library.kind();
 
@@ -54,6 +69,7 @@ export async function syncLibrary({ batchSize = DEFAULT_BATCH_SIZE } = {}) {
       completed: false,
       upserted: 0,
       removed: 0,
+      sweepBlocked: false,
       reason: "unsupported",
     };
   }
@@ -71,6 +87,7 @@ export async function syncLibrary({ batchSize = DEFAULT_BATCH_SIZE } = {}) {
         completed: false,
         upserted: 0,
         removed: 0,
+        sweepBlocked: false,
         reason: "locked",
       };
     }
@@ -78,6 +95,7 @@ export async function syncLibrary({ batchSize = DEFAULT_BATCH_SIZE } = {}) {
     let upserted = 0;
     let removed = 0;
     let completed = false;
+    let sweepBlocked = false;
 
     try {
       // NOW(), not a JS Date. This value is the sweep's boundary, so it has to
@@ -100,14 +118,39 @@ export async function syncLibrary({ batchSize = DEFAULT_BATCH_SIZE } = {}) {
       // Only now. Everything below this line depends on the enumeration having
       // been complete.
       completed = true;
-      removed = await sweep(query, kind);
 
-      await query(
-        `UPDATE ggr_library_sync_state
-            SET last_completed_at = NOW(), entry_count = $2, last_error = NULL
-          WHERE library_kind = $1`,
-        [kind, upserted],
-      );
+      const swept = await sweep(query, kind, maxSweepRatio);
+      removed = swept.removed;
+      sweepBlocked = swept.blocked;
+
+      if (sweepBlocked) {
+        const message =
+          `sweep refused: ${swept.stale} of ${swept.live} live entries ` +
+          `would have been removed, above LIBRARY_SYNC_MAX_SWEEP_RATIO=${maxSweepRatio}`;
+
+        console.warn(`⚠️ Library sync for ${kind}: ${message}`);
+
+        // last_completed_at is still written. The enumeration did complete --
+        // this pass learned the whole backend and upserted it -- and the index
+        // is exactly as readable as it was a moment ago. Withholding the flag
+        // would send every read back to its backend fallback, or to
+        // indexBuilding for a backend that has none, which is a strictly worse
+        // outcome than one stale removed_at. last_error carries the refusal so
+        // it is visible without reading logs.
+        await query(
+          `UPDATE ggr_library_sync_state
+              SET last_completed_at = NOW(), entry_count = $2, last_error = $3
+            WHERE library_kind = $1`,
+          [kind, upserted, message],
+        );
+      } else {
+        await query(
+          `UPDATE ggr_library_sync_state
+              SET last_completed_at = NOW(), entry_count = $2, last_error = NULL
+            WHERE library_kind = $1`,
+          [kind, upserted],
+        );
+      }
     } catch (error) {
       console.error(`Library sync failed for ${kind}:`, error.message);
       await query(
@@ -120,7 +163,14 @@ export async function syncLibrary({ batchSize = DEFAULT_BATCH_SIZE } = {}) {
       );
     }
 
-    return { ran: true, completed, upserted, removed, reason: null };
+    return {
+      ran: true,
+      completed,
+      upserted,
+      removed,
+      sweepBlocked,
+      reason: null,
+    };
   });
 }
 
@@ -162,9 +212,9 @@ function dedupeByLibraryId(entries) {
  * added_at goes in as the Date normalizeEntry produced, with no conversion.
  * The column is TIMESTAMPTZ, so node-postgres sends the instant with its
  * offset and Postgres keeps the instant -- correct whatever zone either side
- * is in. It was briefly a UTC ISO string instead, to keep the right digits out
- * of the reach of a `timestamp without time zone` column; that fixed the write
- * and left the read wrong by the app container's offset, because the driver
+ * is in. It was briefly an ISO string instead, to keep UTC digits out of the
+ * reach of a `timestamp without time zone` column; that fixed the write and
+ * left the read wrong by the app container's offset, because the driver
  * reapplies the local zone when it builds a Date from naive digits.
  *
  * @param {Function} query - Bound to the pass's single client
@@ -216,26 +266,65 @@ async function upsertBatch(query, kind, rawEntries) {
 }
 
 /**
- * Mark entries the completed pass did not see.
+ * Mark entries the completed pass did not see, unless there are implausibly
+ * many of them.
  *
  * Only ever called after a full enumeration. Called after a partial one it
  * would delete the part that was not reached.
  *
+ * Completing is not by itself enough. rommRequest throws on a breaker-open,
+ * non-2xx or timed-out page, so a failed page cannot arrive as an empty one --
+ * but a *legitimate* `200 {items: []}` can, and does: RomM's own database
+ * reset, the ROM volume unmounted before a rescan, LIBRARY_URL repointed at a
+ * fresh instance. The pass completes honestly, sees nothing, and every row in
+ * the index is older than the boundary. Soft-delete means the next good pass
+ * heals it, but until then every read filters `removed_at IS NULL` and the
+ * whole library reports absent.
+ *
+ * So the sweep first asks what proportion of the live index it is about to
+ * take, in the same pass and in SQL, and refuses above maxSweepRatio. Both
+ * counts come from one scan, and both are taken after the upserts -- so a
+ * first-ever sync has just written every row it saw, stale is 0, and the guard
+ * cannot trip on it. An index with nothing live yet is likewise never a trip:
+ * a share of zero is not a number, and there is nothing to protect.
+ *
  * The boundary is read back out of the table *in SQL*. It cannot be passed as
  * a parameter: synced_at is written by NOW() on the server, and a JS Date sent
- * into that comparison arrives on the app container's clock rather than the
+ * into that comparison arrives on the app container's clock instead of the
  * database's. West of the database that makes the sweep a no-op for the length
  * of the offset. East of it -- an app on Europe/Berlin against a default-UTC
- * Postgres, an entirely ordinary self-hosted pairing -- every row the pass
- * just inserted satisfies `synced_at < startedAt`, so the first completed pass
- * marks the whole library removed. Round-tripping the value through JS to
- * "fix" it reintroduces the identical serialisation.
+ * Postgres, an entirely ordinary self-hosted pairing -- every row the pass just
+ * inserted satisfies `synced_at < startedAt`, so the first completed pass marks
+ * the whole library removed. Round-tripping the value through JS to "fix" it
+ * reintroduces the identical serialisation.
  *
  * @param {Function} query - Bound to the pass's single client
  * @param {string} kind - Library kind
- * @returns {Promise<number>} - Rows marked removed
+ * @param {number} maxSweepRatio - Largest share of `live` that may be removed
+ * @returns {Promise<{removed: number, blocked: boolean, live: number,
+ *   stale: number}>}
  */
-async function sweep(query, kind) {
+async function sweep(query, kind, maxSweepRatio) {
+  const counts = await query(
+    `SELECT count(*) AS live,
+            count(*) FILTER (WHERE entry.synced_at < state.last_started_at)
+              AS stale
+       FROM ggr_library_entries entry
+       CROSS JOIN (SELECT last_started_at
+                     FROM ggr_library_sync_state
+                    WHERE library_kind = $1) state
+      WHERE entry.library_kind = $1
+        AND entry.removed_at IS NULL`,
+    [kind],
+  );
+
+  const live = Number(counts.rows[0]?.live ?? 0);
+  const stale = Number(counts.rows[0]?.stale ?? 0);
+
+  if (live > 0 && stale / live > maxSweepRatio) {
+    return { removed: 0, blocked: true, live, stale };
+  }
+
   const result = await query(
     `UPDATE ggr_library_entries
         SET removed_at = NOW()
@@ -246,5 +335,6 @@ async function sweep(query, kind) {
                           WHERE library_kind = $1)`,
     [kind],
   );
-  return result.rowCount ?? 0;
+
+  return { removed: result.rowCount ?? 0, blocked: false, live, stale };
 }

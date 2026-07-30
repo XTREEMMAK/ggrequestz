@@ -67,7 +67,10 @@ function startLibrarySync() {
 
   const cycle = async () => {
     try {
-      const result = await syncLibrary({ batchSize: config.syncBatchSize });
+      const result = await syncLibrary({
+        batchSize: config.syncBatchSize,
+        maxSweepRatio: config.syncMaxSweepRatio,
+      });
       if (result.completed) {
         lastSkipReason = null;
         console.log(
