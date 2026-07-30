@@ -7,6 +7,7 @@ import { json, error } from "@sveltejs/kit";
 import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { getUserIdFromAuth } from "$lib/getUserId.js";
 import { query } from "$lib/database.js";
+import { applyRequestStatusChange } from "$lib/requestStatus.server.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -59,13 +60,23 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    // Update the request status to 'cancelled'
-    const updateResult = await query(
-      "UPDATE ggr_game_requests SET status = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3 RETURNING id, status, updated_at",
-      ["cancelled", request_id, localUserId],
-    );
+    // Routed through the status owner rather than writing `cancelled` here.
+    // This route was the fourth writer of the column and the only one that did
+    // no side effects, so a user withdrawing their own request produced no
+    // Gotify cancellation notification and invalidated no cache -- the request
+    // went on showing as open until something else happened to it.
+    //
+    // Ownership is already established by the SELECT above; the owner writes by
+    // id alone. No conflict branch is needed: `cancelled` leaves the open set
+    // rather than entering it, so it cannot violate the duplicate-guard
+    // indexes, which cover only `pending` and `approved`.
+    const { row: updatedRequest } = await applyRequestStatusChange({
+      id: request_id,
+      to: "cancelled",
+      actor: user.name || user.email || gameRequest.user_name,
+    });
 
-    if (updateResult.rows.length === 0) {
+    if (!updatedRequest) {
       return json(
         {
           success: false,
@@ -74,8 +85,6 @@ export async function POST({ request, cookies }) {
         { status: 500 },
       );
     }
-
-    const updatedRequest = updateResult.rows[0];
 
     return json({
       success: true,
