@@ -65,11 +65,15 @@
 			};
 			window.addEventListener('scroll', handleScroll, { passive: true });
 
-			// Fetch app version
+			// Fetch app version, release history and update status. Deliberately
+			// client-side after mount rather than in the layout's load function:
+			// that runs on every route including the unauthenticated /login, and
+			// anything awaited there blocks the first byte of every page.
 			fetch('/api/version')
 				.then(response => response.json())
 				.then(data => {
 					appVersion = data.version;
+					versionHistory = data.history ?? [];
 				})
 				.catch(() => {
 					// Silently fail - version display is not critical
@@ -94,6 +98,7 @@
 	});
 	let windowWidth = $state(0);
 	let appVersion = $state(null);
+	let versionHistory = $state([]);
 
 	// Reset sidebar collapse when switching to mobile view
 	$effect(() => {
@@ -709,6 +714,41 @@
 					<p class="text-gray-400 mb-1">Version {appVersion}</p>
 					<p class="text-sm text-gray-500">A modern game discovery and request management platform</p>
 				</div>
+
+				<!-- Release history, parsed from CHANGELOG.md at build time. Absent
+				     rather than empty when the parse finds nothing, so a malformed
+				     file costs a section instead of rendering a bare heading. -->
+				{#if versionHistory.length > 0}
+					<div class="mb-6">
+						<h3 class="text-sm font-semibold text-gray-300 mb-2">Release History</h3>
+						<ul class="border border-gray-700 rounded-lg divide-y divide-gray-700 overflow-hidden">
+							{#each versionHistory as release}
+								<li>
+									<a
+										href={release.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="flex items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-gray-700/60 transition-colors group"
+									>
+										<span class="font-medium {release.version === appVersion ? 'text-white' : 'text-gray-300'}">
+											v{release.version}
+											{#if release.version === appVersion}
+												<span class="ml-1 text-xs text-gray-500">(current)</span>
+											{/if}
+										</span>
+										<span class="flex items-center gap-2 text-xs text-gray-500">
+											{release.date}
+											<Icon
+												icon="heroicons:arrow-top-right-on-square"
+												class="w-3.5 h-3.5 opacity-40 group-hover:opacity-100"
+											/>
+										</span>
+									</a>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 
 				<!-- Links Section -->
 				<div class="space-y-3">

@@ -63,3 +63,10 @@ docs
 .github
 Makefile
 *.md
+
+# Exception: CHANGELOG.md is needed at BUILD time. `src/lib/changelog.server.js`
+# imports it with Vite's `?raw`, which inlines the release history into the bundle
+# so the About popup does not have to read a file the production image never
+# copies. Without this line the build fails outright — which is how this was
+# found. Do not remove it without removing that import.
+!CHANGELOG.md
