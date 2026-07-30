@@ -12,6 +12,7 @@ import {
   isRommConfigured,
   getRommAvailabilitySnapshot,
 } from "$lib/romm.server.js";
+import { resolveLibraryConfig } from "$lib/library/config.js";
 import { query, customNavigation } from "$lib/database.js";
 import {
   needsInitialSetup,
@@ -229,9 +230,12 @@ export async function load({ request, cookies }) {
       if (rommAvailable) {
         // Public base — this becomes an href in the nav, so it must be a URL
         // the browser can resolve, not an internal service address.
-        const { ROMM_SERVER_URL_PUBLIC, ROMM_SERVER_URL } = process.env;
+        // resolveLibraryConfig() already prefers LIBRARY_PUBLIC_URL, falls back
+        // to ROMM_SERVER_URL_PUBLIC, then to the internal URL; reading
+        // process.env here meant a LIBRARY_*-configured install got the
+        // localhost default.
         rommServerUrl =
-          ROMM_SERVER_URL_PUBLIC || ROMM_SERVER_URL || "http://localhost:8080";
+          resolveLibraryConfig().publicUrl || "http://localhost:8080";
       }
     } catch (rommError) {
       console.warn("Failed to read ROMM availability:", rommError);
