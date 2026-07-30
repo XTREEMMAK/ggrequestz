@@ -10,13 +10,26 @@
 
 import { query } from "$lib/database.js";
 import { getLibrary } from "$lib/library/index.js";
-import { CAPABILITIES } from "./types.js";
+import { CAPABILITIES, LIST_ORDERS } from "./types.js";
 
 const COLUMNS = `library_id, igdb_id, name, platform_name, size_bytes,
                  cover_url, path, added_at, first_seen_at`;
 
-/** Recency, preferring the backend's own timestamp over when we first saw it. */
-const RECENCY = "COALESCE(added_at, first_seen_at)";
+/**
+ * Recency, preferring the backend's own timestamp over when we first saw it,
+ * with library_id as the tiebreaker.
+ *
+ * The tiebreaker is not cosmetic. first_seen_at defaults to NOW(), which is the
+ * *transaction* timestamp, so every row of one `unnest` batch shares a single
+ * value to the microsecond. For a backend that reports no added_at -- Retrom --
+ * the whole library then has roughly one distinct sort key per batch, and
+ * LIMIT/OFFSET over a non-deterministic order repeats and skips entries between
+ * one page load and the next.
+ *
+ * ggr_library_entries_recent_idx is declared on the same two columns in the
+ * same directions, so the sort is still served by the index.
+ */
+const RECENCY_ORDER = "COALESCE(added_at, first_seen_at) DESC, library_id DESC";
 
 /** An index row, in the seam's vocabulary. */
 function fromRow(row) {
@@ -60,7 +73,7 @@ export async function recentEntries({ limit = 24, offset = 0 } = {}) {
     const result = await query(
       `SELECT ${COLUMNS} FROM ggr_library_entries
         WHERE library_kind = $1 AND removed_at IS NULL
-        ORDER BY ${RECENCY} DESC
+        ORDER BY ${RECENCY_ORDER}
         LIMIT $2 OFFSET $3`,
       [kind, limit, offset],
     );
@@ -94,7 +107,7 @@ export async function searchEntries({ search, limit = 24, offset = 0 }) {
     const result = await query(
       `SELECT ${COLUMNS} FROM ggr_library_entries
         WHERE library_kind = $1 AND removed_at IS NULL AND name ILIKE $2
-        ORDER BY ${RECENCY} DESC
+        ORDER BY ${RECENCY_ORDER}
         LIMIT $3 OFFSET $4`,
       [kind, `%${search}%`, limit, offset],
     );
@@ -110,7 +123,16 @@ export async function searchEntries({ search, limit = 24, offset = 0 }) {
   return {
     source: "backend",
     indexBuilding: false,
-    entries: await library.listEntries({ limit, offset, search }),
+    entries: await library.listEntries({
+      limit,
+      offset,
+      search,
+      // Asked for, not left to the default. Omitting `order` means RECENT,
+      // which makes RomM sort a *search* by created_at desc and throws the
+      // backend's own ranking away -- the exact inference LIST_ORDERS exists
+      // to replace.
+      order: LIST_ORDERS.RELEVANCE,
+    }),
   };
 }
 
@@ -120,6 +142,9 @@ export async function searchEntries({ search, limit = 24, offset = 0 }) {
  * One query for the whole set. The code this replaces fetched the 2000 most
  * recently added ROMs and matched against that window, which on a 72k
  * library is wrong for about 97 percent of it.
+ *
+ * There is deliberately no backend fallback here, so a caller must keep using
+ * its existing cross-reference path for as long as `indexBuilding` is true.
  *
  * @param {Array<string|number>} igdbIds
  * @returns {Promise<{source: string, indexBuilding: boolean, entries: Array}>}

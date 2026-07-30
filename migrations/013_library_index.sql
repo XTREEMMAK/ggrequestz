@@ -25,19 +25,28 @@ CREATE TABLE IF NOT EXISTS ggr_library_entries (
     CONSTRAINT ggr_library_entries_kind_id_uniq UNIQUE (library_kind, library_id)
 );
 
--- Every index below is partial on removed_at IS NULL, so a read query must
--- carry that predicate or the planner will not use it.
+-- Two indexes, one per read that has one. Both are partial on
+-- removed_at IS NULL, so a read query must carry that predicate or the planner
+-- will not use it.
+--
+-- There is deliberately no index for the name search. It is
+-- `name ILIKE '%term%'`, and a leading wildcard cannot use a btree at any
+-- collation -- an index on lower(name) would be write amplification on every
+-- upsert of every pass in exchange for nothing. Making that search indexable
+-- means pg_trgm (a GIN index on `name gin_trgm_ops`), which is a separate
+-- decision with an extension behind it, not a column list.
 
 CREATE INDEX IF NOT EXISTS ggr_library_entries_igdb_idx
     ON ggr_library_entries (igdb_id)
  WHERE removed_at IS NULL AND igdb_id IS NOT NULL;
 
+-- library_id is part of the key, not decoration. first_seen_at defaults to
+-- NOW(), the transaction timestamp, so a whole batch shares one value; without
+-- a tiebreaker the recency sort is non-deterministic and LIMIT/OFFSET paging
+-- repeats and skips rows. router.js orders by exactly these two columns in
+-- these directions.
 CREATE INDEX IF NOT EXISTS ggr_library_entries_recent_idx
-    ON ggr_library_entries (COALESCE(added_at, first_seen_at) DESC)
- WHERE removed_at IS NULL;
-
-CREATE INDEX IF NOT EXISTS ggr_library_entries_name_idx
-    ON ggr_library_entries (lower(name))
+    ON ggr_library_entries (COALESCE(added_at, first_seen_at) DESC, library_id DESC)
  WHERE removed_at IS NULL;
 
 -- Whether a sync has ever finished. An empty library and an unsynced one

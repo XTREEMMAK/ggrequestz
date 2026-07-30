@@ -8,6 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { LIST_ORDERS } from "$lib/library/types.js";
 
 const query = vi.fn(async () => ({ rows: [] }));
 const listEntries = vi.fn(async () => []);
@@ -101,6 +102,51 @@ describe("read routing", () => {
 
     expect(result.indexBuilding).toBe(true);
     expect(listEntries).not.toHaveBeenCalled();
+  });
+
+  it("asks the backend for relevance ordering when a search falls back", async () => {
+    const { searchEntries } = await router();
+
+    const result = await searchEntries({
+      search: "chrono",
+      limit: 5,
+      offset: 0,
+    });
+
+    // Omitting `order` means RECENT, which makes RomM put
+    // order_by=created_at&order_dir=desc on a *search* and discard the
+    // backend's own ranking. LIST_ORDERS exists so ordering is asked for
+    // rather than inferred from the presence of a search term.
+    expect(result.source).toBe("backend");
+    expect(listEntries).toHaveBeenCalledWith(
+      expect.objectContaining({
+        search: "chrono",
+        order: LIST_ORDERS.RELEVANCE,
+      }),
+    );
+  });
+
+  it("breaks the recency tie on library_id, or paging repeats rows", async () => {
+    synced = true;
+    const { recentEntries, searchEntries } = await router();
+
+    await recentEntries({ limit: 5, offset: 0 });
+    await searchEntries({ search: "chrono", limit: 5, offset: 0 });
+
+    const reads = query.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql) => sql.includes("FROM ggr_library_entries"));
+    expect(reads).toHaveLength(2);
+    for (const read of reads) {
+      // first_seen_at defaults to NOW(), which is the transaction timestamp, so
+      // every row of one unnest batch shares a single value. For a backend with
+      // no added_at that leaves roughly one distinct sort key per batch, and
+      // LIMIT/OFFSET over a non-deterministic order repeats and skips entries
+      // between page loads.
+      expect(read).toContain(
+        "COALESCE(added_at, first_seen_at) DESC, library_id DESC",
+      );
+    }
   });
 
   it("orders by the backend timestamp when it has one, ours when it does not", async () => {
