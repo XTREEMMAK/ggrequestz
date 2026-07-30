@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ New Features
+
+- **The About popup lists release history.** The last ten releases with their
+  dates, each linking to its GitHub release page, with the running version marked.
+  Read from `CHANGELOG.md`, which is inlined at build time rather than opened at
+  runtime — the production image does not ship the file, so reading it on demand
+  would have worked in development and shown nothing in Docker. The heading format
+  is untouched, since the release workflow and `create-release.sh` both parse it.
+- **The sidebar shows an indicator when a newer release exists.** A dot beside the
+  version number, and a line in the About popup naming the new version and linking
+  to it. The check asks the GitHub releases API at most once every six hours,
+  doubling to 24 hours while it keeps failing, and never blocks a page render. Set
+  `UPDATE_CHECK_ENABLED=false` to turn it off entirely — air-gapped installs, or
+  anywhere the app should not reach out; opted out, it makes no outbound request at
+  all. A failed check shows nothing in the UI and logs the reason with its status
+  code for the operator.
+
 ### ⚡ Performance
 
 - **ROMM requests no longer pay for two aggregates the app never reads.** Every
