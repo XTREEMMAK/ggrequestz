@@ -6,6 +6,7 @@
 import { browser } from "$app/environment";
 import { getGameById } from "./gameCache.js";
 import { fetchWithTimeout, isTimeoutOrNetworkError } from "./utils.js";
+import { rommCoverUrl, rommPlatformName } from "./library/romm-fields.js";
 
 // Outbound deadlines. Nothing here may block unbounded — ROMM is typically
 // reached over a public URL, so a slow or unreachable instance previously
@@ -78,22 +79,32 @@ async function loadEnvironmentVariables() {
     return; // Already loaded
   }
 
-  const { env } = await import("$env/dynamic/private");
-  ROMM_SERVER_URL = env.ROMM_SERVER_URL || process.env.ROMM_SERVER_URL;
+  // Resolution lives in one place. Reading ROMM_* directly here is what made
+  // the documented LIBRARY_* names inert: an operator who set only LIBRARY_URL
+  // and LIBRARY_API_TOKEN got isRommConfigured() === false and a library
+  // section that silently vanished. resolveLibraryConfig() still prefers
+  // LIBRARY_* and still falls back to ROMM_*, so a ROMM_*-only install
+  // resolves to exactly the values this function used to compute.
+  //
+  // Imported dynamically, like the env module it replaces: config.js reaches
+  // for $env/dynamic/private at module scope, which does not exist outside a
+  // SvelteKit build.
+  const { resolveLibraryConfig } = await import("./library/config.js");
+  const config = resolveLibraryConfig();
+
+  ROMM_SERVER_URL = config.url;
   // Browser-facing base for "Play in ROMM" links and cover images. On
   // Kubernetes or any split-network setup, ROMM_SERVER_URL is an internal
-  // service address the browser cannot resolve. Falls back to ROMM_SERVER_URL,
-  // so single-network deployments need no new configuration. Issue #2.
-  ROMM_SERVER_URL_PUBLIC =
-    env.ROMM_SERVER_URL_PUBLIC ||
-    process.env.ROMM_SERVER_URL_PUBLIC ||
-    ROMM_SERVER_URL;
-  ROMM_USERNAME = env.ROMM_USERNAME || process.env.ROMM_USERNAME;
-  ROMM_PASSWORD = env.ROMM_PASSWORD || process.env.ROMM_PASSWORD;
+  // service address the browser cannot resolve. resolveLibraryConfig() falls
+  // back to the internal URL, so single-network deployments need no new
+  // configuration. Issue #2.
+  ROMM_SERVER_URL_PUBLIC = config.publicUrl;
+  ROMM_USERNAME = config.username;
+  ROMM_PASSWORD = config.password;
   // RomM 5.0+ Client API Token ("rmm_"-prefixed). Preferred over the password
   // grant: it carries an explicit scope set, does not expire every 30 minutes,
   // and means the ROMM account password never has to be stored here.
-  ROMM_API_TOKEN = env.ROMM_API_TOKEN || process.env.ROMM_API_TOKEN;
+  ROMM_API_TOKEN = config.apiToken;
 }
 
 // Session token storage for authenticated requests.
@@ -348,12 +359,17 @@ function warnIfMissingReadScope(token) {
  * Every caller except the availability probe goes through here. The probe uses
  * `rommAttempt` directly, since it is the thing that closes the breaker again.
  *
+ * Exported, where it used to be private, because the library seam's sync needs
+ * raw paging: getRecentlyAddedROMs and searchROMs return app-shaped objects,
+ * which costs an IGDB round-trip per ROM, and a full-library walk must not pay
+ * that.
+ *
  * @param {string} endpoint - API endpoint (without /api prefix)
  * @param {Object} options - Fetch options
  * @param {string} cookies - Optional cookies to forward (for same-domain auth)
  * @returns {Promise<Object>} - API response
  */
-async function rommRequest(endpoint, options = {}, cookies = null) {
+export async function rommRequest(endpoint, options = {}, cookies = null) {
   if (isBreakerOpen()) {
     const retryAt = availabilityState.checkedAt + availabilityTtl();
     const error = new Error(
@@ -922,10 +938,10 @@ async function batchFormatROMData(roms) {
 
       // Public base: this URL is rendered as an <img src> in the browser.
       // ROMM covers are not routed through /api/images/proxy — that only
-      // rewrites igdb.com URLs — so the browser fetches this directly.
-      let cover_url = rom.url_cover
-        ? `${ROMM_SERVER_URL_PUBLIC}${rom.url_cover}`
-        : null;
+      // rewrites igdb.com URLs — so the browser fetches this directly. Shared
+      // with the library seam, which was passing the relative path straight
+      // through.
+      let cover_url = rommCoverUrl(ROMM_SERVER_URL_PUBLIC, rom.url_cover);
 
       // Try to get IGDB cover if IGDB ID is available
       if (rom.igdb_id) {
@@ -953,13 +969,14 @@ async function batchFormatROMData(roms) {
       // back empty. Fallbacks to the old names are kept so an older RomM (or a
       // fork) still works.
       const meta = rom.metadatum || {};
-      const platformName =
-        rom.platform_custom_name ||
-        rom.platform_display_name ||
-        rom.platform_name ||
-        rom.platform?.name ||
-        null;
+      // One chain, in library/romm-fields.js, so the seam and this formatter
+      // cannot disagree about where RomM keeps a platform name again.
+      const platformName = rommPlatformName(rom);
       const rating = meta.average_rating ?? rom.rating ?? null;
+
+      // Public base: rendered as an href in the browser, so it must be a URL
+      // the browser can resolve rather than an internal service address.
+      const libraryUrl = `${ROMM_SERVER_URL_PUBLIC}/rom/${rom.id}`;
 
       return {
         id: rom.id,
@@ -973,8 +990,20 @@ async function batchFormatROMData(roms) {
         release_date: meta.first_release_date ?? rom.first_release_date ?? null,
         popularity_score: rating || 0,
         status: "available", // All ROMM games are available to play
+        // Neutral names, matching crossReferenceWithROMM. This is the shape
+        // getRecentlyAddedROMs, searchROMs and getROMById return -- the
+        // homepage library shelf and every RomM-native card -- so without
+        // these the claim that new code should read the neutral names was
+        // false for half the app.
+        //
+        // Stringified, like LibraryEntry.id and the TEXT column the local
+        // index will use, so the neutral field does not change type when
+        // cross-referencing becomes an index join.
+        in_library: true,
+        library_id: String(rom.id),
+        library_url: libraryUrl,
         romm_id: rom.id,
-        romm_url: `${ROMM_SERVER_URL_PUBLIC}/rom/${rom.id}`,
+        romm_url: libraryUrl,
         platform_id: rom.platform_id ?? rom.platform?.id,
         platform_name: platformName,
         platform_slug: rom.platform_slug || null,
@@ -982,7 +1011,11 @@ async function batchFormatROMData(roms) {
         updated_at: rom.updated_at,
         file_name: rom.fs_name || rom.file_name,
         file_size: rom.fs_size_bytes ?? rom.file_size,
-        // Flag to identify this as a ROMM game
+        // Flag to identify this as a library-native game. is_romm_game is read
+        // by seven component branches, so it stays as the deprecated alias --
+        // without is_library_game beside it a component migration could not
+        // even begin.
+        is_library_game: true,
         is_romm_game: true,
       };
     });
@@ -1061,17 +1094,32 @@ export async function crossReferenceWithROMM(igdbGames, cookies = null) {
         rommLookup.get(game.title?.toLowerCase()?.trim());
 
       if (rommGame) {
+        const libraryUrl = `${ROMM_SERVER_URL_PUBLIC}/rom/${rommGame.id}`;
         return {
           ...game,
+          in_library: true,
+          // Deliberately a string where romm_id stays a number. library_id is
+          // the *stable* name: LibraryEntry.id is stringified and the local
+          // index's column is TEXT, so leaving this as RomM's numeric id would
+          // flip its type the moment cross-referencing becomes an index join --
+          // a client-visible break in the field whose whole purpose is not to
+          // break. romm_id keeps its historical numeric type instead.
+          library_id: String(rommGame.id),
+          library_url: libraryUrl,
+          // Deprecated aliases. Svelte components read these, so they stay
+          // until a major release drops them.
           is_in_romm: true,
           romm_id: rommGame.id,
-          romm_url: `${ROMM_SERVER_URL_PUBLIC}/rom/${rommGame.id}`,
-          platform_name: rommGame.platform?.name,
+          romm_url: libraryUrl,
+          // Was rommGame.platform?.name, which RomM never returns, so this was
+          // always undefined. Same helper as the formatter above.
+          platform_name: rommPlatformName(rommGame),
         };
       }
 
       return {
         ...game,
+        in_library: false,
         is_in_romm: false,
       };
     });
