@@ -121,3 +121,73 @@ CREATE UNIQUE INDEX IF NOT EXISTS t_b_uniq ON t (lower(b)) WHERE status IN ('ope
     expect(splitSQLStatements(sql)).toHaveLength(4);
   });
 });
+
+/**
+ * The splitter also carried a "am I inside a function body" flag, separate from
+ * quote tracking. It armed on any `CREATE` whose remainder of the *whole file*
+ * contained the word "function", and disarmed only at a following `LANGUAGE`.
+ *
+ * That is why `002_complete_schema_updates.sql` split into 13 statements rather
+ * than 62: nothing after its `CREATE TRIGGER ... EXECUTE FUNCTION` says
+ * `LANGUAGE`, so the flag stayed armed to end of file and every remaining
+ * semicolon was ignored. Comment-skipping alone moved it to 14, which is why
+ * these cases are worth pinning separately — they were not fixed by that.
+ */
+describe("splitSQLStatements and function bodies", () => {
+  it("terminates CREATE TRIGGER ... EXECUTE FUNCTION at its own semicolon", () => {
+    // Postgres 11+ syntax. No LANGUAGE follows, so the old flag never cleared
+    // and this swallowed the remainder of the migration.
+    const sql = `CREATE TRIGGER bump_t BEFORE UPDATE ON t
+  FOR EACH ROW EXECUTE FUNCTION bump();
+
+INSERT INTO t (a) VALUES (1);
+
+INSERT INTO t (a) VALUES (2);
+`;
+
+    const statements = splitSQLStatements(sql);
+
+    expect(statements).toHaveLength(3);
+    expect(statements[0]).toContain("CREATE TRIGGER");
+    expect(statements[2]).toContain("VALUES (2)");
+  });
+
+  it("does not let the word 'function' in a comment merge later statements", () => {
+    // "-- Function to get ESRB rating level" appears in 002 and armed the flag.
+    const sql = `-- Function to get the rating level
+CREATE TABLE a (id int);
+CREATE TABLE b (id int);
+`;
+
+    expect(splitSQLStatements(sql)).toHaveLength(2);
+  });
+
+  it("does not merge a table into a function defined later in the file", () => {
+    const sql = `CREATE TABLE a (id int);
+
+CREATE OR REPLACE FUNCTION f() RETURNS int AS $$
+BEGIN
+  RETURN 1;
+END;
+$$ LANGUAGE plpgsql;
+`;
+
+    const statements = splitSQLStatements(sql);
+
+    expect(statements).toHaveLength(2);
+    expect(statements[0]).toContain("CREATE TABLE a");
+    expect(statements[1]).toContain("RETURN 1;");
+  });
+
+  it("keeps an old-style single-quoted function body in one statement", () => {
+    // Quote tracking, not a function flag, is what protects this form.
+    const sql = `CREATE FUNCTION f() RETURNS int AS 'SELECT 1;' LANGUAGE sql;
+SELECT 2;
+`;
+
+    const statements = splitSQLStatements(sql);
+
+    expect(statements).toHaveLength(2);
+    expect(statements[0]).toContain("'SELECT 1;'");
+  });
+});

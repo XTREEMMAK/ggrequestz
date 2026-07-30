@@ -7,6 +7,22 @@
  * text. A semicolon inside a string literal, a dollar-quoted function body, or
  * a comment is not a statement separator, and an apostrophe inside a comment is
  * not the start of a string.
+ *
+ * There is deliberately no separate "am I inside a function body" state. There
+ * used to be, and it was the single largest source of mis-splitting: it set a
+ * flag on any `CREATE` whose *remainder of the entire file* contained the word
+ * "function", and cleared it only at a following `LANGUAGE`. So a comment
+ * reading "-- Function to get ESRB rating level" armed it, and
+ * `CREATE TRIGGER ... EXECUTE FUNCTION f();` -- ordinary Postgres 11+ syntax
+ * with no `LANGUAGE` after it -- armed it permanently, swallowing every
+ * remaining statement in the file.
+ *
+ * A function body does not need its own state, because it is always already
+ * quoted: `$$ ... $$` is covered by dollar-quote tracking and the older
+ * `AS 'body'` form by single-quote tracking. Verified by applying every
+ * migration to an empty database both ways and diffing the resulting schema --
+ * identical tables, columns, indexes, functions and triggers, but 135 correctly
+ * separated statements instead of 31 merged blobs.
  */
 
 /**
@@ -22,7 +38,6 @@ export function splitSQLStatements(sql) {
   let inDoubleQuote = false;
   let inDollarQuote = false;
   let dollarTag = "";
-  let inFunction = false;
   let inLineComment = false;
   let inBlockComment = false;
 
@@ -97,25 +112,8 @@ export function splitSQLStatements(sql) {
       if (char === '"' && !inSingleQuote) inDoubleQuote = !inDoubleQuote;
     }
 
-    // Check for function keywords
-    if (!inSingleQuote && !inDoubleQuote && !inDollarQuote) {
-      const remaining = sql.substring(i).toLowerCase();
-      if (remaining.startsWith("create") && remaining.includes("function")) {
-        inFunction = true;
-      }
-      if (inFunction && remaining.startsWith("language")) {
-        inFunction = false;
-      }
-    }
-
     // Statement separator
-    if (
-      char === ";" &&
-      !inSingleQuote &&
-      !inDoubleQuote &&
-      !inDollarQuote &&
-      !inFunction
-    ) {
+    if (char === ";" && !inSingleQuote && !inDoubleQuote && !inDollarQuote) {
       const statement = current.trim();
       if (statement && statement !== ";") {
         statements.push(statement);
