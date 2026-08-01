@@ -20,6 +20,19 @@ vi.mock("../../src/lib/gameCache.js", () => ({
   getGameById: vi.fn(async () => null),
 }));
 
+// Pinned to the window path, not left to chance. crossReferenceWithROMM reads
+// the library index first and only falls back to the 2000-window when the
+// index reports indexBuilding -- which, without this, is decided by whether
+// the machine running the suite happens to have a reachable Postgres. The
+// index path's own field contract is covered in library-cross-reference.test.js.
+vi.mock("$lib/library/router.js", () => ({
+  entriesByIgdbIds: vi.fn(async () => ({
+    source: "none",
+    indexBuilding: true,
+    entries: [],
+  })),
+}));
+
 const ROM = {
   id: 42,
   name: "Chrono Trigger",
