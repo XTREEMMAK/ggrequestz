@@ -213,7 +213,76 @@ setting here.
 
 ## Retrom
 
-`LIBRARY_KIND=retrom` is recognized but not yet implemented.
+Cross-references requested games against a [Retrom](https://github.com/JMBeresford/retrom)
+library. Select it with `LIBRARY_KIND=retrom`.
+
+```env
+LIBRARY_KIND=retrom
+LIBRARY_URL=http://retrom:5101
+LIBRARY_SYNC_ENABLED=true
+```
+
+| Variable               | Description                                               |
+| ---------------------- | --------------------------------------------------------- |
+| `LIBRARY_KIND`         | `retrom`                                                  |
+| `LIBRARY_URL`          | Retrom's **service** port. Default 5101                   |
+| `LIBRARY_PUBLIC_URL`   | Browser-facing base, for cover art. Defaults to the above |
+| `LIBRARY_SYNC_ENABLED` | `true`. Not optional here — see below                     |
+
+### There is no credential to set
+
+Retrom has no authentication. No RPC takes one and no handler looks for one;
+the project's own README still lists multi-user authentication as a roadmap
+item. `LIBRARY_API_TOKEN`, `LIBRARY_USERNAME` and `LIBRARY_PASSWORD` are
+ignored for this backend, and the connection check reports reachability rather
+than a login.
+
+Put Retrom behind a reverse proxy if it needs protecting. `LIBRARY_URL` may
+carry `user:pass@` for a proxy that wants basic auth.
+
+### Turn the library index on
+
+`LIBRARY_SYNC_ENABLED=true` is effectively required for Retrom, which is not
+true of the other backends. Retrom's `GetGames` request message has exactly
+five fields — platform filter, id filter, and three booleans. It has no limit,
+no offset, no ordering and no search term, so recently-added and search cannot
+be answered by the backend at all.
+
+With the index on, a background pass enumerates the library and those queries
+are answered from Postgres. With it off, the recently-added shelf and library
+search report that the index is still building, permanently, because nothing is
+ever going to build it. Cross-referencing a requested game by IGDB id still
+works either way.
+
+### What a game gets
+
+Retrom names a game from its metadata when it has matched one, and from the ROM
+file name when it has not, which is the common case on a library that has never
+been matched to a provider. Platform names come from platform metadata when
+present and otherwise from the library directory's own name — a directory
+called `nes` becomes the platform "nes".
+
+A game is only marked as owned against a request when Retrom carries a real
+IGDB id for it. An unmatched game is listed in the library and left
+unassociated rather than guessed at, because a wrong id marks an unrelated game
+as owned and that is not visible until someone notices the wrong badge.
+
+### Retrom troubleshooting
+
+**Everything fails with `UNIMPLEMENTED`.** `LIBRARY_URL` is pointing at
+something that is not Retrom's service port. Retrom serves REST, gRPC and
+WebDAV on one port and routes on the content type, so a wrong port often still
+answers HTTP.
+
+**A non-200 status in the error.** Nothing routed the request at all: a proxy in
+front, the web UI's port rather than the service port, or Retrom not running. A
+method Retrom genuinely does not have answers `200` with a gRPC status of
+`UNIMPLEMENTED` instead, and says so.
+
+**`the response frame is marked compressed`.** Something between the app and
+Retrom is compressing gRPC frames. This backend advertises no
+`grpc-accept-encoding` and cannot inflate them; turn response compression off
+for that path.
 
 ---
 

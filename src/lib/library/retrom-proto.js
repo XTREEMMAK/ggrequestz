@@ -27,13 +27,22 @@
  * The meaning lives in retrom.js beside the field number it was read from, so a
  * number and its name are never far apart.
  *
- * **Varints are accumulated in BigInt, never with `<<`.** JavaScript's bitwise
- * operators coerce to *signed 32-bit*, so the obvious `result |= (byte & 0x7f)
- * << shift` silently corrupts every value above 2^31 -- which on this API means
- * `GameFile.byte_size` (int64) for any file over 2GB, and `GameMetadata.igdb_id`
- * (int64). A wrong igdb_id marks an unrelated game as owned, so this is
- * precisely the field that must not be quietly mangled. The accumulator is
- * BigInt and the result is narrowed to a Number only after a safe-range check.
+ * **Integers are carried as BigInt and narrowed only when read.** JavaScript's
+ * bitwise operators coerce to *signed 32-bit*, so the obvious `result |= (byte
+ * & 0x7f) << shift` silently corrupts every value above 2^31 -- which on this
+ * API means `GameFile.byte_size` (int64) for any file over 2GB, and
+ * `GameMetadata.igdb_id` (int64). A wrong igdb_id marks an unrelated game as
+ * owned, so this is precisely the field that must not be quietly mangled.
+ *
+ * Where that narrowing happens is load-bearing, and it is `readInt` rather than
+ * `decodeMessage`. Decoding has to be able to walk past a field it will never
+ * read: a `double` that a later Retrom adds to `Game` is eight bytes whose bit
+ * pattern is nobody's integer, and refusing to represent it while decoding
+ * would throw out the whole enclosing record -- silently, because a nested
+ * record that will not decode is dropped rather than propagated. So
+ * `decodeMessage` only stores, and `readInt` refuses at the point a caller asks
+ * for a value it cannot represent exactly. Out of range is still an error and
+ * never a rounded number.
  *
  * Field numbers used by the backend are cited in retrom.js against the
  * descriptors recovered from the running server's own client bundle
@@ -171,6 +180,10 @@ export function concatBytes(...parts) {
  * Accumulates in BigInt. See the module docstring: `<<` on a Number is a
  * 32-bit signed shift and corrupts anything wider.
  *
+ * Ten bytes is the ceiling, because sixty-four bits need at most ten groups of
+ * seven. An eleventh continuation byte is a malformed message rather than a
+ * very large number, and reading on would let a corrupt buffer run.
+ *
  * @param {Uint8Array} bytes - Buffer to read from
  * @param {number} offset - Where to start
  * @returns {[bigint, number]} - The value and the offset just past it
@@ -200,45 +213,21 @@ function readVarint(bytes, offset) {
 }
 
 /**
- * Narrow a decoded varint to a Number.
- *
- * Values at or above 2^63 are read as negative, because that is how protobuf
- * sign-extends a negative int32/int64 -- and every integer field this backend
- * reads is signed (`Game.id` int32, `GameFile.byte_size` int64,
- * `GameMetadata.igdb_id` int64). A genuine uint64 above 2^63 would be misread,
- * and Retrom's schema has none.
- *
- * Out-of-safe-range throws rather than returning an approximation: a rounded
- * igdb_id is a wrong igdb_id, and a wrong one marks unrelated games as owned.
- *
- * @param {bigint} raw - As read off the wire
- * @returns {number}
- * @throws {ProtoError} When the value cannot be represented exactly
- */
-function varintToNumber(raw) {
-  const signed = raw >= TWO_POW_63 ? raw - TWO_POW_64 : raw;
-
-  if (signed > MAX_SAFE || signed < MIN_SAFE) {
-    throw new ProtoError(
-      `integer ${signed} cannot be represented exactly as a JavaScript number`,
-    );
-  }
-  return Number(signed);
-}
-
-/**
  * Decode one protobuf message into `Map<fieldNumber, values[]>`.
  *
- * Varint and fixed-width fields decode to Number; length-delimited fields stay
- * as Uint8Array and are interpreted by the caller, which is the only layer that
- * knows whether they are a string or a nested message.
+ * Integer fields decode to BigInt and are narrowed later by `readInt`;
+ * length-delimited fields stay as Uint8Array and are interpreted by the caller,
+ * which is the only layer that knows whether they are a string or a nested
+ * message. Nothing here rejects a value for its magnitude: this function's one
+ * job is to reach the end of the buffer, and a field it will never read must
+ * not be able to stop it.
  *
  * Every field is an array because `repeated` is not visible on the wire: a
  * field that appears once and one that appears many times encode identically,
  * and guessing wrong in either direction loses data.
  *
  * @param {Uint8Array} bytes - One serialized message
- * @returns {Map<number, Array<number|Uint8Array>>}
+ * @returns {Map<number, Array<bigint|Uint8Array>>}
  * @throws {ProtoError} When the bytes are not decodable
  */
 export function decodeMessage(bytes) {
@@ -256,7 +245,13 @@ export function decodeMessage(bytes) {
     let value;
     if (wireType === WIRE_VARINT) {
       const [raw, next] = readVarint(bytes, offset);
-      value = varintToNumber(raw);
+      // Two's complement, applied here rather than at read time because it is a
+      // property of the wire type and not of the caller. Every integer field in
+      // Retrom's schema is signed (`Game.id` int32, `GameFile.byte_size` int64,
+      // `GameMetadata.igdb_id` int64) and protobuf writes a negative one
+      // sign-extended to sixty-four bits. A genuine uint64 above 2^63 would be
+      // misread, and Retrom's schema has none.
+      value = raw >= TWO_POW_63 ? raw - TWO_POW_64 : raw;
       offset = next;
     } else if (wireType === WIRE_LEN) {
       const [rawLength, next] = readVarint(bytes, offset);
@@ -274,22 +269,26 @@ export function decodeMessage(bytes) {
       if (offset + 8 > bytes.length) {
         throw new ProtoError(`truncated 64-bit field ${field}`);
       }
+      // Kept as the raw unsigned sixty-four-bit pattern, deliberately
+      // uninterpreted. This backend reads no fixed-width field, and the ones
+      // Retrom's schema already carries elsewhere are `double` -- a bit pattern
+      // that is nobody's integer. Stepping over it is the whole requirement, so
+      // that the fields on either side of it survive.
       let acc = 0n;
-      for (let i = 7; i >= 0; i -= 1)
+      for (let i = 7; i >= 0; i -= 1) {
         acc = (acc << 8n) | BigInt(bytes[offset + i]);
-      value = varintToNumber(acc);
+      }
+      value = acc;
       offset += 8;
     } else if (wireType === WIRE_FIXED32) {
       if (offset + 4 > bytes.length) {
         throw new ProtoError(`truncated 32-bit field ${field}`);
       }
       value =
-        bytes[offset] |
-        (bytes[offset + 1] << 8) |
-        (bytes[offset + 2] << 16) |
-        (bytes[offset + 3] << 24);
-      // Read back as unsigned: the shift above is signed 32-bit.
-      value >>>= 0;
+        BigInt(bytes[offset]) |
+        (BigInt(bytes[offset + 1]) << 8n) |
+        (BigInt(bytes[offset + 2]) << 16n) |
+        (BigInt(bytes[offset + 3]) << 24n);
       offset += 4;
     } else {
       // There is no way to know how long an unknown wire type is, so the walk
@@ -311,9 +310,13 @@ export function decodeMessage(bytes) {
 // -- reading decoded fields -------------------------------------------------
 //
 // Each of these answers "what is field N, if it is there at all", and returns a
-// fallback rather than throwing: a field Retrom did not send is the normal case
-// for every proto3 optional in its schema, and a missing field must never be
-// confused with a wrong one.
+// fallback rather than throwing when the field is absent or the wrong shape: a
+// field Retrom did not send is the normal case for every proto3 optional in its
+// schema, and a missing field must never be confused with a wrong one.
+//
+// The one thing they will not do is answer approximately. readInt throws for a
+// value it cannot represent exactly, because reaching readInt means a caller
+// does care about that field.
 
 /**
  * The last integer value of a field, or a fallback.
@@ -321,17 +324,31 @@ export function decodeMessage(bytes) {
  * Last, not first, because protobuf's own rule for a repeated scalar in a
  * non-repeated field is that the last one wins.
  *
+ * Out of JavaScript's exact integer range throws rather than returning an
+ * approximation: a rounded igdb_id is a wrong igdb_id, and a wrong one marks
+ * unrelated games as owned. Callers that walk a listing catch this per record,
+ * so one impossible value costs that record rather than the pass.
+ *
  * @param {Map<number, Array>} fields - A decoded message
  * @param {number} field - Field number
- * @param {*} [fallback] - Returned when absent or not an integer
+ * @param {*} [fallback] - Returned when absent or not an integer field
  * @returns {number|*}
+ * @throws {ProtoError} When the value cannot be represented exactly
  */
 export function readInt(fields, field, fallback = null) {
   const values = fields.get(field);
   if (!values || values.length === 0) return fallback;
 
   const value = values[values.length - 1];
-  return typeof value === "number" ? value : fallback;
+  if (typeof value !== "bigint") return fallback;
+
+  if (value > MAX_SAFE || value < MIN_SAFE) {
+    throw new ProtoError(
+      `field ${field} is ${value}, which cannot be represented exactly as a ` +
+        "JavaScript number",
+    );
+  }
+  return Number(value);
 }
 
 /**
@@ -357,6 +374,11 @@ export function readString(fields, field, fallback = null) {
  * An occurrence that will not decode is dropped rather than thrown: one
  * malformed row in a listing of a thousand should cost that row, not the sync.
  *
+ * It is not dropped quietly, though. A record that disappears from an
+ * enumeration without a word is worse than one that fails it: the pass still
+ * completes, and a completed pass is exactly what lets the index sweep mark
+ * every entry it did not see as removed.
+ *
  * @param {Map<number, Array>} fields - A decoded message
  * @param {number} field - Field number
  * @returns {Array<Map<number, Array>>}
@@ -367,8 +389,10 @@ export function readMessages(fields, field) {
     if (!(value instanceof Uint8Array)) continue;
     try {
       out.push(decodeMessage(value));
-    } catch {
-      // Deliberately swallowed; see the docstring.
+    } catch (error) {
+      console.warn(
+        `Dropping an undecodable Retrom record in field ${field}: ${error.message}`,
+      );
     }
   }
   return out;

@@ -30,6 +30,13 @@
  *        00 00000008 0a060a0410081804     (the response message)
  *        80 0000000f "grpc-status:0\r\n"  (the trailers)
  *
+ * Bit 0x01 of the same flag byte means the frame body is compressed. This
+ * client advertises no `grpc-accept-encoding`, so a conforming server must not
+ * set it, and 0.8.4 measurably does not -- it answered with a flag byte of 0
+ * and no `grpc-encoding` even when the request asked for gzip. It is still
+ * checked, because the alternative is handing a compressed body to a protobuf
+ * decoder and reporting whatever comes out.
+ *
  * ## HTTP 200 is not success
  *
  * gRPC carries its status in the trailers, so a call that failed on the server
@@ -45,8 +52,11 @@
 /** What tonic sends and accepts. The `+proto` suffix is what its own client uses. */
 export const GRPC_WEB_CONTENT_TYPE = "application/grpc-web+proto";
 
-/** Set on the trailer frame's flag byte. Bit 0 (0x01) would mean compressed. */
+/** Set on the trailer frame's flag byte. */
 const TRAILER_FLAG = 0x80;
+
+/** Set on any frame whose body is compressed. Nothing here can decompress. */
+const COMPRESSED_FLAG = 0x01;
 
 const FRAME_HEADER = 5;
 
@@ -135,11 +145,19 @@ export function parseTrailers(raw) {
  * streaming more would be a schema change, and taking the first is the same
  * thing tonic's own unary client does.
  *
+ * `compressed` reports whether that data frame's flag byte claimed a compressed
+ * body. It is reported rather than acted on here so that a non-zero
+ * `grpc-status` still wins: an error trailer explains the response, and a
+ * compression complaint about a body that was never meant to be read would
+ * bury it.
+ *
  * @param {Uint8Array} body - The whole response body
- * @returns {{message: Uint8Array, trailers: Object<string, string>}}
+ * @returns {{message: Uint8Array, trailers: Object<string, string>,
+ *   compressed: boolean}}
  */
 export function parseResponseBody(body) {
   let message = null;
+  let compressed = false;
   let trailers = {};
   let offset = 0;
 
@@ -159,11 +177,12 @@ export function parseResponseBody(body) {
       trailers = { ...trailers, ...parseTrailers(body.subarray(start, end)) };
     } else if (message === null) {
       message = body.subarray(start, end);
+      compressed = (flags & COMPRESSED_FLAG) !== 0;
     }
     offset = end;
   }
 
-  return { message: message ?? new Uint8Array(0), trailers };
+  return { message: message ?? new Uint8Array(0), trailers, compressed };
 }
 
 /**
@@ -191,6 +210,8 @@ export function createGrpcWebChannel({
      * An empty response message is legitimate and never treated as a failure:
      * a message whose fields are all at proto3 defaults encodes to zero bytes,
      * so `GetGames` on an empty platform genuinely answers with nothing.
+     * Measured on 0.8.4: `GetGames{platform_ids:[<no such platform>]}` returns
+     * `200`, `grpc-status: 0` and a zero-length message.
      *
      * @param {string} method - `<package>.<Service>/<Method>`
      * @param {Uint8Array} request - The serialized request message
@@ -236,13 +257,16 @@ export function createGrpcWebChannel({
       }
 
       if (response.status !== 200) {
-        // Not a gRPC status at all: the request never reached a handler. A 404
-        // here almost always means the server is older than the RPC being
-        // called, so say so rather than leaving an operator to guess.
+        // Not a gRPC status at all: the request never reached a handler. Note
+        // that a method this server does not have is *not* one of these --
+        // measured on 0.8.4, an unknown method and an unknown service both
+        // answer 200 with `grpc-status: 12` (UNIMPLEMENTED), which is handled
+        // below. A non-200 means something in front of the handlers: a proxy,
+        // a wrong port, or a Retrom that is not serving gRPC at all.
         const hint =
           response.status === 404
-            ? " -- the server has no such method; it may be an older Retrom " +
-              "than this backend was written against"
+            ? " -- nothing is routing this path; check that LIBRARY_URL points " +
+              "at Retrom's service port rather than at a proxy or its web UI"
             : "";
         throw new GrpcError(
           method,
@@ -252,7 +276,7 @@ export function createGrpcWebChannel({
       }
 
       const body = new Uint8Array(await response.arrayBuffer());
-      const { message, trailers } = parseResponseBody(body);
+      const { message, trailers, compressed } = parseResponseBody(body);
 
       // A "trailers-only" response carries the status in the HTTP headers and
       // has no trailer frame at all. tonic emits one for some early rejections,
@@ -284,6 +308,20 @@ export function createGrpcWebChannel({
       }
       if (status !== 0) {
         throw new GrpcError(method, status, trailers["grpc-message"] ?? "");
+      }
+
+      // A compressed body is refused rather than decoded. Nothing here can
+      // inflate it, and handing the compressed bytes to the protobuf decoder
+      // would produce either a confusing parse error or -- worse -- a message
+      // that decodes to nothing and reads as an empty library.
+      if (compressed) {
+        throw new GrpcError(
+          method,
+          13,
+          "the response frame is marked compressed and this client sent no " +
+            "grpc-accept-encoding, so it cannot be read; disable response " +
+            "compression between here and Retrom",
+        );
       }
 
       return message;

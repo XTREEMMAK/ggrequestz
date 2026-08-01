@@ -8,7 +8,7 @@
  * of them captured verbatim off the live Retrom 0.8.4 instance.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   ProtoError,
@@ -74,6 +74,10 @@ describe("varint encoding", () => {
     const encoded = varintField(1, Number.MAX_SAFE_INTEGER);
     expect(readInt(decodeMessage(encoded), 1)).toBe(Number.MAX_SAFE_INTEGER);
   });
+
+  it("round-trips a negative value through the two's complement rule", () => {
+    expect(readInt(decodeMessage(varintField(1, -42)), 1)).toBe(-42);
+  });
 });
 
 describe("message decoding", () => {
@@ -91,7 +95,9 @@ describe("message decoding", () => {
     const fields = decodeMessage(
       concatBytes(varintField(1, 7), varintField(1, 9)),
     );
-    expect(fields.get(1)).toEqual([7, 9]);
+    // Stored as BigInt: decoding never narrows, so that a field this codec will
+    // never read cannot be refused for its magnitude. readInt narrows.
+    expect(fields.get(1)).toEqual([7n, 9n]);
     // Protobuf's rule for a repeated scalar in a singular field: last wins.
     expect(readInt(fields, 1)).toBe(9);
   });
@@ -117,6 +123,14 @@ describe("message decoding", () => {
     expect(() => decodeMessage(bytes("08ff"))).toThrow(ProtoError);
   });
 
+  it("refuses a varint longer than the ten bytes 64 bits can need", () => {
+    // Eleven continuation bytes. Without the cap this walks off into whatever
+    // follows, so the ceiling is what stops a corrupt buffer running.
+    expect(() => decodeMessage(bytes(`08${"ff".repeat(10)}01`))).toThrow(
+      /longer than 64 bits/,
+    );
+  });
+
   it("refuses a length that runs past the end of the message", () => {
     // field 3, wire type 2, claims 40 bytes, supplies 2.
     expect(() => decodeMessage(bytes("1a28abcd"))).toThrow(ProtoError);
@@ -136,11 +150,17 @@ describe("message decoding", () => {
 
   it("drops an undecodable nested message instead of throwing", () => {
     // field 1 carries 2 bytes that are not a valid message (field number 0).
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const fields = decodeMessage(bytes("0a0200010a020801"));
     const messages = readMessages(fields, 1);
 
     expect(messages).toHaveLength(1);
     expect(readInt(messages[0], 1)).toBe(1);
+    // Dropped, but never in silence: a record that vanishes from a sync without
+    // a word still lets the pass complete, and a completed pass is what lets
+    // the index sweep mark the missing entry removed.
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("packs a repeated int32 and reads it back", () => {
@@ -156,6 +176,58 @@ describe("message decoding", () => {
   it("encodes a bool as a varint 1 or 0", () => {
     expect(hex(boolField(3, true))).toBe("1801");
     expect(hex(boolField(3, false))).toBe("1800");
+  });
+});
+
+describe("the fixed-width wire types", () => {
+  it("decodes a 32-bit field little-endian and unsigned", () => {
+    // field 1, wire type 5, 0x12345678 little-endian.
+    expect(readInt(decodeMessage(bytes("0d78563412")), 1)).toBe(0x12345678);
+  });
+
+  it("does not sign-extend a 32-bit field with the high bit set", () => {
+    // 0xffffffff is 4294967295, not -1: fixed32 carries no sign of its own,
+    // and the shift that assembles it must not introduce one.
+    expect(readInt(decodeMessage(bytes("0dffffffff")), 1)).toBe(4294967295);
+  });
+
+  it("decodes a 64-bit field little-endian", () => {
+    // field 1, wire type 1, 65536 little-endian.
+    expect(readInt(decodeMessage(bytes("090000010000000000")), 1)).toBe(65536);
+  });
+
+  it("refuses a truncated 64-bit field", () => {
+    expect(() => decodeMessage(bytes("09010203"))).toThrow(/truncated 64-bit/);
+  });
+
+  it("refuses a truncated 32-bit field", () => {
+    expect(() => decodeMessage(bytes("0d0102"))).toThrow(/truncated 32-bit/);
+  });
+
+  it("steps over an unknown double without losing the record around it", () => {
+    // The regression this codec's contract turns on. Retrom's schema already
+    // uses `double` elsewhere (InstallationProgress.bytes_per_second), so a
+    // later release adding one to Game is an ordinary event. Its bit pattern is
+    // not an integer and is far outside JavaScript's exact range; narrowing it
+    // while decoding would throw, and a nested record that throws is dropped in
+    // silence and then swept out of the index.
+    //
+    // field 1 = 1, field 20 wire type 1 = 1234.5 as IEEE754, field 3 = "abc".
+    const message = bytes("0801a10100000000004a93401a03616263");
+    const fields = decodeMessage(message);
+
+    expect(readInt(fields, 1)).toBe(1);
+    expect(readString(fields, 3)).toBe("abc");
+  });
+
+  it("decodes a value too large to represent, and refuses only when read", () => {
+    // The split that makes the case above work: decodeMessage stores, readInt
+    // judges. A caller that asks for this field gets an error rather than a
+    // rounded number, because a rounded igdb_id is a wrong igdb_id.
+    const fields = decodeMessage(varintField(7, 2n ** 60n));
+
+    expect(fields.get(7)).toEqual([2n ** 60n]);
+    expect(() => readInt(fields, 7)).toThrow(ProtoError);
   });
 });
 
@@ -247,10 +319,23 @@ describe("gRPC-Web framing", () => {
       bytes("800000000f"),
       new TextEncoder().encode("grpc-status:0\r\n"),
     );
-    const { message, trailers } = parseResponseBody(body);
+    const { message, trailers, compressed } = parseResponseBody(body);
 
     expect(hex(message)).toBe("0a060a0410081804");
     expect(trailers["grpc-status"]).toBe("0");
+    expect(compressed).toBe(false);
+  });
+
+  it("reports a data frame whose flag byte claims a compressed body", () => {
+    // Bit 0x01. Nothing here can inflate it, so the caller must refuse rather
+    // than hand the bytes to the protobuf decoder and report what comes out.
+    const body = concatBytes(
+      bytes("01000000021f8b"),
+      bytes("800000000f"),
+      new TextEncoder().encode("grpc-status:0\r\n"),
+    );
+
+    expect(parseResponseBody(body).compressed).toBe(true);
   });
 
   it("decodes the captured GetServerInfo message as version 0.8.4", () => {
