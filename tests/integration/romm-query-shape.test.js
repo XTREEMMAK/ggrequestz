@@ -26,6 +26,18 @@ vi.mock("../../src/lib/gameCache.js", () => ({
 
 const ROMM_URL = "http://romm.test";
 
+// LIBRARY_URL wins over ROMM_SERVER_URL in resolveLibraryConfig()'s read()
+// order. docker-compose.yml forwards LIBRARY_URL, so a developer with it
+// exported would otherwise have ROMM_SERVER_URL below silently overridden.
+const LIBRARY_ENV_KEYS = [
+  "LIBRARY_KIND",
+  "LIBRARY_URL",
+  "LIBRARY_PUBLIC_URL",
+  "LIBRARY_API_TOKEN",
+  "LIBRARY_USERNAME",
+  "LIBRARY_PASSWORD",
+];
+
 function response(status, body = {}) {
   return {
     ok: status >= 200 && status < 300,
@@ -58,6 +70,7 @@ async function freshRomm() {
 
 describe("ROMM /roms query shape", () => {
   beforeEach(() => {
+    for (const key of LIBRARY_ENV_KEYS) delete process.env[key];
     process.env.ROMM_SERVER_URL = ROMM_URL;
     process.env.ROMM_API_TOKEN = "rmm_static_token";
     delete process.env.ROMM_USERNAME;

@@ -70,6 +70,15 @@ export async function POST({ request, cookies }) {
     }
 
     // Parse request data
+    //
+    // Deliberately NOT routed through resolveLibraryConfig(). Falling back to
+    // the configured LIBRARY_*/ROMM_* credential for whatever the caller
+    // omits would let a request that only supplies `server_url` make this
+    // endpoint authenticate to an attacker-chosen host with the server's own
+    // password -- a secret the admin settings page does not even display (it
+    // shows a different, database-backed value). This endpoint tests exactly
+    // the credential the caller provides, nothing else. Do not reintroduce a
+    // fallback here.
     const { server_url, username, password } = await request.json();
 
     if (!server_url || !username || !password) {
