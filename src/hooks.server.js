@@ -74,7 +74,8 @@ function startLibrarySync() {
       if (result.completed) {
         lastSkipReason = null;
         console.log(
-          `📚 Library sync: ${result.upserted} indexed, ${result.removed} marked removed`,
+          `📚 Library sync: ${result.upserted} indexed, ${result.removed} marked removed` +
+            (result.resumed ? " (resumed pass, so nothing was swept)" : ""),
         );
       } else if (result.reason) {
         if (result.reason !== lastSkipReason) {

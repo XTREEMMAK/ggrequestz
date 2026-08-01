@@ -129,13 +129,39 @@ export function createRommLibrary(config) {
       return toEntries(data?.items, publicUrl);
     },
 
-    syncEntries: async ({ batchSize = 500, onBatch }) => {
-      let offset = 0;
+    // RomM's /roms takes no id-greater-than filter, so this cannot be a keyset
+    // walk. Verified against a live 4.9.2 instance rather than assumed: the
+    // OpenAPI document for GET /api/roms lists no cursor parameter of any
+    // kind, and `id_after`, `after_id`, `id_gt`, `id__gt`, `cursor`, `last_id`
+    // and `min_id` each return HTTP 200 with the identical unfiltered first
+    // page -- exactly as a parameter name invented for the test does, because
+    // FastAPI drops query parameters an endpoint does not declare. There is a
+    // real `updated_after` datetime filter, which is an incremental-refresh
+    // tool and not a way to page.
+    //
+    // So the walk stays on limit/offset and is made resumable instead. The
+    // offset it has reached is reported to the caller after every page, and a
+    // pass that dies partway is handed that offset next time rather than
+    // starting again from zero. On a 72,162-rom library one page failing used
+    // to cost the entire 85-minute enumeration.
+    syncEntries: async ({ batchSize = 500, startOffset = 0, onBatch }) => {
+      // A resume point that is not a usable offset is ignored rather than
+      // passed through: `offset=-1` is a 422 from RomM and `offset=NaN` is a
+      // walk that never starts.
+      let offset =
+        Number.isInteger(startOffset) && startOffset > 0 ? startOffset : 0;
 
       for (;;) {
         const params = new URLSearchParams({
           group_by_meta_id: "false",
           order_by: "id",
+          // Asked for rather than inherited. RomM's default order_dir is
+          // "asc" today, and the walk depends on it: ids ascend, so a rom
+          // added mid-walk lands past the end of the walk instead of shifting
+          // the pages already taken. Descending, every addition would push the
+          // whole library one place along and the walk would re-read a row and
+          // skip another.
+          order_dir: "asc",
           limit: String(batchSize),
           offset: String(offset),
         });
@@ -147,10 +173,15 @@ export function createRommLibrary(config) {
         // forever if it disagreed with what the pages actually return.
         if (items.length === 0) return;
 
-        await onBatch(toEntries(items, publicUrl));
+        // Advanced by what RomM returned, not by what survived toEntries. A
+        // record too malformed to map is still a row RomM counted, so stepping
+        // by the mapped count would request it again forever and would report
+        // a resume offset short by one for every bad record seen.
+        offset += items.length;
+
+        await onBatch(toEntries(items, publicUrl), { nextOffset: offset });
 
         if (items.length < batchSize) return;
-        offset += items.length;
       }
     },
   };

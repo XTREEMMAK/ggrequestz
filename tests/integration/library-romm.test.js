@@ -282,3 +282,106 @@ describe("RomM library backend", () => {
     expect(batches).toHaveLength(1);
   });
 });
+
+/**
+ * The enumeration walk.
+ *
+ * RomM's /roms has no id-greater-than filter -- verified against a live 4.9.2
+ * instance, where `id_after`, `after_id`, `id_gt`, `cursor`, `last_id` and
+ * `min_id` all return HTTP 200 and the identical unfiltered first page, exactly
+ * as a parameter name invented for the test does. So the walk stays on
+ * limit/offset and is made resumable instead, which is what stops one slow page
+ * from costing an 85-minute enumeration.
+ */
+describe("RomM enumeration walk", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("asks for ascending id explicitly rather than inheriting a default", async () => {
+    // order_dir defaults to "asc" today. The walk's correctness depends on
+    // ascending id -- new roms get larger ids and therefore land after the
+    // cursor rather than shifting it -- so it is asked for, not assumed.
+    rommRequest.mockResolvedValue({ items: [], total: 0 });
+
+    await (await backend()).syncEntries({ batchSize: 50, onBatch: () => {} });
+
+    const params = new URL(`http://x${rommRequest.mock.calls[0][0]}`)
+      .searchParams;
+    expect(params.get("order_by")).toBe("id");
+    expect(params.get("order_dir")).toBe("asc");
+  });
+
+  it("reports the offset reached after each page", async () => {
+    rommRequest
+      .mockResolvedValueOnce({
+        items: [
+          { id: 1, name: "a" },
+          { id: 2, name: "b" },
+        ],
+        total: 3,
+      })
+      .mockResolvedValueOnce({ items: [{ id: 3, name: "c" }], total: 3 });
+
+    const progress = [];
+    await (
+      await backend()
+    ).syncEntries({
+      batchSize: 2,
+      onBatch: (_entries, at) => progress.push(at?.nextOffset),
+    });
+
+    expect(progress).toEqual([2, 3]);
+  });
+
+  it("counts the page RomM returned, not the entries that survived mapping", async () => {
+    // toEntries drops a record too malformed to use. Advancing by the mapped
+    // count would re-request the dropped row forever, and the offset reported
+    // for a resume would be short by one for every bad record seen.
+    rommRequest
+      .mockResolvedValueOnce({
+        items: [{ id: 1, name: "good" }, { name: "no id" }],
+        total: 3,
+      })
+      .mockResolvedValueOnce({ items: [], total: 3 });
+
+    const progress = [];
+    const batches = [];
+    await (
+      await backend()
+    ).syncEntries({
+      batchSize: 2,
+      onBatch: (entries, at) => {
+        batches.push(entries.length);
+        progress.push(at?.nextOffset);
+      },
+    });
+
+    expect(batches).toEqual([1]);
+    expect(progress).toEqual([2]);
+  });
+
+  it("starts where it was told to, so an interrupted pass is not re-walked", async () => {
+    rommRequest.mockResolvedValue({ items: [], total: 72162 });
+
+    await (
+      await backend()
+    ).syncEntries({ batchSize: 500, startOffset: 62650, onBatch: () => {} });
+
+    const params = new URL(`http://x${rommRequest.mock.calls[0][0]}`)
+      .searchParams;
+    expect(params.get("offset")).toBe("62650");
+  });
+
+  it("ignores a resume point that is not a usable offset", async () => {
+    rommRequest.mockResolvedValue({ items: [], total: 0 });
+
+    await (
+      await backend()
+    ).syncEntries({ batchSize: 500, startOffset: -1, onBatch: () => {} });
+
+    const params = new URL(`http://x${rommRequest.mock.calls[0][0]}`)
+      .searchParams;
+    expect(params.get("offset")).toBe("0");
+  });
+});

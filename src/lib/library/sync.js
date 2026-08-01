@@ -52,7 +52,8 @@ const DEFAULT_MAX_SWEEP_RATIO = 0.5;
  * @param {number} [options.maxSweepRatio] - Largest share of the live index one
  *   pass may remove before the sweep refuses
  * @returns {Promise<{ran: boolean, completed: boolean, upserted: number,
- *   removed: number, sweepBlocked: boolean, reason: string|null}>}
+ *   removed: number, sweepBlocked: boolean, resumed: boolean,
+ *   reason: string|null}>}
  */
 export async function syncLibrary({
   batchSize = DEFAULT_BATCH_SIZE,
@@ -70,6 +71,7 @@ export async function syncLibrary({
       upserted: 0,
       removed: 0,
       sweepBlocked: false,
+      resumed: false,
       reason: "unsupported",
     };
   }
@@ -88,6 +90,7 @@ export async function syncLibrary({
         upserted: 0,
         removed: 0,
         sweepBlocked: false,
+        resumed: false,
         reason: "locked",
       };
     }
@@ -96,22 +99,79 @@ export async function syncLibrary({
     let removed = 0;
     let completed = false;
     let sweepBlocked = false;
+    let resumed = false;
 
     try {
-      // NOW(), not a JS Date. This value is the sweep's boundary, so it has to
-      // be on the same clock as the synced_at values it is compared with.
-      await query(
-        `INSERT INTO ggr_library_sync_state (library_kind, last_started_at, last_error)
-              VALUES ($1, NOW(), NULL)
-         ON CONFLICT (library_kind)
-         DO UPDATE SET last_started_at = NOW(), last_error = NULL`,
+      // Where an interrupted pass stopped, if one did. RomM's /roms has no
+      // id-greater-than filter (see romm.js), so the walk is offset-based and
+      // a failed pass used to restart at 0 -- on a 72,162-rom library that is
+      // the whole 85-minute enumeration thrown away for one bad page.
+      //
+      // What this fixes and what it does not: a transient failure -- a timeout
+      // blip, a tripped breaker, a container restart mid-pass -- now costs one
+      // page instead of the walk. A page that is reliably too slow still
+      // blocks the pass, because the resumed run starts on exactly that page.
+      // The lever for that is a smaller LIBRARY_SYNC_BATCH, which resuming is
+      // what makes worth pulling: the pages already taken are no longer
+      // discarded on the way to finding a size that fits.
+      const state = await query(
+        `SELECT resume_offset, resume_upserted
+           FROM ggr_library_sync_state
+          WHERE library_kind = $1`,
         [kind],
       );
 
+      const resumeOffset = Number(state.rows[0]?.resume_offset ?? 0) || 0;
+      resumed = resumeOffset > 0;
+
+      if (resumed) {
+        // last_started_at is deliberately NOT moved. It is the sweep's
+        // boundary and it belongs to the logical enumeration, not to this run
+        // of it: reset here, every row the earlier runs already wrote would be
+        // older than the boundary and the sweep would mark the whole library
+        // removed.
+        upserted = Number(state.rows[0]?.resume_upserted ?? 0) || 0;
+        await query(
+          `UPDATE ggr_library_sync_state SET last_error = NULL
+            WHERE library_kind = $1`,
+          [kind],
+        );
+      } else {
+        // NOW(), not a JS Date. This value is the sweep's boundary, so it has
+        // to be on the same clock as the synced_at values it is compared with.
+        //
+        // The resume columns are cleared with it. A walk starting from zero
+        // must not inherit a stale offset -- from a backend that stopped
+        // reporting progress, or from a pass whose completion write failed.
+        await query(
+          `INSERT INTO ggr_library_sync_state
+             (library_kind, last_started_at, last_error, resume_offset, resume_upserted)
+              VALUES ($1, NOW(), NULL, NULL, NULL)
+         ON CONFLICT (library_kind)
+         DO UPDATE SET last_started_at = NOW(), last_error = NULL,
+                       resume_offset = NULL, resume_upserted = NULL`,
+          [kind],
+        );
+      }
+
       await library.syncEntries({
         batchSize,
-        onBatch: async (entries) => {
+        startOffset: resumeOffset,
+        onBatch: async (entries, progress) => {
           upserted += await upsertBatch(query, kind, entries);
+
+          // Recorded per batch, so what is resumed from is a page that
+          // actually landed. A backend with no offset to report -- Retrom's
+          // GetGames takes no paging at all -- writes nothing here and is
+          // simply never resumed.
+          if (Number.isInteger(progress?.nextOffset)) {
+            await query(
+              `UPDATE ggr_library_sync_state
+                  SET resume_offset = $2, resume_upserted = $3
+                WHERE library_kind = $1`,
+              [kind, progress.nextOffset, upserted],
+            );
+          }
         },
       });
 
@@ -119,10 +179,36 @@ export async function syncLibrary({
       // been complete.
       completed = true;
 
-      const swept = await sweep(query, kind, maxSweepRatio);
-      removed = swept.removed;
-      sweepBlocked = swept.blocked;
+      let swept;
+      if (resumed) {
+        // The third gate on deletion, and the one this change adds.
+        //
+        // An offset walk stitched across two points in time is not the same
+        // enumeration as an offset walk done in one. A rom deleted from the
+        // backend between the two runs shifts every later page left, so the
+        // resume point steps over entries that were never enumerated by
+        // either run -- and from the sweep's side that miss is
+        // indistinguishable from those entries being gone. It would mark
+        // games that still exist as removed, below the plausibility ratio and
+        // therefore invisibly.
+        //
+        // Upserting is safe and still happens, so the index is refreshed and
+        // becomes readable. Deletion waits for a pass that walked the whole
+        // library in one run -- which is the next one, since completing here
+        // clears the resume point.
+        console.log(
+          `📚 Library sync for ${kind}: resumed pass completed; ` +
+            "removals deferred to the next uninterrupted walk",
+        );
+        swept = null;
+      } else {
+        swept = await sweep(query, kind, maxSweepRatio);
+        removed = swept.removed;
+        sweepBlocked = swept.blocked;
+      }
 
+      // `swept` is only ever null on the resumed branch, which cannot set
+      // sweepBlocked, so the counts below are always the ones this pass read.
       if (sweepBlocked) {
         const message =
           `sweep refused: ${swept.stale} of ${swept.live} live entries ` +
@@ -139,14 +225,19 @@ export async function syncLibrary({
         // it is visible without reading logs.
         await query(
           `UPDATE ggr_library_sync_state
-              SET last_completed_at = NOW(), entry_count = $2, last_error = $3
+              SET last_completed_at = NOW(), entry_count = $2, last_error = $3,
+                  resume_offset = NULL, resume_upserted = NULL
             WHERE library_kind = $1`,
           [kind, upserted, message],
         );
       } else {
+        // The resume point is cleared here and nowhere else. A pass that
+        // throws leaves it exactly where the last landed batch put it, which
+        // is the entire point.
         await query(
           `UPDATE ggr_library_sync_state
-              SET last_completed_at = NOW(), entry_count = $2, last_error = NULL
+              SET last_completed_at = NOW(), entry_count = $2, last_error = NULL,
+                  resume_offset = NULL, resume_upserted = NULL
             WHERE library_kind = $1`,
           [kind, upserted],
         );
@@ -169,6 +260,7 @@ export async function syncLibrary({
       upserted,
       removed,
       sweepBlocked,
+      resumed,
       reason: null,
     };
   });
