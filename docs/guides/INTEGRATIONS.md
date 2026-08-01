@@ -25,8 +25,9 @@ on game pages, and links out to play them.
 **`LIBRARY_*` is the current, documented name for these settings.** `ROMM_*` is
 honoured as a fallback so an existing install needs no changes — the same
 trade `REQUEST_WEBHOOK_URL` made with `N8N_WEBHOOK_URL`. `LIBRARY_*` wins when
-both are set. `LIBRARY_KIND` additionally selects the backend (`romm` is the
-default; `gaseous` and `retrom` are recognized but not yet implemented).
+both are set. `LIBRARY_KIND` additionally selects the backend; `romm` is the
+default and is what the rest of this section describes. Every other backend has
+its own section below.
 
 ```env
 LIBRARY_URL=http://romm:8080
@@ -148,6 +149,18 @@ RomM's numeric id without silently changing type the day that phase lands.
 `romm_id` keeps the numeric type it has always had instead. Do not "fix"
 these two to match each other — a test comment says so in exactly those
 words.
+
+---
+
+## Gaseous
+
+`LIBRARY_KIND=gaseous` is recognized but not yet implemented.
+
+---
+
+## Retrom
+
+`LIBRARY_KIND=retrom` is recognized but not yet implemented.
 
 ---
 
