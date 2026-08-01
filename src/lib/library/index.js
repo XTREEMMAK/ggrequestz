@@ -22,11 +22,11 @@ export function getLibrary() {
   const config = resolveLibraryConfig();
 
   switch (config.kind) {
-    case "romm":
-      cached = createRommLibrary(config);
-      return cached;
     case "gaseous":
       cached = createGaseousLibrary(config);
+      return cached;
+    case "romm":
+      cached = createRommLibrary(config);
       return cached;
     default:
       // Reachable only for a kind config.js accepts and this switch does not,
