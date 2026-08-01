@@ -22,18 +22,26 @@ Authentication providers are **not** covered here — see
 Cross-references requested games against your ROMM library, shows availability
 on game pages, and links out to play them.
 
+**`LIBRARY_*` is the current, documented name for these settings.** `ROMM_*` is
+honoured as a fallback so an existing install needs no changes — the same
+trade `REQUEST_WEBHOOK_URL` made with `N8N_WEBHOOK_URL`. `LIBRARY_*` wins when
+both are set. `LIBRARY_KIND` additionally selects the backend; `romm` is the
+default and is what the rest of this section describes. Every other backend has
+its own section below.
+
 ```env
-ROMM_SERVER_URL=http://romm:8080
-ROMM_API_TOKEN=<client api token with roms.read>
+LIBRARY_URL=http://romm:8080
+LIBRARY_API_TOKEN=<client api token with roms.read>
 ```
 
-| Variable                 | Description                                                     |
-| ------------------------ | --------------------------------------------------------------- |
-| `ROMM_SERVER_URL`        | Server-side API base. Prefer an internal hostname               |
-| `ROMM_SERVER_URL_PUBLIC` | Browser-facing base for links and covers. Defaults to the above |
-| `ROMM_API_TOKEN`         | Client API Token, RomM 5.0+ — **recommended**                   |
-| `ROMM_USERNAME`          | Password-grant fallback for RomM 4.x                            |
-| `ROMM_PASSWORD`          | Password-grant fallback for RomM 4.x                            |
+| Variable                                        | Description                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| `LIBRARY_URL` / `ROMM_SERVER_URL`               | Server-side API base. Prefer an internal hostname               |
+| `LIBRARY_PUBLIC_URL` / `ROMM_SERVER_URL_PUBLIC` | Browser-facing base for links and covers. Defaults to the above |
+| `LIBRARY_API_TOKEN` / `ROMM_API_TOKEN`          | Client API Token, RomM 5.0+ — **recommended**                   |
+| `LIBRARY_USERNAME` / `ROMM_USERNAME`            | Password-grant fallback for RomM 4.x                            |
+| `LIBRARY_PASSWORD` / `ROMM_PASSWORD`            | Password-grant fallback for RomM 4.x                            |
+| `LIBRARY_KIND`                                  | Backend selector: `romm` (default), `gaseous`, `retrom`         |
 
 Include the scheme in the URL. `romm:8080` without `http://` will not resolve.
 
@@ -111,9 +119,117 @@ Check the scheme is present in `ROMM_SERVER_URL`, and that the address resolves
 _from inside the app container_ — not from your laptop.
 
 **Library section missing entirely**
-It only appears when `ROMM_SERVER_URL` is set along with either
-`ROMM_API_TOKEN` or both `ROMM_USERNAME` and `ROMM_PASSWORD`. A partial
-configuration disables it silently.
+It only appears when a server URL is set (`LIBRARY_URL` or `ROMM_SERVER_URL`)
+along with either an API token (`LIBRARY_API_TOKEN` or `ROMM_API_TOKEN`) or
+both a username and password (`LIBRARY_USERNAME`/`LIBRARY_PASSWORD` or
+`ROMM_USERNAME`/`ROMM_PASSWORD`). A partial configuration disables it
+silently.
+
+### Library fields on a game
+
+A cross-referenced game carries `in_library`, and when it is in the library
+also `library_id` and `library_url`. A RomM-native card — as returned by the
+recently-added, search and by-id endpoints — additionally carries
+`is_library_game`.
+
+`is_in_romm`, `is_romm_game`, `romm_id` and `romm_url` are the **deprecated**
+aliases, kept because Svelte components still read them — `is_romm_game`
+alone in seven component branches — and will be removed in a future major
+release. Migrate a reader from `is_romm_game || is_in_romm` to
+`is_library_game || in_library`: the neutral pair covers every case the
+deprecated pair does, since `in_library` is set by both producers even where
+`is_library_game` is only set on RomM-native cards.
+
+Most deprecated fields are populated with the same value as their neutral
+counterpart — **with one deliberate exception**: `library_id` is a **string**
+and `romm_id` stays a **number**. Every id in the library seam is
+stringified, matching `LibraryEntry.id` and the `TEXT` column a later
+cross-reference-by-index phase will use, so `library_id` cannot revert to
+RomM's numeric id without silently changing type the day that phase lands.
+`romm_id` keeps the numeric type it has always had instead. Do not "fix"
+these two to match each other — a test comment says so in exactly those
+words.
+
+---
+
+## Gaseous
+
+`LIBRARY_KIND=gaseous` is recognized but not yet implemented.
+
+---
+
+## Retrom
+
+Cross-references requested games against a [Retrom](https://github.com/JMBeresford/retrom)
+library. Select it with `LIBRARY_KIND=retrom`.
+
+```env
+LIBRARY_KIND=retrom
+LIBRARY_URL=http://retrom:5101
+LIBRARY_SYNC_ENABLED=true
+```
+
+| Variable               | Description                                               |
+| ---------------------- | --------------------------------------------------------- |
+| `LIBRARY_KIND`         | `retrom`                                                  |
+| `LIBRARY_URL`          | Retrom's **service** port. Default 5101                   |
+| `LIBRARY_PUBLIC_URL`   | Browser-facing base, for cover art. Defaults to the above |
+| `LIBRARY_SYNC_ENABLED` | `true`. Not optional here — see below                     |
+
+### There is no credential to set
+
+Retrom has no authentication. No RPC takes one and no handler looks for one;
+the project's own README still lists multi-user authentication as a roadmap
+item. `LIBRARY_API_TOKEN`, `LIBRARY_USERNAME` and `LIBRARY_PASSWORD` are
+ignored for this backend, and the connection check reports reachability rather
+than a login.
+
+Put Retrom behind a reverse proxy if it needs protecting. `LIBRARY_URL` may
+carry `user:pass@` for a proxy that wants basic auth.
+
+### Turn the library index on
+
+`LIBRARY_SYNC_ENABLED=true` is effectively required for Retrom, which is not
+true of the other backends. Retrom's `GetGames` request message has exactly
+five fields — platform filter, id filter, and three booleans. It has no limit,
+no offset, no ordering and no search term, so recently-added and search cannot
+be answered by the backend at all.
+
+With the index on, a background pass enumerates the library and those queries
+are answered from Postgres. With it off, the recently-added shelf and library
+search report that the index is still building, permanently, because nothing is
+ever going to build it. Cross-referencing a requested game by IGDB id still
+works either way.
+
+### What a game gets
+
+Retrom names a game from its metadata when it has matched one, and from the ROM
+file name when it has not, which is the common case on a library that has never
+been matched to a provider. Platform names come from platform metadata when
+present and otherwise from the library directory's own name — a directory
+called `nes` becomes the platform "nes".
+
+A game is only marked as owned against a request when Retrom carries a real
+IGDB id for it. An unmatched game is listed in the library and left
+unassociated rather than guessed at, because a wrong id marks an unrelated game
+as owned and that is not visible until someone notices the wrong badge.
+
+### Retrom troubleshooting
+
+**Everything fails with `UNIMPLEMENTED`.** `LIBRARY_URL` is pointing at
+something that is not Retrom's service port. Retrom serves REST, gRPC and
+WebDAV on one port and routes on the content type, so a wrong port often still
+answers HTTP.
+
+**A non-200 status in the error.** Nothing routed the request at all: a proxy in
+front, the web UI's port rather than the service port, or Retrom not running. A
+method Retrom genuinely does not have answers `200` with a gRPC status of
+`UNIMPLEMENTED` instead, and says so.
+
+**`the response frame is marked compressed`.** Something between the app and
+Retrom is compressing gRPC frames. This backend advertises no
+`grpc-accept-encoding` and cannot inflate them; turn response compression off
+for that path.
 
 ---
 
