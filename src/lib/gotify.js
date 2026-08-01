@@ -317,6 +317,80 @@ export async function sendRequestStatusNotification({
 }
 
 /**
+ * Send one summary notification for a bulk status change.
+ *
+ * Bulk actions get one push, not one per row: approving 100 requests used to
+ * send a single "Bulk Request Update", and notifying per row turned that into
+ * 100 pushes and 100 settings reads. The per-row notification remains the right
+ * shape for a single-row action, where the reader wants the detail.
+ *
+ * Unlike the version this replaces, it goes through sendGotifyNotification, so
+ * it honours GOTIFY_URL/GOTIFY_TOKEN from the environment as well as the
+ * database settings, and respects the status_changes notification toggle.
+ *
+ * @param {Object} update - Bulk update data
+ * @param {Array} update.requests - The updated ggr_game_requests rows
+ * @param {string} update.status - The status they were all moved to
+ * @param {string} [update.actor] - Display name of whoever acted
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function sendBulkRequestStatusNotification({
+  requests,
+  status,
+  actor = null,
+}) {
+  const statusMessages = {
+    approved: "✅ Approved",
+    rejected: "❌ Rejected",
+    fulfilled: "🎮 Fulfilled",
+    cancelled: "🚫 Cancelled",
+    pending: "⏳ Pending Review",
+  };
+
+  const statusPriorities = {
+    approved: 5,
+    rejected: 3,
+  };
+
+  const summary = statusMessages[status] || `Status changed to ${status}`;
+
+  // Five titles, then a count. A bulk action can cover 100 rows and a push
+  // notification that long is unreadable.
+  const titles = requests
+    .slice(0, 5)
+    .map((request) => `• ${request.title}`)
+    .join("\n");
+  const remaining =
+    requests.length > 5 ? `\n...and ${requests.length - 5} more` : "";
+
+  const messageLines = [
+    `${requests.length} requests updated:`,
+    "",
+    `${titles}${remaining}`,
+  ];
+  if (actor) {
+    messageLines.push("", `**By:** ${actor}`);
+  }
+
+  return await sendGotifyNotification({
+    title: `Bulk Request Update: ${summary}`,
+    message: messageLines.join("\n"),
+    priority: statusPriorities[status] ?? 2,
+    type: "status_changes",
+    extras: {
+      "client::display": {
+        contentType: "text/markdown",
+      },
+      bulk_request_status_change: {
+        new_status: status,
+        count: requests.length,
+        request_ids: requests.map((request) => request.id),
+      },
+    },
+  });
+}
+
+/**
  * Send a notification about admin actions
  * @param {Object} action - Action data
  * @param {string} action.title - Action title

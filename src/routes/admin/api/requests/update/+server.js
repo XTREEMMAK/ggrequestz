@@ -8,10 +8,9 @@ import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
 import {
-  sendRequestStatusNotification,
-  sendRequestCancelledDeletedNotification,
-} from "$lib/gotify.js";
-import { invalidateCache } from "$lib/cache.js";
+  applyRequestStatusChange,
+  requestConflictMessage,
+} from "$lib/requestStatus.server.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -124,45 +123,41 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    // Get the old status before updating
-    const oldStatusResult = await query(
-      "SELECT status, title, user_name FROM ggr_game_requests WHERE id = $1",
-      [request_id],
-    );
+    // admin_notes is passed through as-is: absent from the request body it
+    // is `undefined` (owner keeps the existing value); present -- including
+    // "" -- the owner writes it (and normalises "" to null).
+    const { row: updatedRequest, conflict } = await applyRequestStatusChange({
+      id: request_id,
+      to: status,
+      actor: user.name || user.email,
+      adminNotes: admin_notes,
+    });
 
-    if (oldStatusResult.rows.length === 0) {
+    // Re-opening a rejected, cancelled or fulfilled request can collide with
+    // another request that is already open for the same game. Answering 409
+    // with the blocking id -- the same field the submission 409 uses -- is what
+    // makes that recoverable: a bare 500 left the row permanently unable to
+    // return to pending or approved with no in-app way to find out why.
+    if (conflict) {
+      return json(
+        {
+          success: false,
+          error: requestConflictMessage(
+            conflict,
+            `moving this request to ${status}`,
+          ),
+          existing_request_id: conflict.existing_request_id,
+        },
+        { status: 409 },
+      );
+    }
+
+    if (!updatedRequest) {
       return json(
         { success: false, error: "Request not found" },
         { status: 404 },
       );
     }
-
-    const oldStatus = oldStatusResult.rows[0].status;
-    const requestTitle = oldStatusResult.rows[0].title;
-    const requestUserName = oldStatusResult.rows[0].user_name;
-
-    // Update the request
-    const updateResult = await query(
-      `
-      UPDATE ggr_game_requests 
-      SET 
-        status = $1, 
-        admin_notes = $2, 
-        updated_at = NOW()
-      WHERE id = $3
-      RETURNING *
-    `,
-      [status, admin_notes || null, request_id],
-    );
-
-    if (updateResult.rows.length === 0) {
-      return json(
-        { success: false, error: "Request not found" },
-        { status: 404 },
-      );
-    }
-
-    const updatedRequest = updateResult.rows[0];
 
     // Log the action for analytics
     try {
@@ -186,61 +181,9 @@ export async function POST({ request, cookies }) {
       console.warn("Failed to log analytics:", analyticsError);
     }
 
-    // Send Gotify notification for status change (asynchronously)
-    if (oldStatus !== status) {
-      if (status === "cancelled") {
-        // Use specific notification function for cancelled requests
-        sendRequestCancelledDeletedNotification({
-          id: updatedRequest.id,
-          title: requestTitle,
-          user_name: requestUserName,
-          action: "cancelled",
-          reason: admin_notes || "",
-          admin_name: user.name || user.email,
-        }).catch((error) => {
-          console.warn(
-            "Failed to send Gotify cancellation notification:",
-            error,
-          );
-          // Don't fail the request if notification fails
-        });
-      } else {
-        // Use general status notification for other status changes
-        sendRequestStatusNotification({
-          id: updatedRequest.id,
-          title: requestTitle,
-          old_status: oldStatus,
-          new_status: status,
-          user_name: requestUserName,
-          admin_notes: admin_notes,
-        }).catch((error) => {
-          console.warn("Failed to send Gotify status notification:", error);
-          // Don't fail the request if notification fails
-        });
-      }
-    }
     console.log(
       `✅ Request ${request_id} updated to ${status} by admin ${user.name || user.email}`,
     );
-
-    // Invalidate cache for the affected user and general request caches
-    try {
-      const cacheKeysToInvalidate = [
-        "game-requests", // General request cache
-        "recent-requests", // Recent requests
-      ];
-
-      // Add user-specific cache keys
-      if (updatedRequest.user_id) {
-        cacheKeysToInvalidate.push(`user-${updatedRequest.user_id}-requests`);
-        cacheKeysToInvalidate.push(`user-${updatedRequest.user_id}-watchlist`);
-      }
-
-      await invalidateCache(cacheKeysToInvalidate);
-    } catch (cacheError) {
-      console.warn("Failed to invalidate cache:", cacheError);
-      // Don't fail the request if cache invalidation fails
-    }
 
     return json({
       success: true,

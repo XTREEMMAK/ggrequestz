@@ -7,8 +7,12 @@ import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getAuthenticatedUser } from "$lib/auth.server.js";
 import { sendNewRequestNotification } from "$lib/gotify.js";
-import { sendGameRequestWebhook } from "$lib/webhooks.server.js";
+import { onRequestApproved } from "$lib/requestStatus.server.js";
 import { invalidateCache } from "$lib/cache.js";
+import {
+  findOpenDuplicate,
+  mayAutoApprove,
+} from "$lib/requestPolicy.server.js";
 
 /**
  * Submit a new game request
@@ -168,7 +172,7 @@ export async function POST({ request, cookies }) {
       platforms: JSON.stringify(requestData.platforms || []),
       priority: priority,
       description: requestData.description || "",
-      status: "pending",
+      status: (await mayAutoApprove(localUserId)) ? "approved" : "pending",
     };
 
     // If an igdb_id is provided, try to cache the game first (non-blocking)
@@ -233,6 +237,26 @@ export async function POST({ request, cookies }) {
       default:
         // No additional processing needed for game requests
         break;
+    }
+
+    // Reject a game that is already requested and still open. Checked here for
+    // a useful message; migration 009's partial unique indexes are the backstop
+    // for two submissions racing.
+    const duplicate = await findOpenDuplicate({
+      igdbId: insertData.igdb_id,
+      title: insertData.title,
+      requestType: insertData.request_type,
+    });
+
+    if (duplicate) {
+      return json(
+        {
+          success: false,
+          error: `"${insertData.title}" has already been requested and is ${duplicate.status}.`,
+          existing_request_id: duplicate.id,
+        },
+        { status: 409 },
+      );
     }
 
     // Insert into database
@@ -302,13 +326,12 @@ export async function POST({ request, cookies }) {
       // Don't fail the request if notification fails
     });
 
-    // Announce the request to whatever automation is configured, for the same
-    // reason and in the same way as the Gotify call above: the row is already
-    // committed, so a slow or absent receiver must not turn a successful
-    // submission into an error for the user.
-    sendGameRequestWebhook(insertedRequest).catch((error) => {
-      console.warn("Failed to send request webhook:", error.message);
-    });
+    // Dispatch only if this request is already approved -- auto-approve on, or
+    // the requester holds the permission. A pending request dispatches when an
+    // admin approves it, not now.
+    if (insertedRequest.status === "approved") {
+      onRequestApproved(insertedRequest);
+    }
 
     return json(
       {
@@ -354,7 +377,7 @@ export async function POST({ request, cookies }) {
       return json(
         {
           success: false,
-          error: "You have already submitted a similar request.",
+          error: "That game has already been requested by someone.",
         },
         { status: 409 },
       );

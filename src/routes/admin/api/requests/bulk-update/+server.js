@@ -3,11 +3,14 @@
  */
 
 import { json } from "@sveltejs/kit";
-import { query } from "$lib/database.js";
+import { query, withTransaction } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
-import { invalidateCache } from "$lib/cache.js";
+import {
+  applyRequestStatusChangeBatch,
+  RequestConflictError,
+} from "$lib/requestStatus.server.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -145,24 +148,55 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    // Build the update query with placeholders for all request IDs
-    const placeholders = request_ids
-      .map((_, index) => `$${index + 3}`)
-      .join(",");
-    const updateQuery = `
-      UPDATE ggr_game_requests 
-      SET 
-        status = $1, 
-        admin_notes = $2, 
-        updated_at = NOW()
-      WHERE id IN (${placeholders})
-      RETURNING id, title, user_name, status
-    `;
+    // One transaction for the whole batch. The rows are written one at a time
+    // -- per-row atomicity is what makes each transition's from/to detection
+    // correct -- but they commit or roll back together. Without that, a row
+    // losing to the duplicate guard left rows 1..k-1 committed with their
+    // webhooks already dispatched (real downloads in flight) while the client
+    // saw a bare 500 and no indication anything had succeeded.
+    //
+    // Nothing is dispatched inside the transaction: a webhook cannot be rolled
+    // back, so the side effects come back deferred and run after commit.
+    //
+    // admin_notes passed through as-is: absent from the request body it is
+    // `undefined` (owner keeps the existing value per row); present --
+    // including "" -- the owner writes it (and normalises "" to null).
+    let batch;
+    try {
+      batch = await withTransaction(async (tx) => {
+        const outcome = await applyRequestStatusChangeBatch({
+          ids: request_ids,
+          to: status,
+          actor: user.name || user.email,
+          adminNotes: admin_notes,
+          tx,
+        });
 
-    const queryParams = [status, admin_notes || null, ...request_ids];
-    const updateResult = await query(updateQuery, queryParams);
+        // Throwing is what rolls the batch back.
+        if (outcome.conflict) {
+          throw new RequestConflictError(
+            outcome.conflict,
+            `moving these requests to ${status}`,
+          );
+        }
 
-    const updatedRequests = updateResult.rows;
+        return outcome;
+      });
+    } catch (transactionError) {
+      if (transactionError instanceof RequestConflictError) {
+        return json(
+          {
+            success: false,
+            error: transactionError.message,
+            existing_request_id: transactionError.conflict.existing_request_id,
+          },
+          { status: 409 },
+        );
+      }
+      throw transactionError;
+    }
+
+    const updatedRequests = batch.rows;
     const updatedCount = updatedRequests.length;
 
     if (updatedCount === 0) {
@@ -171,6 +205,10 @@ export async function POST({ request, cookies }) {
         { status: 404 },
       );
     }
+
+    // Committed. Now the one summary notification, the single cache
+    // invalidation, and the per-row approval dispatches.
+    batch.runSideEffects();
 
     // Log the bulk action for analytics
     try {
@@ -194,37 +232,9 @@ export async function POST({ request, cookies }) {
       console.warn("Failed to log analytics:", analyticsError);
     }
 
-    // Send bulk notification if configured
-    try {
-      await sendBulkNotificationForRequests(updatedRequests, status, user);
-    } catch (notificationError) {
-      console.warn("Failed to send bulk notification:", notificationError);
-    }
     console.log(
       `✅ Bulk updated ${updatedCount} requests to ${status} by admin ${user.name || user.email}`,
     );
-
-    // Invalidate cache for all affected users and general request caches
-    try {
-      const cacheKeysToInvalidate = [
-        "game-requests", // General request cache
-        "recent-requests", // Recent requests
-      ];
-
-      // Add user-specific cache keys for each affected user
-      const affectedUserIds = [
-        ...new Set(updatedRequests.map((req) => req.user_id).filter(Boolean)),
-      ];
-      for (const userId of affectedUserIds) {
-        cacheKeysToInvalidate.push(`user-${userId}-requests`);
-        cacheKeysToInvalidate.push(`user-${userId}-watchlist`);
-      }
-
-      await invalidateCache(cacheKeysToInvalidate);
-    } catch (cacheError) {
-      console.warn("Failed to invalidate cache:", cacheError);
-      // Don't fail the request if cache invalidation fails
-    }
 
     return json({
       success: true,
@@ -244,76 +254,5 @@ export async function POST({ request, cookies }) {
       },
       { status: 500 },
     );
-  }
-}
-
-/**
- * Send bulk notification for request status changes
- * @param {Array} requests - The updated requests
- * @param {string} status - New status
- * @param {Object} admin - Admin user who made the change
- */
-async function sendBulkNotificationForRequests(requests, status, admin) {
-  try {
-    // Get Gotify settings
-    const settingsResult = await query(
-      "SELECT key, value FROM ggr_system_settings WHERE key IN ($1, $2)",
-      ["gotify.url", "gotify.token"],
-    );
-
-    const settings = {};
-    settingsResult.rows.forEach((row) => {
-      settings[row.key] = row.value;
-    });
-
-    if (!settings["gotify.url"] || !settings["gotify.token"]) {
-      return;
-    }
-
-    const statusMessages = {
-      approved: "✅ Approved",
-      rejected: "❌ Rejected",
-      fulfilled: "🎮 Fulfilled",
-      cancelled: "🚫 Cancelled",
-    };
-
-    const message = statusMessages[status] || `Status changed to ${status}`;
-    const requestTitles = requests
-      .slice(0, 5)
-      .map((r) => `• ${r.title}`)
-      .join("\n");
-    const additionalCount =
-      requests.length > 5 ? `\n...and ${requests.length - 5} more` : "";
-
-    const notificationData = {
-      title: `Bulk Request Update: ${message}`,
-      message: `${requests.length} requests updated:\n\n${requestTitles}${additionalCount}`,
-      priority: status === "approved" ? 5 : status === "rejected" ? 3 : 2,
-      extras: {
-        "client::display": {
-          contentType: "text/markdown",
-        },
-      },
-    };
-
-    const response = await fetch(
-      `${settings["gotify.url"]}/message?token=${settings["gotify.token"]}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(notificationData),
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Gotify API error: ${response.status} ${response.statusText}`,
-      );
-    }
-  } catch (error) {
-    console.error("❌ Failed to send bulk notification:", error);
-    throw error;
   }
 }
