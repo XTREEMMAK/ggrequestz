@@ -6,6 +6,7 @@
 
 import { resolveLibraryConfig } from "./config.js";
 import { createRommLibrary } from "./romm.js";
+import { createRetromLibrary } from "./retrom.js";
 
 let cached = null;
 
@@ -23,6 +24,9 @@ export function getLibrary() {
   switch (config.kind) {
     case "romm":
       cached = createRommLibrary(config);
+      return cached;
+    case "retrom":
+      cached = createRetromLibrary(config);
       return cached;
     default:
       // Reachable only for a kind config.js accepts and this switch does not,
