@@ -273,6 +273,29 @@ describe("Gaseous library backend", () => {
     expect(entry.igdbId).toBeNull();
   });
 
+  it("treats id 0 under an IGDB source as no id, not as IGDB game 0", async () => {
+    // Gaseous uses 0 as its unset sentinel all through this API -- cover: 0,
+    // franchise: 0, parent_game: 0, platformIds: [0] for Unknown Platform,
+    // MetadataSourceType 0 for None. Real IGDB ids start at 1. Checking only
+    // for undefined let the sentinel through as the string "0", in the one
+    // column entriesByIgdbIds joins on.
+    const { fetch } = transportFor([[game({ id: 0, metadataSource: "IGDB" })]]);
+
+    const [entry] = await backend(fetch).listEntries({ limit: 24 });
+
+    expect(entry.igdbId).toBeNull();
+  });
+
+  it("refuses an igdbId that is not a positive integer", async () => {
+    const { fetch } = transportFor([
+      [game({ metadataMapId: 3, id: null, metadataSource: "IGDB" })],
+    ]);
+
+    const [entry] = await backend(fetch).listEntries({ limit: 24 });
+
+    expect(entry.igdbId).toBeNull();
+  });
+
   it("orders by DateAdded descending for a recent listing", async () => {
     const { fetch, calls } = transportFor([[game()]]);
 
@@ -458,27 +481,47 @@ describe("Gaseous library backend", () => {
     expect(pages).toEqual(["1", "2", "3"]);
   });
 
-  it("never emits a duplicate id within one batch", async () => {
-    // metadataMapId is MetadataMap's primary key, so this holds by
-    // construction -- the assertion pins it, because a batch carrying a
-    // duplicate makes the ON CONFLICT upsert raise "cannot affect row a
-    // second time".
+  it("sorts the walk by NameThe ascending, the least volatile key on offer", async () => {
+    // Gaseous exposes no stable id sort -- SortBy is a validated enum and its
+    // whole set is Name, NameThe, Rating, RatingCount, DateAdded, LastPlayed,
+    // TimePlayed, ReleaseDate. This pins which one the walk uses, because the
+    // choice is the whole of its resistance to a mid-walk reorder.
+    const { fetch, calls } = transportFor([[game()]]);
+
+    await backend(fetch).syncEntries({ batchSize: 500, onBatch: () => {} });
+
+    const body = listingBody(calls);
+    expect(body.Sorting.SortBy).toBe("NameThe");
+    expect(body.Sorting.SortAscending).toBe(true);
+  });
+
+  it("passes a duplicated id through, because dedupe is the seam's job", async () => {
+    // This backend is NOT claimed to be duplicate-free. metadataMapId is
+    // MetadataMap's primary key, but a listing row's id and metadataSource come
+    // from MetadataMapBridge, whose primary key is (ParentMapId,
+    // MetadataSourceType, MetadataSourceId) -- several rows may share one
+    // ParentMapId, and whether GetGames collapses them to the Preferred row
+    // cannot be shown on a library where every game has exactly one bridge row.
+    //
+    // So the contract is that the backend reports what the server sent, and
+    // upsertBatch's dedupeByLibraryId is what makes the ON CONFLICT statement
+    // legal -- see "collapses a library_id that appears twice in one batch" in
+    // library-sync.test.js. Pinning that here stops someone reading the absence
+    // of a duplicate in the fixtures as proof the case cannot arise.
     const { fetch } = transportFor([
       [
-        game({ metadataMapId: 1 }),
-        game({ metadataMapId: 2 }),
-        game({ metadataMapId: 3 }),
+        game({ metadataMapId: 1, name: "first" }),
+        game({ metadataMapId: 1, name: "second" }),
       ],
     ]);
 
     const batches = [];
     await backend(fetch).syncEntries({
-      batchSize: 3,
+      batchSize: 2,
       onBatch: (batch) => batches.push(batch),
     });
 
-    const ids = batches[0].map((e) => e.id);
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(batches[0].map((e) => e.id)).toEqual(["1", "1"]);
   });
 
   it("lists platforms", async () => {
@@ -555,6 +598,46 @@ describe("Gaseous library backend", () => {
     expect(entry.name).toBe("proofseed");
     expect(entry.platformName).toBeNull();
     warn.mockRestore();
+  });
+
+  it("retries the platform lookup instead of caching the failure", async () => {
+    // The failure used to be cached, and getLibrary() caches this backend for
+    // the life of the process, so one 500 from /Platforms meant every later
+    // call answered from an empty map. That is worse than a degraded listing:
+    // upsertBatch sets platform_name = EXCLUDED.platform_name unconditionally,
+    // so the next sync pass would write NULL over the names already in the
+    // index, and nothing short of a restart would heal it.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let platformCalls = 0;
+    const fetch = vi.fn(async (url) => {
+      if (url.includes("/Account/Login")) return LOGIN_OK;
+      if (url.includes("/Platforms")) {
+        platformCalls += 1;
+        return platformCalls === 1 ? reply({}, { status: 500 }) : PLATFORMS;
+      }
+      return reply({ games: [game()] });
+    });
+
+    const library = backend(fetch);
+    const [first] = await library.listEntries({ limit: 24 });
+    const [second] = await library.listEntries({ limit: 24 });
+
+    expect(first.platformName).toBeNull();
+    // The second call retried and got the map, so the entry is named.
+    expect(second.platformName).toBe("Nintendo Entertainment System");
+    expect(platformCalls).toBe(2);
+    warn.mockRestore();
+  });
+
+  it("stops asking for platforms once a lookup succeeds", async () => {
+    // The retry must not become a fetch per listing on the happy path.
+    const { fetch, calls } = transportFor([[game()], [game()]]);
+    const library = backend(fetch);
+
+    await library.listEntries({ limit: 24 });
+    await library.listEntries({ limit: 24 });
+
+    expect(calls.filter((c) => c.url.includes("/Platforms"))).toHaveLength(1);
   });
 
   it("probes by logging in, and reports why a probe failed", async () => {
