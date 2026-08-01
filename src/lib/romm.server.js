@@ -6,6 +6,7 @@
 import { browser } from "$app/environment";
 import { getGameById } from "./gameCache.js";
 import { fetchWithTimeout, isTimeoutOrNetworkError } from "./utils.js";
+import { rommCoverUrl, rommPlatformName } from "./library/romm-fields.js";
 
 // Outbound deadlines. Nothing here may block unbounded — ROMM is typically
 // reached over a public URL, so a slow or unreachable instance previously
@@ -78,22 +79,32 @@ async function loadEnvironmentVariables() {
     return; // Already loaded
   }
 
-  const { env } = await import("$env/dynamic/private");
-  ROMM_SERVER_URL = env.ROMM_SERVER_URL || process.env.ROMM_SERVER_URL;
+  // Resolution lives in one place. Reading ROMM_* directly here is what made
+  // the documented LIBRARY_* names inert: an operator who set only LIBRARY_URL
+  // and LIBRARY_API_TOKEN got isRommConfigured() === false and a library
+  // section that silently vanished. resolveLibraryConfig() still prefers
+  // LIBRARY_* and still falls back to ROMM_*, so a ROMM_*-only install
+  // resolves to exactly the values this function used to compute.
+  //
+  // Imported dynamically, like the env module it replaces: config.js reaches
+  // for $env/dynamic/private at module scope, which does not exist outside a
+  // SvelteKit build.
+  const { resolveLibraryConfig } = await import("./library/config.js");
+  const config = resolveLibraryConfig();
+
+  ROMM_SERVER_URL = config.url;
   // Browser-facing base for "Play in ROMM" links and cover images. On
   // Kubernetes or any split-network setup, ROMM_SERVER_URL is an internal
-  // service address the browser cannot resolve. Falls back to ROMM_SERVER_URL,
-  // so single-network deployments need no new configuration. Issue #2.
-  ROMM_SERVER_URL_PUBLIC =
-    env.ROMM_SERVER_URL_PUBLIC ||
-    process.env.ROMM_SERVER_URL_PUBLIC ||
-    ROMM_SERVER_URL;
-  ROMM_USERNAME = env.ROMM_USERNAME || process.env.ROMM_USERNAME;
-  ROMM_PASSWORD = env.ROMM_PASSWORD || process.env.ROMM_PASSWORD;
+  // service address the browser cannot resolve. resolveLibraryConfig() falls
+  // back to the internal URL, so single-network deployments need no new
+  // configuration. Issue #2.
+  ROMM_SERVER_URL_PUBLIC = config.publicUrl;
+  ROMM_USERNAME = config.username;
+  ROMM_PASSWORD = config.password;
   // RomM 5.0+ Client API Token ("rmm_"-prefixed). Preferred over the password
   // grant: it carries an explicit scope set, does not expire every 30 minutes,
   // and means the ROMM account password never has to be stored here.
-  ROMM_API_TOKEN = env.ROMM_API_TOKEN || process.env.ROMM_API_TOKEN;
+  ROMM_API_TOKEN = config.apiToken;
 }
 
 // Session token storage for authenticated requests.
@@ -348,12 +359,17 @@ function warnIfMissingReadScope(token) {
  * Every caller except the availability probe goes through here. The probe uses
  * `rommAttempt` directly, since it is the thing that closes the breaker again.
  *
+ * Exported, where it used to be private, because the library seam's sync needs
+ * raw paging: getRecentlyAddedROMs and searchROMs return app-shaped objects,
+ * which costs an IGDB round-trip per ROM, and a full-library walk must not pay
+ * that.
+ *
  * @param {string} endpoint - API endpoint (without /api prefix)
  * @param {Object} options - Fetch options
  * @param {string} cookies - Optional cookies to forward (for same-domain auth)
  * @returns {Promise<Object>} - API response
  */
-async function rommRequest(endpoint, options = {}, cookies = null) {
+export async function rommRequest(endpoint, options = {}, cookies = null) {
   if (isBreakerOpen()) {
     const retryAt = availabilityState.checkedAt + availabilityTtl();
     const error = new Error(
@@ -922,10 +938,10 @@ async function batchFormatROMData(roms) {
 
       // Public base: this URL is rendered as an <img src> in the browser.
       // ROMM covers are not routed through /api/images/proxy — that only
-      // rewrites igdb.com URLs — so the browser fetches this directly.
-      let cover_url = rom.url_cover
-        ? `${ROMM_SERVER_URL_PUBLIC}${rom.url_cover}`
-        : null;
+      // rewrites igdb.com URLs — so the browser fetches this directly. Shared
+      // with the library seam, which was passing the relative path straight
+      // through.
+      let cover_url = rommCoverUrl(ROMM_SERVER_URL_PUBLIC, rom.url_cover);
 
       // Try to get IGDB cover if IGDB ID is available
       if (rom.igdb_id) {
@@ -953,13 +969,14 @@ async function batchFormatROMData(roms) {
       // back empty. Fallbacks to the old names are kept so an older RomM (or a
       // fork) still works.
       const meta = rom.metadatum || {};
-      const platformName =
-        rom.platform_custom_name ||
-        rom.platform_display_name ||
-        rom.platform_name ||
-        rom.platform?.name ||
-        null;
+      // One chain, in library/romm-fields.js, so the seam and this formatter
+      // cannot disagree about where RomM keeps a platform name again.
+      const platformName = rommPlatformName(rom);
       const rating = meta.average_rating ?? rom.rating ?? null;
+
+      // Public base: rendered as an href in the browser, so it must be a URL
+      // the browser can resolve rather than an internal service address.
+      const libraryUrl = `${ROMM_SERVER_URL_PUBLIC}/rom/${rom.id}`;
 
       return {
         id: rom.id,
@@ -973,8 +990,20 @@ async function batchFormatROMData(roms) {
         release_date: meta.first_release_date ?? rom.first_release_date ?? null,
         popularity_score: rating || 0,
         status: "available", // All ROMM games are available to play
+        // Neutral names, matching crossReferenceWithROMM. This is the shape
+        // getRecentlyAddedROMs, searchROMs and getROMById return -- the
+        // homepage library shelf and every RomM-native card -- so without
+        // these the claim that new code should read the neutral names was
+        // false for half the app.
+        //
+        // Stringified, like LibraryEntry.id and the TEXT column the local
+        // index will use, so the neutral field does not change type when
+        // cross-referencing becomes an index join.
+        in_library: true,
+        library_id: String(rom.id),
+        library_url: libraryUrl,
         romm_id: rom.id,
-        romm_url: `${ROMM_SERVER_URL_PUBLIC}/rom/${rom.id}`,
+        romm_url: libraryUrl,
         platform_id: rom.platform_id ?? rom.platform?.id,
         platform_name: platformName,
         platform_slug: rom.platform_slug || null,
@@ -982,7 +1011,11 @@ async function batchFormatROMData(roms) {
         updated_at: rom.updated_at,
         file_name: rom.fs_name || rom.file_name,
         file_size: rom.fs_size_bytes ?? rom.file_size,
-        // Flag to identify this as a ROMM game
+        // Flag to identify this as a library-native game. is_romm_game is read
+        // by seven component branches, so it stays as the deprecated alias --
+        // without is_library_game beside it a component migration could not
+        // even begin.
+        is_library_game: true,
         is_romm_game: true,
       };
     });
@@ -1012,17 +1045,169 @@ async function formatROMData(rom) {
 }
 
 /**
- * Cross-reference IGDB games with ROMM library to check availability
- * @param {Array} igdbGames - Array of IGDB games
- * @param {string} cookies - Optional cookies to forward
- * @returns {Promise<Array>} - IGDB games with ROMM availability flags
+ * A value as the index keys it, or null when there is nothing to look up.
+ *
+ * The index column is TEXT and LibraryEntry.igdbId is stringified, so both
+ * sides of every comparison are stringified here too. The window path below
+ * stringified on insert and not on read, which is why a numeric igdb_id from
+ * IGDB never matched a single rom -- issue #19.
+ *
+ * @param {string|number|null|undefined} value
+ * @returns {string|null}
  */
-export async function crossReferenceWithROMM(igdbGames, cookies = null) {
-  if (browser) throw new Error("crossReferenceWithROMM is server-only");
-  if (!(await isRommConfigured())) {
-    return igdbGames;
+function igdbKey(value) {
+  if (value === null || value === undefined || value === "") return null;
+  return String(value);
+}
+
+/**
+ * romm_id at the type it has always had.
+ *
+ * library_id follows LibraryEntry.id, which is a string for every backend
+ * because the index column is TEXT -- that is the stable name and the whole
+ * point of it. romm_id is the deprecated alias, RomM has always put a number
+ * there, and a Svelte component comparing it with === to a number has to keep
+ * working. So the string is turned back into the number it came from.
+ *
+ * Digits only, and only within the safe integer range. `Number("")` is 0,
+ * `Number("1e3")` is 1000, and a 17-digit id silently loses its last digit;
+ * none of those is the id that was stored. Anything else -- a Retrom or
+ * Gaseous id, which are not RomM's integers -- is handed back as the string it
+ * is, which is far better than the NaN a bare Number() would produce. NaN
+ * compares false against everything, itself included.
+ *
+ * @param {string} id - LibraryEntry.id
+ * @returns {number|string}
+ */
+function historicalRommId(id) {
+  if (!/^\d+$/.test(id)) return id;
+  const numeric = Number(id);
+  return Number.isSafeInteger(numeric) ? numeric : id;
+}
+
+/**
+ * Read the library index for these games' igdb ids.
+ *
+ * @param {Array} igdbGames - Array of IGDB games
+ * @returns {Promise<Array|null>} - Index entries, or null when the index
+ *   cannot answer and the caller must fall back
+ */
+async function readLibraryIndex(igdbGames) {
+  try {
+    // Imported dynamically, like config.js above and for the same reason:
+    // router.js reaches library/config.js, which reads $env/dynamic/private at
+    // module scope, and that module does not exist outside a SvelteKit build.
+    const { entriesByIgdbIds } = await import("$lib/library/router.js");
+    const result = await entriesByIgdbIds(
+      igdbGames.map((game) => game?.igdb_id),
+    );
+
+    // An empty `entries` is a real answer: those games are not in the library.
+    // `indexBuilding` is not an answer at all -- no sync has ever completed,
+    // so the table cannot distinguish "absent" from "not indexed yet".
+    //
+    // One edge is worth naming because it is not obvious from here. Handed a
+    // set with no usable igdb_id in it, entriesByIgdbIds short-circuits and
+    // reports `indexBuilding: false` whatever the index's real state is, since
+    // there is nothing an id-keyed lookup could have failed to find. Those
+    // games then report absent rather than going to the window, which is the
+    // answer the index would give in any case: a rom RomM never matched to
+    // IGDB is not findable by id, and finding it by title is the collision
+    // this change removes.
+    return result.indexBuilding ? null : result.entries;
+  } catch (error) {
+    // A database problem must degrade to the old behaviour rather than
+    // blanking every badge in the app.
+    console.warn(
+      "Library index unavailable, falling back to the ROMM window:",
+      error?.message || error,
+    );
+    return null;
+  }
+}
+
+/**
+ * Annotate games from index entries.
+ *
+ * Keyed on igdb_id alone. The window path below is also keyed by lowercased
+ * name, so two different games sharing a title collide and the last one
+ * written wins -- issue #19's second defect. An id match is either right or
+ * absent, and absent is an answer this function is allowed to give.
+ *
+ * The cost of that is real and worth stating: a rom RomM has not matched to
+ * IGDB has no igdb_id in the index and can no longer be found by title. It
+ * reports not-in-library, which is what the index knows, rather than
+ * occasionally matching an arbitrary rom that happens to share a name.
+ *
+ * @param {Array} igdbGames - Array of IGDB games
+ * @param {Array} entries - LibraryEntry rows from the index
+ * @returns {Array} - IGDB games with library availability flags
+ */
+function annotateFromIndex(igdbGames, entries) {
+  const byIgdbId = new Map();
+  for (const entry of entries) {
+    const key = igdbKey(entry?.igdbId);
+    if (key === null) continue;
+
+    // The same game on two platforms is two roms sharing one igdb_id, and only
+    // one of them can be library_id. Which one is arbitrary; it must not also
+    // be unstable. The index read carries no ORDER BY, so "last row wins"
+    // means the badge can point at a different platform's rom between two
+    // loads of the same page. First by library_id, compared as text exactly as
+    // the column stores it, is equally arbitrary and does not move.
+    const existing = byIgdbId.get(key);
+    if (existing && String(existing.id) <= String(entry.id)) continue;
+
+    byIgdbId.set(key, entry);
   }
 
+  return igdbGames.map((game) => {
+    const key = igdbKey(game?.igdb_id);
+    const entry = key === null ? undefined : byIgdbId.get(key);
+
+    if (!entry) {
+      return { ...game, in_library: false, is_in_romm: false };
+    }
+
+    const libraryUrl = `${ROMM_SERVER_URL_PUBLIC}/rom/${entry.id}`;
+    return {
+      ...game,
+      in_library: true,
+      library_id: String(entry.id),
+      library_url: libraryUrl,
+      // Deprecated aliases. Svelte components read these, so they stay until a
+      // major release drops them.
+      is_in_romm: true,
+      romm_id: historicalRommId(entry.id),
+      romm_url: libraryUrl,
+      platform_name: entry.platformName ?? null,
+    };
+  });
+}
+
+/**
+ * Cross-reference against the 2000 most recently added ROMs.
+ *
+ * This is what crossReferenceWithROMM did before the index existed, and it is
+ * retained deliberately rather than kept around out of caution.
+ *
+ * entriesByIgdbIds has no backend fallback: until a sync has completed it
+ * returns `indexBuilding: true` and no entries. LIBRARY_SYNC_ENABLED defaults
+ * to "false", so that is the state of every install that has not opted in, and
+ * of every opted-in install for the length of its first pass -- 85 minutes on
+ * a 72,162-rom library. Swapping the implementations outright would make every
+ * game on all of those report not-in-library, which is a worse bug than the
+ * one being fixed.
+ *
+ * So this path stays until the index can answer, and then is never used again.
+ * The window is still wrong for about 97 percent of a large library; it is
+ * simply the best answer available with nothing indexed.
+ *
+ * @param {Array} igdbGames - Array of IGDB games
+ * @param {string} cookies - Optional cookies to forward
+ * @returns {Promise<Array>} - IGDB games with library availability flags
+ */
+async function crossReferenceFromWindow(igdbGames, cookies) {
   // Read the snapshot instead of probing. This runs on every /game/[id] load,
   // and a live probe here meant two ROMM round trips per page — eight requests
   // once retries are counted, whenever ROMM was down.
@@ -1030,6 +1215,10 @@ export async function crossReferenceWithROMM(igdbGames, cookies = null) {
   // Only a known-bad snapshot short-circuits. `ok === null` means no probe has
   // completed yet on this worker, and skipping on that would drop ROMM badges
   // from the first page loads after every restart.
+  //
+  // The index path does not consult this at all, and must not: it reads
+  // Postgres and never touches ROMM, so blanking every badge because ROMM is
+  // down would throw away the one advantage of having an index.
   if (getRommAvailabilitySnapshot().ok === false) {
     return igdbGames;
   }
@@ -1057,21 +1246,42 @@ export async function crossReferenceWithROMM(igdbGames, cookies = null) {
 
     return igdbGames.map((game) => {
       const rommGame =
-        rommLookup.get(game.igdb_id) ||
+        // igdbKey, not the raw value. The map is keyed with
+        // `rom.igdb_id.toString()` and this read used to pass `game.igdb_id`
+        // through unchanged, so a numeric id missed a string key every time.
+        // Issue #19 calls this out as cheap to fix independently of the index,
+        // and leaving a known-wrong lookup in a retained path is not "keeping
+        // it".
+        rommLookup.get(igdbKey(game.igdb_id)) ||
         rommLookup.get(game.title?.toLowerCase()?.trim());
 
       if (rommGame) {
+        const libraryUrl = `${ROMM_SERVER_URL_PUBLIC}/rom/${rommGame.id}`;
         return {
           ...game,
+          in_library: true,
+          // Deliberately a string where romm_id stays a number. library_id is
+          // the *stable* name: LibraryEntry.id is stringified and the local
+          // index's column is TEXT, so leaving this as RomM's numeric id would
+          // flip its type the moment cross-referencing became an index join --
+          // a client-visible break in the field whose whole purpose is not to
+          // break. romm_id keeps its historical numeric type instead.
+          library_id: String(rommGame.id),
+          library_url: libraryUrl,
+          // Deprecated aliases. Svelte components read these, so they stay
+          // until a major release drops them.
           is_in_romm: true,
           romm_id: rommGame.id,
-          romm_url: `${ROMM_SERVER_URL_PUBLIC}/rom/${rommGame.id}`,
-          platform_name: rommGame.platform?.name,
+          romm_url: libraryUrl,
+          // Was rommGame.platform?.name, which RomM never returns, so this was
+          // always undefined. Same helper as the formatter above.
+          platform_name: rommPlatformName(rommGame),
         };
       }
 
       return {
         ...game,
+        in_library: false,
         is_in_romm: false,
       };
     });
@@ -1079,4 +1289,46 @@ export async function crossReferenceWithROMM(igdbGames, cookies = null) {
     console.error("Failed to cross-reference with ROMM:", error);
     return igdbGames;
   }
+}
+
+/**
+ * Cross-reference IGDB games with the library to check availability.
+ *
+ * Two paths, and which one runs is decided by whether the local index has ever
+ * completed a sync.
+ *
+ * The index path is one SQL statement over `ggr_library_entries` keyed on
+ * igdb_id, so it sees the whole library and costs no outbound request on a
+ * render path. The window path is the pre-index implementation and answers
+ * only while the index cannot -- see crossReferenceFromWindow for why it is
+ * still here.
+ *
+ * Once a sync completes the switch is permanent: entriesByIgdbIds reports
+ * `indexBuilding` false from then on, and the window is never requested again.
+ *
+ * @param {Array} igdbGames - Array of IGDB games
+ * @param {string} cookies - Optional cookies to forward
+ * @returns {Promise<Array>} - IGDB games with library availability flags
+ */
+export async function crossReferenceWithROMM(igdbGames, cookies = null) {
+  if (browser) throw new Error("crossReferenceWithROMM is server-only");
+  if (!Array.isArray(igdbGames) || igdbGames.length === 0) {
+    // Nothing to annotate. Worth its own line: without it an empty batch still
+    // fetched 2000 roms on the window path.
+    return igdbGames;
+  }
+  if (!(await isRommConfigured())) {
+    return igdbGames;
+  }
+
+  // Both paths build library_url from the browser-facing base, and only the
+  // window path reaches rommRequest, which loads it for itself.
+  await loadEnvironmentVariables();
+
+  const entries = await readLibraryIndex(igdbGames);
+  if (entries) {
+    return annotateFromIndex(igdbGames, entries);
+  }
+
+  return crossReferenceFromWindow(igdbGames, cookies);
 }
