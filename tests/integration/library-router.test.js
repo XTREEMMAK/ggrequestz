@@ -182,11 +182,29 @@ describe("read routing", () => {
     const result = await entriesByIgdbIds([]);
 
     expect(result.entries).toEqual([]);
+    expect(result.indexBuilding).toBe(false);
     expect(
       query.mock.calls.filter(([sql]) =>
         sql.includes("FROM ggr_library_entries"),
       ),
     ).toHaveLength(0);
+  });
+
+  it("still says indexBuilding for no ids when nothing has synced", async () => {
+    // The empty-id short-circuit used to run before the readiness check, so an
+    // unsynced index answered `indexBuilding: false, entries: []` -- "none of
+    // these are in the library" -- for a batch it had no basis to answer at
+    // all. This function has no backend fallback, which is why its callers
+    // keep one and switch on this flag; a confident empty answer takes that
+    // fallback away on exactly the installs that need it, since
+    // LIBRARY_SYNC_ENABLED is off by default.
+    synced = false;
+    const { entriesByIgdbIds } = await router();
+
+    const result = await entriesByIgdbIds([]);
+
+    expect(result.indexBuilding).toBe(true);
+    expect(result.entries).toEqual([]);
   });
 
   it("stringifies igdb ids on lookup, which is the 2000-window bug's sibling", async () => {

@@ -156,14 +156,26 @@ export async function entriesByIgdbIds(igdbIds) {
     .map((id) => (id === null || id === undefined ? null : String(id)))
     .filter(Boolean);
 
-  if (ids.length === 0) {
-    return { source: "index", indexBuilding: false, entries: [] };
-  }
-
   const library = getLibrary();
   const kind = library.kind();
 
+  // Readiness is decided first, even when there is nothing to look up.
+  //
+  // Reporting `indexBuilding: false` with no entries says "none of these are
+  // in the library", and a caller has to be able to take that literally --
+  // this function has no backend fallback, so its callers keep one of their
+  // own and switch on exactly this flag. On an install that has never synced,
+  // answering that confidently for an empty id set is wrong rather than merely
+  // unhelpful: the games may well be present, and the caller would stop asking
+  // the backend that could have said so.
+  //
+  // The short-circuit below is a saving on the entries table. It is not a
+  // licence to skip the state the whole contract is built on.
   if (!(await indexIsReady(kind))) return building();
+
+  if (ids.length === 0) {
+    return { source: "index", indexBuilding: false, entries: [] };
+  }
 
   const result = await query(
     `SELECT ${COLUMNS} FROM ggr_library_entries

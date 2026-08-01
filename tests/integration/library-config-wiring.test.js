@@ -17,6 +17,24 @@ vi.mock("../../src/lib/gameCache.js", () => ({
   getGameById: vi.fn(async () => null),
 }));
 
+// Pinned to the window path. crossReferenceWithROMM consults the library index
+// first and only falls back to the 2000-window when the index reports
+// indexBuilding, so without this the test below asserts against whichever path
+// the machine running the suite happens to offer: no reachable Postgres and it
+// takes the window, a reachable one and it silently starts reading a real
+// index instead. That is not a flake, it is the test quietly measuring
+// something else -- verified by running this file against a populated
+// database, where it returned a library_url built from a real indexed rom id
+// rather than the mocked one. What this file is about is which *URL base* the
+// link is built from, and that has to be true on both paths.
+vi.mock("$lib/library/router.js", () => ({
+  entriesByIgdbIds: vi.fn(async () => ({
+    source: "none",
+    indexBuilding: true,
+    entries: [],
+  })),
+}));
+
 const KEYS = [
   "LIBRARY_KIND",
   "LIBRARY_URL",
