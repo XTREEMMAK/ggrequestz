@@ -1435,7 +1435,7 @@ export const apiKeys = {
  *   Receives a `query`-shaped function bound to the checked-out client.
  * @returns {Promise<any>} - Whatever `fn` resolves to
  */
-async function withClient(fn) {
+export async function withClient(fn) {
   const poolInstance = await getPool();
   const client = await poolInstance.connect();
   try {
@@ -1446,4 +1446,4 @@ async function withClient(fn) {
 }
 
 // Export direct query function for advanced usage
-export { query, withClient, warmPool, withTransaction };
+export { query, warmPool, withTransaction };
