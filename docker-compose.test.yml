@@ -86,6 +86,23 @@ services:
       ROMM_USERNAME: ${ROMM_USERNAME:-}
       ROMM_PASSWORD: ${ROMM_PASSWORD:-}
 
+      # The backend-neutral spelling of the five above. Forwarded so the live
+      # stack can exercise a LIBRARY_*-only configuration, which is the case
+      # that used to leave the library unconfigured.
+      LIBRARY_KIND: ${LIBRARY_KIND:-}
+      LIBRARY_URL: ${LIBRARY_URL:-}
+      LIBRARY_PUBLIC_URL: ${LIBRARY_PUBLIC_URL:-}
+      LIBRARY_API_TOKEN: ${LIBRARY_API_TOKEN:-}
+      LIBRARY_USERNAME: ${LIBRARY_USERNAME:-}
+      LIBRARY_PASSWORD: ${LIBRARY_PASSWORD:-}
+
+      # Index sync, so the live stack can exercise a pass end to end. Off unless
+      # exactly "true", same as production.
+      LIBRARY_SYNC_ENABLED: ${LIBRARY_SYNC_ENABLED:-}
+      LIBRARY_SYNC_INTERVAL_MS: ${LIBRARY_SYNC_INTERVAL_MS:-}
+      LIBRARY_SYNC_BATCH: ${LIBRARY_SYNC_BATCH:-}
+      LIBRARY_SYNC_MAX_SWEEP_RATIO: ${LIBRARY_SYNC_MAX_SWEEP_RATIO:-}
+
       # Optional; the app runs without these, games just will not populate.
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}

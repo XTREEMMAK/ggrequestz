@@ -22,18 +22,26 @@ Authentication providers are **not** covered here — see
 Cross-references requested games against your ROMM library, shows availability
 on game pages, and links out to play them.
 
+**`LIBRARY_*` is the current, documented name for these settings.** `ROMM_*` is
+honoured as a fallback so an existing install needs no changes — the same
+trade `REQUEST_WEBHOOK_URL` made with `N8N_WEBHOOK_URL`. `LIBRARY_*` wins when
+both are set. `LIBRARY_KIND` additionally selects the backend; `romm` is the
+default and is what the rest of this section describes. Every other backend has
+its own section below.
+
 ```env
-ROMM_SERVER_URL=http://romm:8080
-ROMM_API_TOKEN=<client api token with roms.read>
+LIBRARY_URL=http://romm:8080
+LIBRARY_API_TOKEN=<client api token with roms.read>
 ```
 
-| Variable                 | Description                                                     |
-| ------------------------ | --------------------------------------------------------------- |
-| `ROMM_SERVER_URL`        | Server-side API base. Prefer an internal hostname               |
-| `ROMM_SERVER_URL_PUBLIC` | Browser-facing base for links and covers. Defaults to the above |
-| `ROMM_API_TOKEN`         | Client API Token, RomM 5.0+ — **recommended**                   |
-| `ROMM_USERNAME`          | Password-grant fallback for RomM 4.x                            |
-| `ROMM_PASSWORD`          | Password-grant fallback for RomM 4.x                            |
+| Variable                                        | Description                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| `LIBRARY_URL` / `ROMM_SERVER_URL`               | Server-side API base. Prefer an internal hostname               |
+| `LIBRARY_PUBLIC_URL` / `ROMM_SERVER_URL_PUBLIC` | Browser-facing base for links and covers. Defaults to the above |
+| `LIBRARY_API_TOKEN` / `ROMM_API_TOKEN`          | Client API Token, RomM 5.0+ — **recommended**                   |
+| `LIBRARY_USERNAME` / `ROMM_USERNAME`            | Password-grant fallback for RomM 4.x                            |
+| `LIBRARY_PASSWORD` / `ROMM_PASSWORD`            | Password-grant fallback for RomM 4.x                            |
+| `LIBRARY_KIND`                                  | Backend selector: `romm` (default), `gaseous`, `retrom`         |
 
 Include the scheme in the URL. `romm:8080` without `http://` will not resolve.
 
@@ -111,9 +119,48 @@ Check the scheme is present in `ROMM_SERVER_URL`, and that the address resolves
 _from inside the app container_ — not from your laptop.
 
 **Library section missing entirely**
-It only appears when `ROMM_SERVER_URL` is set along with either
-`ROMM_API_TOKEN` or both `ROMM_USERNAME` and `ROMM_PASSWORD`. A partial
-configuration disables it silently.
+It only appears when a server URL is set (`LIBRARY_URL` or `ROMM_SERVER_URL`)
+along with either an API token (`LIBRARY_API_TOKEN` or `ROMM_API_TOKEN`) or
+both a username and password (`LIBRARY_USERNAME`/`LIBRARY_PASSWORD` or
+`ROMM_USERNAME`/`ROMM_PASSWORD`). A partial configuration disables it
+silently.
+
+### Library fields on a game
+
+A cross-referenced game carries `in_library`, and when it is in the library
+also `library_id` and `library_url`. A RomM-native card — as returned by the
+recently-added, search and by-id endpoints — additionally carries
+`is_library_game`.
+
+`is_in_romm`, `is_romm_game`, `romm_id` and `romm_url` are the **deprecated**
+aliases, kept because Svelte components still read them — `is_romm_game`
+alone in seven component branches — and will be removed in a future major
+release. Migrate a reader from `is_romm_game || is_in_romm` to
+`is_library_game || in_library`: the neutral pair covers every case the
+deprecated pair does, since `in_library` is set by both producers even where
+`is_library_game` is only set on RomM-native cards.
+
+Most deprecated fields are populated with the same value as their neutral
+counterpart — **with one deliberate exception**: `library_id` is a **string**
+and `romm_id` stays a **number**. Every id in the library seam is
+stringified, matching `LibraryEntry.id` and the `TEXT` column a later
+cross-reference-by-index phase will use, so `library_id` cannot revert to
+RomM's numeric id without silently changing type the day that phase lands.
+`romm_id` keeps the numeric type it has always had instead. Do not "fix"
+these two to match each other — a test comment says so in exactly those
+words.
+
+---
+
+## Gaseous
+
+`LIBRARY_KIND=gaseous` is recognized but not yet implemented.
+
+---
+
+## Retrom
+
+`LIBRARY_KIND=retrom` is recognized but not yet implemented.
 
 ---
 

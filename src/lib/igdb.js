@@ -279,7 +279,6 @@ limit ${fetchLimit};`;
       platforms: game.platforms?.map((p) => p.name) || [],
       genres: game.genres?.map((g) => g.name) || [],
       websites: game.websites || [],
-      is_in_library: false,
     }));
 
     // Apply global banned games filter first (always applies)
