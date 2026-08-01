@@ -75,7 +75,6 @@ import {
 } from "./types.js";
 import { createGrpcWebChannel } from "./retrom-grpcweb.js";
 import {
-  ProtoError,
   boolField,
   concatBytes,
   decodeMessage,
@@ -152,6 +151,34 @@ export function basename(path) {
   if (!path) return "";
   const parts = String(path).split(/[\\/]/).filter(Boolean);
   return parts.length > 0 ? parts[parts.length - 1] : "";
+}
+
+/**
+ * `GameMetadata.igdb_id` (field 7) as a positive integer, or null.
+ *
+ * igdbId is the one column the index cross-references on, so this fails closed
+ * on anything that is not unmistakably a real id.
+ *
+ * The positivity check is not belt-and-braces. `igdb_id` is `optional int64` in
+ * the server's descriptor, which is proto3 *explicit presence*: a zero that has
+ * been set is written to the wire, and only a field that was never set is
+ * absent. So a decoded `0` is a value Retrom put there, and it is not IGDB game
+ * zero -- real IGDB ids start at 1. Reading it as one would put the string "0"
+ * into the join column for every such record, which is neither null nor an id.
+ * The sibling Gaseous backend had exactly this defect against a server that
+ * uses 0 as its unset marker throughout.
+ *
+ * Not observed carrying any value on the measured instance: nothing in that
+ * library is matched to IGDB, so this path was exercised only for absence.
+ *
+ * @param {Map|null} meta - A decoded GameMetadata, or null when there is none
+ * @returns {number|null}
+ */
+function igdbIdOf(meta) {
+  if (!meta) return null;
+
+  const id = readInt(meta, 7);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 /**
@@ -316,13 +343,11 @@ export function createRetromLibrary(config) {
     // library would be dropped.
     const name = (meta && readString(meta, 2)) || basename(path);
 
-    // igdb_id (field 7) is `optional int64` and was absent on every record of
-    // the measured library, so this path emits null there. That is deliberate
-    // and is the whole point: igdbId is what the index joins on, and a wrong id
-    // silently marks unrelated games as owned. A missing badge is recoverable;
-    // a wrong one is not. The field number itself comes from the server's own
-    // descriptor, but it could not be exercised against a real value here.
-    const igdbId = meta ? readInt(meta, 7) : null;
+    // igdbId is what the index joins on, and a wrong id silently marks
+    // unrelated games as owned. A missing badge is recoverable; a wrong one is
+    // not. See igdbIdOf for why absence, zero and a real id are three different
+    // things here.
+    const igdbId = igdbIdOf(meta);
 
     const platformId = readInt(game, 4);
 
@@ -358,25 +383,31 @@ export function createRetromLibrary(config) {
    * here than on a REST backend: a partial sync never sets last_completed_at,
    * so throwing out of the middle of a walk leaves the index permanently
    * unreadable rather than merely one entry short.
+   *
+   * The whole per-record body sits inside the try, the is_deleted check
+   * included. Every read on a decoded message can refuse -- readInt throws for
+   * an integer too large to represent exactly -- and a check that runs before
+   * the guard is a check that can take the enumeration down with it.
    */
   function toEntries(response, names) {
     const tables = indexResponse(response);
     const entries = [];
 
     for (const game of readMessages(response, 1)) {
-      // Game.is_deleted (field 8). include_deleted (request field 5) is never
-      // sent, so Retrom already filters these; checked anyway, because
-      // resurrecting deleted games into the index is invisible until someone
-      // requests one.
-      if (readInt(game, 8, 0)) continue;
-
       try {
+        // Game.is_deleted (field 8). include_deleted (request field 5) is never
+        // sent, so Retrom already filters these; checked anyway, because
+        // resurrecting deleted games into the index is invisible until someone
+        // requests one.
+        if (readInt(game, 8, 0)) continue;
+
         const entry = toEntry(game, tables, names);
         if (entry) entries.push(entry);
       } catch (error) {
-        const reason =
-          error instanceof ProtoError ? "undecodable" : error.message;
-        console.warn("Skipping unusable Retrom record:", reason);
+        // The message, not a category. A ProtoError now names the field and
+        // why it was refused, which is the difference between "undecodable"
+        // and "field 7 is 2^70, which cannot be represented exactly".
+        console.warn("Skipping unusable Retrom record:", error.message);
       }
     }
     return entries;
@@ -510,6 +541,11 @@ export function createRetromLibrary(config) {
      * the walk terminates because `GetPlatforms` returns a finite list that is
      * read once up front.
      *
+     * A platform holding no games is not a special case: measured on 0.8.4, a
+     * `GetGames` filtered to a platform id with nothing behind it answers
+     * `grpc-status: 0` with a zero-length message, which decodes to a message
+     * with no fields and contributes no entries.
+     *
      * `batchSize` still means something: games accumulate into a buffer that is
      * flushed whenever it reaches batchSize, across platform boundaries, so
      * batches are full rather than one-per-platform. Peak memory is one
@@ -547,6 +583,8 @@ export function createRetromLibrary(config) {
      * @param {Function} options.onBatch - Receives each batch
      */
     syncEntries: async ({ batchSize = 500, onBatch }) => {
+      assertCapability(RETROM_CAPABILITIES, CAPABILITIES.SYNC);
+
       const platforms = await loadPlatforms();
 
       // Populate the name cache from the same listing rather than fetching it

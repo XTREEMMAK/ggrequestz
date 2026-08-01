@@ -670,4 +670,102 @@ describe("Retrom library backend", () => {
 
     await expect(library.listPlatforms()).rejects.toThrow(/not configured/);
   });
+
+  // -- the unset sentinel ---------------------------------------------------
+
+  it("treats igdb_id 0 as absent rather than as IGDB game zero", async () => {
+    // `igdb_id` is `optional int64` in the server's descriptor, which is proto3
+    // explicit presence: a zero that has been set is written to the wire, and
+    // only a never-set field is absent. So a decoded 0 is a value Retrom put
+    // there, and it is not an IGDB id -- real ones start at 1. Letting it
+    // through puts the string "0" into the one column the index joins on. The
+    // sibling Gaseous backend shipped exactly this defect.
+    const library = await backend({
+      "PlatformService/GetPlatforms": ONE_PLATFORM,
+      "GameService/GetGames": grpcResponse(
+        concatBytes(
+          game({ id: 8, path: "/library/nes/unmatched.nes", platformId: 2 }),
+          gameMetadata({ gameId: 8, name: "Unmatched", igdbId: 0 }),
+        ),
+      ),
+    });
+
+    expect((await library.getEntry(8)).igdbId).toBeNull();
+  });
+
+  it("keeps a real igdb_id, so failing closed has not closed everything", async () => {
+    const library = await backend({
+      "PlatformService/GetPlatforms": ONE_PLATFORM,
+      "GameService/GetGames": grpcResponse(
+        concatBytes(
+          game({ id: 9, path: "/library/nes/matched.nes", platformId: 2 }),
+          gameMetadata({ gameId: 9, name: "Matched", igdbId: 1721 }),
+        ),
+      ),
+    });
+
+    expect((await library.getEntry(9)).igdbId).toBe("1721");
+  });
+
+  // -- surviving a schema this backend does not know ------------------------
+
+  it("keeps a game carrying a field type the codec cannot represent", async () => {
+    // Retrom's schema already uses `double` elsewhere, so a later release
+    // adding one to Game is ordinary. Its bit pattern is not an integer and is
+    // far outside JavaScript's exact range. A codec that refused it while
+    // decoding would drop the whole Game -- silently, because a nested record
+    // that will not decode is dropped rather than propagated, and the pass
+    // would still complete and let the sweep mark the game removed.
+    //
+    // field 20, wire type 1, 1234.5 as IEEE754 little-endian.
+    const unknownDouble = Uint8Array.from([
+      0xa1, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4a, 0x93, 0x40,
+    ]);
+
+    const library = await backend({
+      "PlatformService/GetPlatforms": ONE_PLATFORM,
+      "GameService/GetGames": grpcResponse(
+        bytesField(
+          1,
+          concatBytes(
+            varintField(1, 11),
+            stringField(3, "/library/nes/future.nes"),
+            varintField(4, 2),
+            unknownDouble,
+          ),
+        ),
+      ),
+    });
+
+    const entry = await library.getEntry(11);
+    expect(entry).toMatchObject({ id: "11", name: "future.nes" });
+  });
+
+  it("refuses a compressed response frame instead of decoding its bytes", async () => {
+    // Bit 0x01 of the flag byte. This client advertises no
+    // grpc-accept-encoding, so a conforming server never sets it -- 0.8.4
+    // measurably does not, even when asked for gzip. If one ever did, handing
+    // the compressed body to the protobuf decoder risks a message that decodes
+    // to nothing and reads as an empty library.
+    const trailer = new TextEncoder().encode("grpc-status:0\r\n");
+    const trailerFrame = new Uint8Array(5 + trailer.length);
+    trailerFrame[0] = 0x80;
+    new DataView(trailerFrame.buffer).setUint32(1, trailer.length, false);
+    trailerFrame.set(trailer, 5);
+
+    // A data frame flagged compressed, carrying a gzip magic number.
+    const dataFrame = Uint8Array.from([0x01, 0, 0, 0, 2, 0x1f, 0x8b]);
+    const body = concatBytes(dataFrame, trailerFrame);
+
+    const library = await backend({
+      "PlatformService/GetPlatforms": {
+        status: 200,
+        headers: { get: () => null },
+        arrayBuffer: async () =>
+          body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      },
+    });
+
+    await expect(library.listPlatforms()).rejects.toThrow(/compressed/);
+  });
 });
