@@ -11,6 +11,94 @@ import { resolveRequiredScope } from "$lib/apiScopes.js";
 import { warmUpCache } from "$lib/gameCache.js";
 import { warmPool } from "$lib/database.js";
 import { probeRommAvailability } from "$lib/romm.server.js";
+import { resolveLibraryConfig } from "$lib/library/config.js";
+import { syncLibrary } from "$lib/library/sync.js";
+
+/**
+ * Start the library index sync loop, if the operator asked for one.
+ *
+ * Off unless LIBRARY_SYNC_ENABLED is exactly "true", so an existing install
+ * behaves identically after upgrading.
+ *
+ * A cycle that throws is logged and dropped. It must not reject out of the
+ * timer callback: an unhandled rejection from an async setInterval callback
+ * does not stop the timer -- it terminates the *process*, as Node has done for
+ * unhandled rejections since v15. The catch is what keeps one unreachable
+ * backend from killing the server on the next tick.
+ *
+ * Started at most once. init() is its only caller and adapter-node calls that
+ * once per process, but SvelteKit's prerender pass also constructs a Server and
+ * calls init, and a second interval would be two timers racing for the same
+ * advisory lock for the life of the process. Same lesson as the "already
+ * warmed" flag below.
+ *
+ * The first cycle runs immediately rather than one interval from now, so a
+ * fresh install is not stuck on indexBuilding for fifteen minutes. Nothing
+ * awaits it: reaching the library backend must never delay the server becoming
+ * ready. Overlap is safe in both directions -- across workers and against a
+ * previous slow cycle in this one -- because syncLibrary takes a session
+ * advisory lock and a loser returns immediately.
+ */
+let librarySyncStarted = false;
+
+function startLibrarySync() {
+  if (librarySyncStarted) return;
+
+  let config;
+  try {
+    config = resolveLibraryConfig();
+  } catch (error) {
+    // A bad LIBRARY_KIND. resolveLibraryConfig refuses rather than guessing;
+    // report it once here instead of on every cycle.
+    console.error("❌ Library sync not started:", error?.message);
+    return;
+  }
+
+  if (!config.syncEnabled) return;
+
+  librarySyncStarted = true;
+
+  // Logged on change only. With PM2_INSTANCES=max and a pass that outlives the
+  // interval, every worker but the winner reports `locked` on every tick for as
+  // long as the process lives -- one line per core per interval, forever,
+  // saying nothing new. The first is worth having; the rest bury everything
+  // else in the log.
+  let lastSkipReason = null;
+
+  const cycle = async () => {
+    try {
+      const result = await syncLibrary({
+        batchSize: config.syncBatchSize,
+        maxSweepRatio: config.syncMaxSweepRatio,
+      });
+      if (result.completed) {
+        lastSkipReason = null;
+        console.log(
+          `📚 Library sync: ${result.upserted} indexed, ${result.removed} marked removed`,
+        );
+      } else if (result.reason) {
+        if (result.reason !== lastSkipReason) {
+          console.log(`📚 Library sync skipped: ${result.reason}`);
+        }
+        lastSkipReason = result.reason;
+      }
+    } catch (error) {
+      console.error(
+        "❌ Library sync cycle failed (non-fatal):",
+        error?.message,
+      );
+    }
+  };
+
+  const timer = setInterval(cycle, config.syncIntervalMs);
+  // A pending timer must not be the reason the process refuses to exit.
+  timer.unref?.();
+
+  console.log(
+    `📚 Library index sync enabled: every ${config.syncIntervalMs}ms, ${config.syncBatchSize} per batch`,
+  );
+  cycle();
+}
 
 /**
  * Server startup hook — runs once at boot, before the first request.
@@ -45,6 +133,10 @@ export async function init() {
   // Populates the availability snapshot the root layout reads, so the first
   // page render already has a real answer instead of an optimistic guess.
   probeRommAvailability().catch(() => {});
+
+  // Nothing else fills ggr_library_entries, so without this the index can
+  // never become ready and every read stays on its backend fallback.
+  startLibrarySync();
 }
 
 // HTTP Cache headers hook

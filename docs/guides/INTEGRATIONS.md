@@ -22,18 +22,26 @@ Authentication providers are **not** covered here — see
 Cross-references requested games against your ROMM library, shows availability
 on game pages, and links out to play them.
 
+**`LIBRARY_*` is the current, documented name for these settings.** `ROMM_*` is
+honoured as a fallback so an existing install needs no changes — the same
+trade `REQUEST_WEBHOOK_URL` made with `N8N_WEBHOOK_URL`. `LIBRARY_*` wins when
+both are set. `LIBRARY_KIND` additionally selects the backend; `romm` is the
+default and is what the rest of this section describes. Every other backend has
+its own section below.
+
 ```env
-ROMM_SERVER_URL=http://romm:8080
-ROMM_API_TOKEN=<client api token with roms.read>
+LIBRARY_URL=http://romm:8080
+LIBRARY_API_TOKEN=<client api token with roms.read>
 ```
 
-| Variable                 | Description                                                     |
-| ------------------------ | --------------------------------------------------------------- |
-| `ROMM_SERVER_URL`        | Server-side API base. Prefer an internal hostname               |
-| `ROMM_SERVER_URL_PUBLIC` | Browser-facing base for links and covers. Defaults to the above |
-| `ROMM_API_TOKEN`         | Client API Token, RomM 5.0+ — **recommended**                   |
-| `ROMM_USERNAME`          | Password-grant fallback for RomM 4.x                            |
-| `ROMM_PASSWORD`          | Password-grant fallback for RomM 4.x                            |
+| Variable                                        | Description                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| `LIBRARY_URL` / `ROMM_SERVER_URL`               | Server-side API base. Prefer an internal hostname               |
+| `LIBRARY_PUBLIC_URL` / `ROMM_SERVER_URL_PUBLIC` | Browser-facing base for links and covers. Defaults to the above |
+| `LIBRARY_API_TOKEN` / `ROMM_API_TOKEN`          | Client API Token, RomM 5.0+ — **recommended**                   |
+| `LIBRARY_USERNAME` / `ROMM_USERNAME`            | Password-grant fallback for RomM 4.x                            |
+| `LIBRARY_PASSWORD` / `ROMM_PASSWORD`            | Password-grant fallback for RomM 4.x                            |
+| `LIBRARY_KIND`                                  | Backend selector: `romm` (default), `gaseous`, `retrom`         |
 
 Include the scheme in the URL. `romm:8080` without `http://` will not resolve.
 
@@ -111,9 +119,101 @@ Check the scheme is present in `ROMM_SERVER_URL`, and that the address resolves
 _from inside the app container_ — not from your laptop.
 
 **Library section missing entirely**
-It only appears when `ROMM_SERVER_URL` is set along with either
-`ROMM_API_TOKEN` or both `ROMM_USERNAME` and `ROMM_PASSWORD`. A partial
-configuration disables it silently.
+It only appears when a server URL is set (`LIBRARY_URL` or `ROMM_SERVER_URL`)
+along with either an API token (`LIBRARY_API_TOKEN` or `ROMM_API_TOKEN`) or
+both a username and password (`LIBRARY_USERNAME`/`LIBRARY_PASSWORD` or
+`ROMM_USERNAME`/`ROMM_PASSWORD`). A partial configuration disables it
+silently.
+
+### Library fields on a game
+
+A cross-referenced game carries `in_library`, and when it is in the library
+also `library_id` and `library_url`. A RomM-native card — as returned by the
+recently-added, search and by-id endpoints — additionally carries
+`is_library_game`.
+
+`is_in_romm`, `is_romm_game`, `romm_id` and `romm_url` are the **deprecated**
+aliases, kept because Svelte components still read them — `is_romm_game`
+alone in seven component branches — and will be removed in a future major
+release. Migrate a reader from `is_romm_game || is_in_romm` to
+`is_library_game || in_library`: the neutral pair covers every case the
+deprecated pair does, since `in_library` is set by both producers even where
+`is_library_game` is only set on RomM-native cards.
+
+Most deprecated fields are populated with the same value as their neutral
+counterpart — **with one deliberate exception**: `library_id` is a **string**
+and `romm_id` stays a **number**. Every id in the library seam is
+stringified, matching `LibraryEntry.id` and the `TEXT` column a later
+cross-reference-by-index phase will use, so `library_id` cannot revert to
+RomM's numeric id without silently changing type the day that phase lands.
+`romm_id` keeps the numeric type it has always had instead. Do not "fix"
+these two to match each other — a test comment says so in exactly those
+words.
+
+---
+
+## Gaseous
+
+Set `LIBRARY_KIND=gaseous` to point the library at a
+[Gaseous](https://github.com/gaseous-project/gaseous-server) server instead of
+RomM. Everything else on this page that is about ROMM specifically — the API
+token, the two-URL split for covers — does not apply; what follows does.
+
+```env
+LIBRARY_KIND=gaseous
+LIBRARY_URL=http://gaseous:5198
+LIBRARY_USERNAME=you@example.com
+LIBRARY_PASSWORD=<account password>
+```
+
+**Gaseous has no API token.** The account credentials are the only way in, so
+`LIBRARY_USERNAME` and `LIBRARY_PASSWORD` are both required and
+`LIBRARY_API_TOKEN` is ignored. Two things catch people out:
+
+- `LIBRARY_USERNAME` must be the account's **e-mail address**, not its
+  username. A bare username is rejected as a bad credential.
+- The account must not have **two-factor authentication** enabled. There is no
+  way for the app to supply a code, so a 2FA account fails the connection
+  check with a message saying so rather than half-working.
+
+### What Gaseous can and cannot answer
+
+| Behaviour            | Gaseous                                                 |
+| -------------------- | ------------------------------------------------------- |
+| Recently added       | Yes, ordered by the server's own date-added             |
+| Search               | **Prefix only** — see below                             |
+| Cover images         | None. Gaseous exposes no working cover route for a game |
+| File size and path   | Not reported. They belong to a ROM, not to a game       |
+| Date added per entry | Not reported, though the server can sort by it          |
+
+**Search matches a prefix, not a substring.** Searching `zelda` finds
+_Zelda II_ but not _The Legend of Zelda_, because the match is anchored at the
+start of the title. This is the server's behaviour, not a client limitation.
+
+Turning the local library index on with `LIBRARY_SYNC_ENABLED=true` fixes it:
+once a sync has completed, searches are answered from the index with a
+substring match, and the anchoring goes away. The index is off by default, so
+until it is enabled, prefix matching is what searching a Gaseous library does.
+It is the single best reason to enable it for this backend.
+
+### Cross-referencing against IGDB
+
+GG Requestz marks a game as owned by matching IGDB ids. Gaseous only reports
+one when the game was actually matched **against IGDB** — a game matched
+against another metadata source, or not matched at all, reports no IGDB id and
+so is never marked owned, even though it is in the library.
+
+That is deliberate. The id Gaseous returns is the game's id _in whichever
+source matched it_, so treating it as an IGDB id regardless would mark
+unrelated games as owned. If your library shows fewer matches than you expect,
+give Gaseous IGDB credentials and let it re-match, rather than looking for a
+setting here.
+
+---
+
+## Retrom
+
+`LIBRARY_KIND=retrom` is recognized but not yet implemented.
 
 ---
 

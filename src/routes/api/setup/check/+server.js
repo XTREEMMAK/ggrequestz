@@ -7,6 +7,7 @@ import { json } from "@sveltejs/kit";
 import { query } from "$lib/database.js";
 import { getRedisClient } from "$lib/cache.js";
 import { fetchWithTimeout } from "$lib/utils.js";
+import { resolveLibraryConfig } from "$lib/library/config.js";
 
 // The setup wizard waits on this check, so it cannot block unbounded.
 const ROMM_CHECK_TIMEOUT_MS = 10000;
@@ -136,10 +137,15 @@ async function testIGDB() {
 }
 
 async function testROMM() {
-  const rommUrl = process.env.ROMM_SERVER_URL;
-  const rommToken = process.env.ROMM_API_TOKEN;
-  const rommUsername = process.env.ROMM_USERNAME;
-  const rommPassword = process.env.ROMM_PASSWORD;
+  // One resolver for the whole app. Reading process.env.ROMM_* directly here
+  // meant this check reported "not configured (optional)" for an install that
+  // had set the documented LIBRARY_URL and LIBRARY_API_TOKEN.
+  const {
+    url: rommUrl,
+    apiToken: rommToken,
+    username: rommUsername,
+    password: rommPassword,
+  } = resolveLibraryConfig();
 
   if (!rommUrl) {
     return { success: true, warning: "ROMM not configured (optional)" };
@@ -152,7 +158,7 @@ async function testROMM() {
     return {
       success: false,
       error:
-        "ROMM credentials not configured. Set ROMM_API_TOKEN, or ROMM_USERNAME and ROMM_PASSWORD.",
+        "ROMM credentials not configured. Set LIBRARY_API_TOKEN (or ROMM_API_TOKEN), or LIBRARY_USERNAME and LIBRARY_PASSWORD (or ROMM_USERNAME and ROMM_PASSWORD).",
     };
   }
 
