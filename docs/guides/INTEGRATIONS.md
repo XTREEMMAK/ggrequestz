@@ -154,7 +154,60 @@ words.
 
 ## Gaseous
 
-`LIBRARY_KIND=gaseous` is recognized but not yet implemented.
+Set `LIBRARY_KIND=gaseous` to point the library at a
+[Gaseous](https://github.com/gaseous-project/gaseous-server) server instead of
+RomM. Everything else on this page that is about ROMM specifically — the API
+token, the two-URL split for covers — does not apply; what follows does.
+
+```env
+LIBRARY_KIND=gaseous
+LIBRARY_URL=http://gaseous:5198
+LIBRARY_USERNAME=you@example.com
+LIBRARY_PASSWORD=<account password>
+```
+
+**Gaseous has no API token.** The account credentials are the only way in, so
+`LIBRARY_USERNAME` and `LIBRARY_PASSWORD` are both required and
+`LIBRARY_API_TOKEN` is ignored. Two things catch people out:
+
+- `LIBRARY_USERNAME` must be the account's **e-mail address**, not its
+  username. A bare username is rejected as a bad credential.
+- The account must not have **two-factor authentication** enabled. There is no
+  way for the app to supply a code, so a 2FA account fails the connection
+  check with a message saying so rather than half-working.
+
+### What Gaseous can and cannot answer
+
+| Behaviour            | Gaseous                                                 |
+| -------------------- | ------------------------------------------------------- |
+| Recently added       | Yes, ordered by the server's own date-added             |
+| Search               | **Prefix only** — see below                             |
+| Cover images         | None. Gaseous exposes no working cover route for a game |
+| File size and path   | Not reported. They belong to a ROM, not to a game       |
+| Date added per entry | Not reported, though the server can sort by it          |
+
+**Search matches a prefix, not a substring.** Searching `zelda` finds
+_Zelda II_ but not _The Legend of Zelda_, because the match is anchored at the
+start of the title. This is the server's behaviour, not a client limitation.
+
+Turning the local library index on with `LIBRARY_SYNC_ENABLED=true` fixes it:
+once a sync has completed, searches are answered from the index with a
+substring match, and the anchoring goes away. The index is off by default, so
+until it is enabled, prefix matching is what searching a Gaseous library does.
+It is the single best reason to enable it for this backend.
+
+### Cross-referencing against IGDB
+
+GG Requestz marks a game as owned by matching IGDB ids. Gaseous only reports
+one when the game was actually matched **against IGDB** — a game matched
+against another metadata source, or not matched at all, reports no IGDB id and
+so is never marked owned, even though it is in the library.
+
+That is deliberate. The id Gaseous returns is the game's id _in whichever
+source matched it_, so treating it as an IGDB id regardless would mark
+unrelated games as owned. If your library shows fewer matches than you expect,
+give Gaseous IGDB credentials and let it re-match, rather than looking for a
+setting here.
 
 ---
 

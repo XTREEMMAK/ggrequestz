@@ -33,15 +33,34 @@
  * ## The listing is a POST, and paging is 1-based with no page zero
  *
  * `POST /Games` is the listing -- a POST because the filter travels in the
- * body -- and answers `{"games": [...], "count": n, "alphaList": {...}}`.
+ * body -- and answers `{"games": [...]}`, plus `count` and `alphaList` when
+ * `returnSummary` is on. This backend always turns the summary off.
  *
  * ROM Hub's client records that `pageNumber=0` means "no paging, return
  * everything" on the 1.7.x line. **That is not true on 2.0 and must not be
- * relied on.** Measured: `pageNumber=0&pageSize=100` answers **500**, and
- * `pageNumber=0` with no page size answers 200 with zero games while the
- * library holds two. So paging here always starts at page 1, and `syncEntries`
- * stops on an empty page and on a short page rather than asking for
- * everything at once.
+ * relied on.** Measured, with the summary off, which is how this backend
+ * always calls it:
+ *
+ *     pageNumber=0&pageSize=100&returnSummary=false  ->  200 {"games":[]}
+ *     pageNumber=0                                   ->  200, zero games
+ *
+ * while the library holds two. Page 0 is a silent empty list, which is a worse
+ * failure than an error would be. So paging here always starts at page 1, and
+ * `syncEntries` stops on an empty page and on a short page rather than asking
+ * for everything at once.
+ *
+ * A 500 does exist in this area, and it is worth not mis-attributing: an
+ * earlier reading of it blamed the page number, and it is the summary block.
+ * `returnSummary` defaults to on, and with it on, a `pageSize` without a usable
+ * `pageNumber` is a 500 -- including with no `pageNumber` key at all, where
+ * page 0 is not involved:
+ *
+ *     pageNumber=0&pageSize=100                      ->  500
+ *     pageSize=100          (no pageNumber at all)   ->  500
+ *     pageNumber=0&pageSize=100&returnSummary=false  ->  200
+ *
+ * `fetchPage` always sends `returnSummary=false` and an explicit page number,
+ * so this backend never reaches it.
  *
  * ## What a game record does and does not carry
  *
@@ -123,6 +142,10 @@ const GASEOUS_CAPABILITIES = [
  * a `.Count > 0` test, so an empty list contributes no WHERE clause. They must
  * be `[]` and not `null` -- an explicit null fails 1.7.x validation exactly as
  * an absent key does, because implicit-required tests the bound value.
+ *
+ * `Sorting` is required too, but it varies per call and `fetchPage` is the only
+ * caller, so `fetchPage` supplies it. It is not defaulted here as well: a value
+ * every caller overwrites reads like a fallback that something might use.
  */
 function matchEverything() {
   return {
@@ -132,7 +155,6 @@ function matchEverything() {
     GameMode: [],
     PlayerPerspective: [],
     Theme: [],
-    Sorting: { SortBy: "NameThe", SortAscending: true },
   };
 }
 
@@ -384,15 +406,27 @@ export function createGaseousLibrary(config) {
         }
       }
       platformNames = map;
+      return platformNames;
     } catch (error) {
       console.warn(
         "Could not load Gaseous platforms; entries will have no platform name:",
         error.message,
       );
-      platformNames = new Map();
-    }
 
-    return platformNames;
+      // Deliberately not cached. `platformNames` stays null so the next call
+      // tries again, and only this listing loses its platform names.
+      //
+      // Caching the empty map made one transient failure permanent, because
+      // getLibrary() caches this backend for the life of the process: a single
+      // 500 from /Platforms and every later call answered from an empty map.
+      // That is not merely a degraded listing -- upsertBatch's ON CONFLICT sets
+      // `platform_name = EXCLUDED.platform_name` unconditionally, so the next
+      // sync pass would write NULL over the platform names already in the
+      // index, and the pass after that would do it again. Nothing heals it
+      // short of restarting the process. One retry per listing, or per sync
+      // pass, is much the cheaper mistake.
+      return new Map();
+    }
   }
 
   /**
@@ -427,11 +461,21 @@ export function createGaseousLibrary(config) {
    * the schema above rather than observed. It fails closed: an unexpected
    * source spelling yields null, which costs a cross-reference, where a wrong
    * id would corrupt one.
+   *
+   * The id is checked as well as the source, and that is not belt-and-braces.
+   * Gaseous uses **0 as its unset sentinel throughout this API** -- measured on
+   * the live instance: `cover: 0`, `franchise: 0`, `parent_game: 0`,
+   * `version_parent: 0`, `platformIds: [0]` for Unknown Platform, and
+   * MetadataSourceType 0 for None. So `id: 0` under an IGDB source means "no
+   * IGDB id", not IGDB game 0, and real IGDB ids start at 1. Testing only for
+   * `undefined` let that sentinel through as the string "0" -- a value that is
+   * neither null nor a real id, in the one column entriesByIgdbIds joins on.
    */
   function igdbIdOf(game) {
-    return game?.metadataSource === "IGDB" && game?.id !== undefined
-      ? game.id
-      : null;
+    if (game?.metadataSource !== "IGDB") return null;
+
+    const id = Number(game.id);
+    return Number.isInteger(id) && id > 0 ? id : null;
   }
 
   /**
@@ -629,11 +673,23 @@ export function createGaseousLibrary(config) {
      * "romhubproof20260730130456": "proof" -> proofseed only, "proofs" ->
      * proofseed, "PROOF" -> proofseed, "romhub" -> the other one, "seed" -> no
      * results, "oofseed" -> no results. So searching a word from the middle of
-     * a title finds nothing. SEARCH is still declared, because the seam's
-     * fallback when it is absent is to return nothing at all: router.js only
-     * reaches a backend search before the first sync completes, and afterwards
-     * answers from the index with `name ILIKE '%term%'`. Anchored results
-     * during that window beat no results.
+     * a title finds nothing.
+     *
+     * SEARCH is still declared, because the seam's fallback when it is absent
+     * is to return nothing at all: a backend that does not declare it gets
+     * `{indexBuilding: true, entries: []}` from router.js. Anchored results
+     * beat no results.
+     *
+     * Be careful how long "that window" is, though, because the obvious reading
+     * is too generous. router.js reaches a backend search only until the first
+     * sync completes and answers from the index with `name ILIKE '%term%'`
+     * afterwards -- but the index is opt-in and off by default
+     * (`LIBRARY_SYNC_ENABLED` must be the literal string "true"). On a default
+     * install no sync ever runs, so this is not a transient pre-index
+     * limitation: it is what Gaseous search does, permanently, until an
+     * operator turns the index on. That is worth saying plainly rather than
+     * describing as a window, and it is why the operator-facing docs say so
+     * too.
      */
     listEntries: async ({
       limit = 24,
@@ -672,22 +728,36 @@ export function createGaseousLibrary(config) {
      * Walk the whole library, a page at a time.
      *
      * Termination is on the pages themselves and never on a reported total:
-     * an empty page ends the walk, and so does a short one. `POST /Games` does
-     * return a `count`, and trusting it is the failure this avoids -- a count
-     * that disagrees with what the pages actually yield loops forever.
+     * an empty page ends the walk, and so does a short one. Gaseous can report
+     * a total -- `count`, in the summary block -- and trusting it is the
+     * failure this avoids, because a count that disagrees with what the pages
+     * actually yield loops forever against a live server. `fetchPage` sends
+     * `returnSummary=false`, so there is not even a count in the response to be
+     * tempted by.
      *
      * There is no page 0 shortcut here even though ROM Hub's notes record one
-     * for the 1.7.x line. Measured on 2.0: `pageNumber=0&pageSize=100` is a
-     * 500 and `pageNumber=0` alone returns nothing at all.
+     * for the 1.7.x line. Measured on 2.0, page 0 is a silent empty list; see
+     * the module header, including which request actually produces the 500 that
+     * was once attributed to it.
      *
-     * **This backend cannot emit two entries with the same id in one batch.**
-     * A batch is exactly one page, an entry's id is `metadataMapId`, and that
-     * is the primary key of `MetadataMap` -- one row per game, and a game
-     * spanning several platforms is still one row carrying a `platformIds`
-     * array. So the `ON CONFLICT` upsert cannot hit "cannot affect row a
-     * second time" from this backend. (A game moving between pages while the
-     * walk is in progress can repeat an entry across *different* batches,
-     * which is separate statements and therefore harmless.)
+     * On duplicate ids within one batch, and stated more carefully than it once
+     * was: an entry's id is `metadataMapId`, which is the primary key of
+     * `MetadataMap`, and every listing measured returned each game once. But
+     * the listing's `id` and `metadataSource` come from `MetadataMapBridge`,
+     * whose own primary key is (ParentMapId, MetadataSourceType,
+     * MetadataSourceId) -- so several bridge rows may share one ParentMapId,
+     * and this server declares three usable sources (None, IGDB, TheGamesDb).
+     * Whether `GetGames` collapses those to the `Preferred` row cannot be shown
+     * on a library where every game has exactly one bridge row, which is all
+     * that was available. So this backend is *not* claimed to be
+     * duplicate-free.
+     *
+     * It does not need to be. `upsertBatch` runs every batch from every backend
+     * through `dedupeByLibraryId` before the `ON CONFLICT` statement, precisely
+     * so that no backend has to make this promise -- see the "collapses a
+     * library_id that appears twice in one batch" test in library-sync. That is
+     * what keeps "cannot affect row a second time" out of reach, here and
+     * everywhere else.
      */
     syncEntries: async ({ batchSize = 500, onBatch }) => {
       assertCapability(GASEOUS_CAPABILITIES, CAPABILITIES.SYNC);
@@ -699,9 +769,19 @@ export function createGaseousLibrary(config) {
         const games = await fetchPage({
           pageNumber,
           pageSize: batchSize,
-          // Sorted by the stable local key rather than by name or date: a
-          // library that changes mid-walk reorders a name sort under the
-          // pager, which drops and repeats entries.
+          // NameThe ascending, and it is worth being straight about what that
+          // does and does not buy. The ideal sort key for a walk is the stable
+          // local id, because a library that changes mid-walk reorders any
+          // other sort under the pager and so drops and repeats entries.
+          // Gaseous does not offer one: `SortBy` is a validated enum and its
+          // whole accepted set is Name, NameThe, Rating, RatingCount,
+          // DateAdded, LastPlayed, TimePlayed, ReleaseDate. Nothing there is
+          // stable under insertion. NameThe is the least volatile of them -- a
+          // title changes far less often than a rating or a last-played time --
+          // so it is chosen as the best available, not as a solution. An entry
+          // missed because of a concurrent insert is picked up by the next
+          // pass, and the sweep's ratio guard is what stops a bad walk from
+          // emptying the index in the meantime.
           sortBy: SORT_NAME,
           ascending: true,
         });
