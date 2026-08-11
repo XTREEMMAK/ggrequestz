@@ -14,7 +14,7 @@ const OPEN_STATUSES = ["pending", "approved"];
 
 // One string, used twice on purpose: the per-role permission name and the
 // global settings key are deliberately identical, so the two switches read as
-// one concept in the admin UI and in migration 010, which seeds both. Kept in a
+// one concept in the admin UI and in migration 012, which seeds both. Kept in a
 // single const so they cannot drift apart.
 //
 // As a setting it is stored by admin/settings/+page.svelte as the bare string
@@ -26,7 +26,7 @@ const AUTO_APPROVE_KEY = "request.auto_approve";
  *
  * Deliberately global rather than per user: two people wanting the same game is
  * one request, and the second is told so. Matching mirrors the partial unique
- * indexes in migration 009 exactly -- igdb_id when present, normalised title
+ * indexes in migration 011 exactly -- igdb_id when present, normalised title
  * when it is null -- so the pre-check and the backstop cannot disagree.
  *
  * @param {Object} params

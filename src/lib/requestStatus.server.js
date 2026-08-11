@@ -21,7 +21,7 @@ import { invalidateCache } from "$lib/cache.js";
 import { sendGameRequestWebhook } from "$lib/webhooks.server.js";
 import { findOpenDuplicate } from "$lib/requestPolicy.server.js";
 
-// Postgres unique_violation. Raised by migration 009's two partial unique
+// Postgres unique_violation. Raised by migration 011's two partial unique
 // indexes over status IN ('pending','approved').
 const UNIQUE_VIOLATION = "23505";
 
@@ -165,7 +165,7 @@ export async function describeRequestConflict({ id, title }) {
  * not supplied" (or vice versa) the way a single COALESCE-on-value would.
  *
  * A row re-entering the open set -- `rejected`, `cancelled` or `fulfilled`
- * back to `pending` or `approved` -- can lose to migration 009's partial
+ * back to `pending` or `approved` -- can lose to migration 011's partial
  * unique indexes when another open request already covers that game. Every
  * step of that sequence is legitimate, so it is reported as a `conflict`
  * outcome rather than thrown: the caller can answer 409 naming the blocking

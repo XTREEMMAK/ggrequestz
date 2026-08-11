@@ -240,7 +240,7 @@ export async function POST({ request, cookies }) {
     }
 
     // Reject a game that is already requested and still open. Checked here for
-    // a useful message; migration 009's partial unique indexes are the backstop
+    // a useful message; migration 011's partial unique indexes are the backstop
     // for two submissions racing.
     const duplicate = await findOpenDuplicate({
       igdbId: insertData.igdb_id,
