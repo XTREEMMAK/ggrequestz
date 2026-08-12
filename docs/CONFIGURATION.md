@@ -108,7 +108,25 @@ Get these from [Twitch Developer Console](https://dev.twitch.tv/console):
 
 If not configured, falls back to in-memory caching.
 
-#### ROMM Integration
+#### Game Library
+
+The library integration is backend-neutral. `LIBRARY_*` is the current spelling
+of these settings and `LIBRARY_KIND` selects which backend to talk to.
+
+| Variable             | Description                                                                               | Default       |
+| -------------------- | ----------------------------------------------------------------------------------------- | ------------- |
+| `LIBRARY_KIND`       | Backend: `romm`, `gaseous` or `retrom`. An unknown value is refused rather than defaulted | `romm`        |
+| `LIBRARY_URL`        | Server-side API base. Prefer an internal hostname                                         | -             |
+| `LIBRARY_PUBLIC_URL` | Browser-facing base for links and cover images                                            | `LIBRARY_URL` |
+| `LIBRARY_API_TOKEN`  | API token, where the backend uses one                                                     | -             |
+| `LIBRARY_USERNAME`   | Username, where the backend authenticates that way                                        | -             |
+| `LIBRARY_PASSWORD`   | Password, where the backend authenticates that way                                        | -             |
+
+Per-backend setup, including which capabilities each one supports and what it
+needs in place of a token, is in
+[guides/INTEGRATIONS.md](guides/INTEGRATIONS.md).
+
+##### The ROMM names still work
 
 | Variable                 | Description                                                              | Default           |
 | ------------------------ | ------------------------------------------------------------------------ | ----------------- |
@@ -117,6 +135,15 @@ If not configured, falls back to in-memory caching.
 | `ROMM_API_TOKEN`         | Client API Token with the `roms.read` scope (RomM 5.0+, **recommended**) | -                 |
 | `ROMM_USERNAME`          | ROMM username (fallback for RomM 4.x)                                    | -                 |
 | `ROMM_PASSWORD`          | ROMM password (fallback for RomM 4.x)                                    | -                 |
+
+Each `ROMM_*` name above is read as a fallback for the `LIBRARY_*` on the same
+row, so an existing install upgrades without touching its configuration. This is
+the same trade `REQUEST_WEBHOOK_URL` made with `N8N_WEBHOOK_URL`. When both are
+set, the `LIBRARY_*` value wins.
+
+That precedence is the reason the `LIBRARY_*` entries in `.env.example` ship
+commented out: an uncommented `LIBRARY_URL` silently overrides a
+`ROMM_SERVER_URL` the operator has already configured.
 
 Set `ROMM_SERVER_URL_PUBLIC` only when the two differ. On Kubernetes, or any
 setup where the app reaches ROMM over an internal network the browser cannot,
