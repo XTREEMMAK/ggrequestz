@@ -126,6 +126,42 @@ Per-backend setup, including which capabilities each one supports and what it
 needs in place of a token, is in
 [guides/INTEGRATIONS.md](guides/INTEGRATIONS.md).
 
+##### Local library index
+
+Optional. When enabled, the app walks the whole library on a timer and keeps a
+local copy in Postgres, then answers listing, search and cross-reference queries
+from there instead of calling the backend on a render path.
+
+| Variable                       | Description                                                              | Default           |
+| ------------------------------ | ------------------------------------------------------------------------ | ----------------- |
+| `LIBRARY_SYNC_ENABLED`         | Run the index sync. Only the literal string `true` enables it            | `false`           |
+| `LIBRARY_SYNC_INTERVAL_MS`     | How often a pass runs                                                    | `900000` (15 min) |
+| `LIBRARY_SYNC_BATCH`           | Entries per batch. One database statement and one backend page per batch | `500`             |
+| `LIBRARY_SYNC_MAX_SWEEP_RATIO` | Largest share of the indexed library one completed pass may mark removed | `0.5`             |
+
+**Off by default, deliberately.** Enabling it means an upgraded install starts
+walking its entire library on a timer, so it has to be asked for. Every read
+still falls back to the backend when no pass has completed.
+
+Two things follow from that default, both worth knowing before you leave it off:
+
+- Backends that cannot list recently-added games or search server-side answer
+  those queries only from the index. `retrom` is the case that matters, so
+  leaving the sync off there means those two features never work rather than
+  working slowly.
+- The cross-reference that decides whether a game is already in your library
+  reads the index when one exists, and otherwise falls back to inspecting only
+  the most recently added titles. On a large library that fallback misses most
+  of it.
+
+`LIBRARY_SYNC_MAX_SWEEP_RATIO` is a safety valve, not a tuning knob. A pass only
+removes entries after enumerating the whole backend without error, so a failed
+walk already sweeps nothing. This covers the backend that answers honestly and
+answers empty, after its own database is reset or its ROM volume is unmounted:
+without the ratio, one such pass would mark the entire index removed. Entries are
+marked with a timestamp rather than deleted, so a refused or mistaken sweep is
+recoverable.
+
 ##### The ROMM names still work
 
 | Variable                 | Description                                                              | Default           |
