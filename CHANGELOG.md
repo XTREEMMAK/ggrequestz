@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ Breaking Changes
+
+- **Approval now gates fulfillment, so submitting a request no longer dispatches
+  the outbound webhook.** Until now the webhook fired the moment a request was
+  submitted, which meant approving or rejecting it changed nothing that had
+  already happened. A request now dispatches exactly once, when it enters
+  `approved`. **If you rely on requests being actioned immediately, either enable
+  the new `request.auto_approve` setting or grant the matching permission**;
+  otherwise nothing is sent downstream until an administrator approves. Any
+  `is_admin` user auto-approves regardless of the global setting. Thanks to
+  [@BlizzHacker](https://github.com/BlizzHacker).
+
 ### ✨ New Features
+
+- **The library integration is no longer ROMM-specific.** A `GameLibrary` seam
+  sits between the app and whatever library manager you run, selected with
+  `LIBRARY_KIND`. The settings gain backend-neutral `LIBRARY_*` names; the
+  `ROMM_*` names keep working as fallbacks, so an existing install upgrades
+  without touching its configuration, and the `LIBRARY_*` value wins when both
+  are set. Thanks to [@BlizzHacker](https://github.com/BlizzHacker).
+- **An optional local library index.** With `LIBRARY_SYNC_ENABLED=true` the app
+  walks the library on a timer, keeps a copy in Postgres, and answers listing,
+  search and in-library queries from there rather than calling the backend on a
+  render path. Off by default: enabling it means an upgraded install starts
+  walking its whole library, so it has to be asked for. A pass only removes
+  entries after enumerating the whole backend without error, refuses outright if
+  more than `LIBRARY_SYNC_MAX_SWEEP_RATIO` of the index would go, and marks rows
+  with a timestamp rather than deleting them. An interrupted walk now resumes
+  where it stopped instead of restarting from the beginning.
+- **Duplicate requests are refused.** Two people asking for the same game
+  produce one request and the second is told which one is already open. Scoped to
+  open requests, so a rejected or fulfilled one can still be retried.
 
 - **The About popup lists release history.** The last ten releases with their
   dates, each linking to its GitHub release page, with the running version marked.
@@ -44,6 +75,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Bug Fixes
 
+- **The in-library badge was wrong for most of a large library.** Deciding
+  whether a game was already held fetched the 2,000 most recently added roms and
+  matched against that window. Measured on a 72,162-rom library, the window can
+  see 655 of the 22,118 distinct IGDB ids present, so it answered for about 3
+  percent and reported "not in library" for the rest. Two smaller faults sat in
+  the same lookup: the map was keyed with a stringified id but read with a raw
+  one, so a numeric id never matched, and a secondary key on lowercased title
+  meant two games sharing a name overwrote each other. The lookup now reads the
+  local index in one statement with no outbound request. **This takes effect only
+  where the index is enabled**; every install without it keeps the old window,
+  because replacing it outright would report "not in library" for everything.
+  Closes [#19](https://github.com/XTREEMMAK/ggrequestz/issues/19). Thanks to
+  [@BlizzHacker](https://github.com/BlizzHacker).
+- **Rescinding a request notified nobody.** It was the fourth place that wrote a
+  request's status and the only one with no side effects, so a user withdrawing
+  their own request produced no notification, invalidated no cache, and the
+  request went on showing as open. Approving from the request edit page had the
+  same problem. All status changes now go through one owner.
 - **The homepage declared ROMM unreachable whenever the check took over 1.5s.**
   It raced a live availability probe against its own 1500ms ceiling — 2250ms under
   the Docker multiplier — which sat far below the ROMM client's request budget. Any
