@@ -14,7 +14,7 @@ A modern game discovery and request management platform with IGDB integration, R
 - **🔍 Advanced Search** - Search 200,000+ games with filters and real-time results
 - **🛡️ Content Filtering** - Comprehensive ESRB rating filters, custom content blocks, and global game banning
 - **🔒 Global Content Controls** - System-wide content filtering that supersedes user preferences for safe environments
-- **📚 ROMM Integration** - Seamless integration with your ROMM game library
+- **📚 Game Library Integration** - Cross-references requests against your own library. ROMM and Gaseous are supported today, selected with `LIBRARY_KIND`
 - **🔐 Flexible Authentication** - Any standards-compliant OIDC provider (Keycloak, Pocket ID, Authentik, Auth0, Okta, Entra ID) via discovery, plus basic auth with user registration
 - **🔑 API Key Management** - Generate scoped API keys for programmatic access with Bearer token authentication
 - **📚 Interactive API Docs** - Complete OpenAPI 3.1 specification with dynamic server URLs at `/api/docs`

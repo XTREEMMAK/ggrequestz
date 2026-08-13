@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ROMM_*` names keep working as fallbacks, so an existing install upgrades
   without touching its configuration, and the `LIBRARY_*` value wins when both
   are set. Thanks to [@BlizzHacker](https://github.com/BlizzHacker).
+- **Gaseous is supported as a second library backend**, with
+  `LIBRARY_KIND=gaseous`. It authenticates with the account e-mail and password
+  rather than an API token, so `LIBRARY_USERNAME` must be the e-mail address and
+  an account with two-factor authentication cannot be used. Two limits are worth
+  knowing before you switch: its search matches from the start of a title rather
+  than anywhere inside it, and a game Gaseous has not matched to IGDB is never
+  reported as owned, because the alternative is marking unrelated games as owned.
+  Enabling the local index removes the first of those. Thanks to
+  [@BlizzHacker](https://github.com/BlizzHacker).
 - **An optional local library index.** With `LIBRARY_SYNC_ENABLED=true` the app
   walks the library on a timer, keeps a copy in Postgres, and answers listing,
   search and in-library queries from there rather than calling the backend on a
