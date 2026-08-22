@@ -7,8 +7,13 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (including devDependencies for build)
-RUN npm ci --silent
+# Install all dependencies (including devDependencies for build).
+#
+# Deliberately not --silent. That flag suppresses npm's errors along with its
+# progress, so a failure here exits 1 with no output at all and the build log
+# says only that the step failed. --no-audit --no-fund gets the quiet log
+# without the blindness.
+RUN npm ci --no-audit --no-fund
 
 # Copy source code
 COPY . .
@@ -39,7 +44,12 @@ RUN (getent group ${PGID} || addgroup -g ${PGID} -S ggrequestz) && \
 
 # Copy package files and install production dependencies
 COPY package*.json ./
-RUN npm ci --only=production --silent && npm cache clean --force
+# --omit=dev, not the deprecated --only=production, which npm 10 warns about
+# on every build. Not --silent, for the reason given in the builder stage: an
+# arm64 leg of this exact step failed once with no diagnosable output at all,
+# and re-running the identical commit succeeded, so the log was the only
+# evidence available and it carried nothing.
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder --chown=${PUID}:${PGID} /app/build ./build
