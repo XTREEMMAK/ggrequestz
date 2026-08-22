@@ -7,7 +7,7 @@
  * SvelteKit routes PUBLIC_-prefixed variables to `$env/dynamic/public` and omits
  * them from the private module, so the public module was never consulted. In
  * practice deployments still worked, because both Compose and the dev server's
- * `load-env.js` preload populate `process.env` — but the resolution depended on
+ * `load-env.js` preload populate `process.env`, but the resolution depended on
  * that happening rather than on reading the correct source.
  *
  * Separately, a malformed value (typically a missing scheme) was returned

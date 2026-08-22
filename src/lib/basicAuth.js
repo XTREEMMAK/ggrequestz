@@ -239,7 +239,7 @@ function signPayload(encodedPayload) {
  *   btoa('{"id":1,"is_admin":true,"auth_type":"basic","exp":9999999999999,...}')
  * and set it as the `basic_auth_session` cookie. Tokens are now HMAC-signed.
  *
- * Uses node:crypto rather than `jose` so verification stays synchronous —
+ * Uses node:crypto rather than `jose` so verification stays synchronous:
  * `getBasicAuthUser()` is called synchronously from hooks and layout loads.
  */
 export function createBasicAuthToken(user) {
@@ -264,7 +264,7 @@ export function createBasicAuthToken(user) {
 /**
  * Verify and decode a basic auth token.
  *
- * Unsigned legacy tokens are rejected — that is the whole point of the change,
+ * Unsigned legacy tokens are rejected; that is the whole point of the change,
  * so existing basic-auth sessions are invalidated and users re-login once.
  */
 export function verifyBasicAuthToken(token) {

@@ -89,7 +89,7 @@
       Requests
     </h1>
     <p class="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-      Help us improve our game library. Request new games, suggest updates, or report issues — and track what you've already asked for.
+      Help us improve our game library. Request new games, suggest updates, or report issues, and track what you've already asked for.
     </p>
   </div>
 

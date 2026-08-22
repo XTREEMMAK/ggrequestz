@@ -3,7 +3,7 @@
  *
  * Scopes were recorded on every key and offered in the admin UI, but nothing
  * ever checked them, so a key stamped `games:read` carried its owner's full
- * privileges. These guard the table that fixed it — in particular the
+ * privileges. These guard the table that fixed it, in particular the
  * default-deny behaviour, which is what makes a route added later closed until
  * someone classifies it.
  */

@@ -33,7 +33,7 @@ export async function GET({ url, request }) {
   const offset = (page - 1) * limit;
 
   try {
-    // No separate availability probe here — the list call itself is the probe,
+    // No separate availability probe here: the list call itself is the probe,
     // and doing both doubled the round trips on every "load more".
     const games = await getRecentlyAddedROMs(limit, offset, cookies);
 

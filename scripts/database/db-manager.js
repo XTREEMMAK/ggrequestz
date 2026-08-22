@@ -430,7 +430,7 @@ async function verifySchemaIntegrity(client) {
         // Deliberately does not throw. A self-hosted instance that refuses to
         // boot on a schema mismatch is worse than one that boots degraded: the
         // operator loses the admin UI they would use to fix it. The trade-off
-        // is that this MUST be loud, and on stderr — a schema error on stdout
+        // is that this MUST be loud, and on stderr: a schema error on stdout
         // is indistinguishable from normal startup chatter in container logs.
         console.error(
           `\n❌ Schema verification found ${errors.length} error(s). ` +

@@ -20,7 +20,7 @@ A modern game discovery and request management platform with IGDB integration, R
 - **📚 Interactive API Docs** - Complete OpenAPI 3.1 specification with dynamic server URLs at `/api/docs`
 - **⚡ High Performance** - Redis caching, hover preloading, and optimized data fetching
 - **🎨 Themeable UI** - Selectable animated backgrounds and a glass sidebar theme, chosen per user
-- **🔔 Outbound Webhooks** - Post request events as JSON to any receiver — n8n, a download automation service, a script
+- **🔔 Outbound Webhooks** - Post request events as JSON to any receiver - n8n, a download automation service, a script
 
 ## 📹 Preview
 
@@ -64,40 +64,40 @@ docker compose up -d
 
 ### Getting Started
 
-- **[Quickstart Guide](docs/setup/QUICKSTART.md)** — Docker setup, running from source, environment configuration
-- **[Configuration Guide](docs/CONFIGURATION.md)** — every environment variable the code reads
-- **[Architecture Overview](docs/ARCHITECTURE.md)** — system design and components
+- **[Quickstart Guide](docs/setup/QUICKSTART.md)** - Docker setup, running from source, environment configuration
+- **[Configuration Guide](docs/CONFIGURATION.md)** - every environment variable the code reads
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - system design and components
 
 ### Setup
 
-- [Database Setup](docs/setup/DATABASE_SETUP.md) — PostgreSQL settings, migrations, backups
-- [OIDC / SSO Setup](docs/setup/OIDC_SETUP.md) — any OIDC provider, plus roles and admin access
-- [Production Deployment](docs/setup/DEPLOYMENT.md) — reverse proxy, TLS, scaling, upgrades
-- [Testing](docs/setup/TESTING.md) — the test layers, and the disposable local stack
+- [Database Setup](docs/setup/DATABASE_SETUP.md) - PostgreSQL settings, migrations, backups
+- [OIDC / SSO Setup](docs/setup/OIDC_SETUP.md) - any OIDC provider, plus roles and admin access
+- [Production Deployment](docs/setup/DEPLOYMENT.md) - reverse proxy, TLS, scaling, upgrades
+- [Testing](docs/setup/TESTING.md) - the test layers, and the disposable local stack
 
 ### Guides
 
-- [Integrations](docs/guides/INTEGRATIONS.md) — ROMM, Gotify, outbound webhooks
-- [Custom Navigation](docs/guides/NAVIGATION.md) — role-based navigation links
-- [Content Filtering](#global-content-filtering) — user and global filtering options
-- [API Documentation](docs/API.md) — REST API reference
-- [Interactive API Docs](/api/docs) — OpenAPI specification with live examples
-- [Release Guide](docs/guides/RELEASE_GUIDE.md) — cutting a release
+- [Integrations](docs/guides/INTEGRATIONS.md) - ROMM, Gotify, outbound webhooks
+- [Custom Navigation](docs/guides/NAVIGATION.md) - role-based navigation links
+- [Content Filtering](#global-content-filtering) - user and global filtering options
+- [API Documentation](docs/API.md) - REST API reference
+- [Interactive API Docs](/api/docs) - OpenAPI specification with live examples
+- [Release Guide](docs/guides/RELEASE_GUIDE.md) - cutting a release
 
 ### Development
 
-- [Contributing Guide](CONTRIBUTING.md) — development guidelines and standards
-- [Engineering Rules](docs/dev-notes/ENGINEERING_RULES.md) — performance rules, migration constraints, commit discipline
-- [v1.3 Findings](docs/dev-notes/V1.3_FINDINGS.md) — root causes and open items
-- [Login Animation Archive](docs/dev-notes/ARCHIVE_LOGIN_ANIMATION.md) — a past investigation
-- [Changelog](CHANGELOG.md) — version history
+- [Contributing Guide](CONTRIBUTING.md) - development guidelines and standards
+- [Engineering Rules](docs/dev-notes/ENGINEERING_RULES.md) - performance rules, migration constraints, commit discipline
+- [v1.3 Findings](docs/dev-notes/V1.3_FINDINGS.md) - root causes and open items
+- [Login Animation Archive](docs/dev-notes/ARCHIVE_LOGIN_ANIMATION.md) - a past investigation
+- [Changelog](CHANGELOG.md) - version history
 
 ### Getting help
 
-1. **Setup problems** — the guide for that service in [docs/setup/](docs/setup/)
-2. **An integration isn't working** — [INTEGRATIONS.md](docs/guides/INTEGRATIONS.md), then the container logs
-3. **Development questions** — [CONTRIBUTING.md](CONTRIBUTING.md)
-4. **Bugs and feature requests** — [open an issue](https://github.com/XTREEMMAK/ggrequestz/issues)
+1. **Setup problems** - the guide for that service in [docs/setup/](docs/setup/)
+2. **An integration isn't working** - [INTEGRATIONS.md](docs/guides/INTEGRATIONS.md), then the container logs
+3. **Development questions** - [CONTRIBUTING.md](CONTRIBUTING.md)
+4. **Bugs and feature requests** - [open an issue](https://github.com/XTREEMMAK/ggrequestz/issues)
 
 > **Maintaining these docs.** Documentation must describe **shipped behavior**.
 > Several guides once documented environment variables that no code read, which
@@ -160,7 +160,7 @@ docker pull ghcr.io/xtreemmak/ggrequestz:latest
 docker pull ghcr.io/xtreemmak/ggrequestz:v1.4.0
 ```
 
-> **📋 v1.4.0 Release Notes:** Selectable backgrounds and a glass theme for the sidebar, a restructured profile Settings area, and the outbound webhook renamed to `REQUEST_WEBHOOK_URL` (`N8N_WEBHOOK_URL` still works). **Breaking:** API key scopes are now enforced — keys created with less than full access will start returning `403` on endpoints outside their scopes. See the [changelog](CHANGELOG.md) before upgrading.
+> **📋 v1.4.0 Release Notes:** Selectable backgrounds and a glass theme for the sidebar, a restructured profile Settings area, and the outbound webhook renamed to `REQUEST_WEBHOOK_URL` (`N8N_WEBHOOK_URL` still works). **Breaking:** API key scopes are now enforced: keys created with less than full access will start returning `403` on endpoints outside their scopes. See the [changelog](CHANGELOG.md) before upgrading.
 
 ## 🤝 Contributing
 

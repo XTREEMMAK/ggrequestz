@@ -36,7 +36,7 @@ export async function GET({ url }) {
     const games = await getPopularGames(limit, offset, userPreferences, false);
 
     // No ROMM cross-reference here. It was disabled some time ago, but the
-    // uncached isRommAvailable() probe that fed it was left in place — so this
+    // uncached isRommAvailable() probe that fed it was left in place, so this
     // route paid a live ROMM round trip, up to the full 12s retry budget, for a
     // value it discarded. If cross-referencing returns, read availability from
     // getRommAvailabilitySnapshot() rather than probing on the request path.

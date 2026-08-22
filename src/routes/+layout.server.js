@@ -161,7 +161,7 @@ export async function load({ request, cookies }) {
     if (user) {
       try {
         // getUserPermissions() already caches internally under exactly this
-        // key, so wrapping it in another withCache() was pure duplication —
+        // key, so wrapping it in another withCache() was pure duplication,
         // and with request coalescing it deadlocked: the outer call registered
         // the key as in-flight, then the inner call was handed the outer's own
         // promise and awaited itself forever.
@@ -176,8 +176,8 @@ export async function load({ request, cookies }) {
       // them. Deliberately inside the `if (user)` branch: the unauthenticated
       // /login must not gain a database round-trip for decorative preferences.
       //
-      // Both columns come from one query. They are separate preferences — the
-      // chrome theme is independent of the background — but they are always
+      // Both columns come from one query. They are separate preferences (the
+      // chrome theme is independent of the background) but they are always
       // needed together, so a second round-trip would buy nothing.
       try {
         const { getUserIdFromAuth } = await import("$lib/getUserId.js");
@@ -202,7 +202,7 @@ export async function load({ request, cookies }) {
         backgroundTheme = appearance.backgroundTheme;
         uiTheme = appearance.uiTheme;
       } catch (prefError) {
-        // Never fatal — both are cosmetic. Log the reason so an upgrade that
+        // Never fatal: both are cosmetic. Log the reason so an upgrade that
         // skipped migration 008 or 009 is diagnosable rather than just silently
         // never showing the effect.
         console.warn(
@@ -228,7 +228,7 @@ export async function load({ request, cookies }) {
       rommAvailable = rommConfigured && snapshot.ok !== false;
 
       if (rommAvailable) {
-        // Public base — this becomes an href in the nav, so it must be a URL
+        // Public base: this becomes an href in the nav, so it must be a URL
         // the browser can resolve, not an internal service address.
         // resolveLibraryConfig() already prefers LIBRARY_PUBLIC_URL, falls back
         // to ROMM_SERVER_URL_PUBLIC, then to the internal URL; reading

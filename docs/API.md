@@ -68,7 +68,7 @@ Content-Type: application/json
 Scopes are enforced for API keys on every `/api/*` route. A key missing the
 required scope receives `403 Insufficient scope`, with the scope it needed named
 in the response body. A key holding `*` satisfies every row below. Session
-(cookie) authentication does not use scopes — browser access is governed by the
+(cookie) authentication does not use scopes. Browser access is governed by the
 user permission system instead.
 
 | Endpoint                     | Method       | Required scope    |
@@ -97,8 +97,8 @@ user permission system instead.
 | `/api/webhooks`              | `POST`       | `admin:write`     |
 
 `/api/search`, `/api/igdb`, `/api/romm/cross-reference` and
-`/api/watchlist/batch` accept `POST` but only read — they take a query or a list
-of IDs in the body — so they require the corresponding `:read` scope.
+`/api/watchlist/batch` accept `POST` but only read (they take a query or a list
+of IDs in the body), so they require the corresponding `:read` scope.
 
 `/api/webhooks` relays a caller-supplied title, message and priority to Gotify
 and the outbound webhook receiver. It requires `admin:write` because the caller

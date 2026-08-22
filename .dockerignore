@@ -42,7 +42,7 @@ build
 .cache
 
 # Planning records and disposable test fixtures.
-# Note this is `tmp`, not `.tmp` above — they are different directories.
+# Note this is `tmp`, not `.tmp` above; they are different directories.
 tmp
 
 # Tests. Excluding them from the build context is what keeps them out of the
@@ -53,7 +53,7 @@ tests
 vitest.config.js
 playwright.config.js
 
-# Test stack and fixture seeding — developer-local, and the seed scripts carry
+# Test stack and fixture seeding: developer-local, and the seed scripts carry
 # fixture passwords that have no business in a published image.
 scripts/testing
 
@@ -67,6 +67,6 @@ Makefile
 # Exception: CHANGELOG.md is needed at BUILD time. `src/lib/changelog.server.js`
 # imports it with Vite's `?raw`, which inlines the release history into the bundle
 # so the About popup does not have to read a file the production image never
-# copies. Without this line the build fails outright — which is how this was
+# copies. Without this line the build fails outright, which is how this was
 # found. Do not remove it without removing that import.
 !CHANGELOG.md

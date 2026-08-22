@@ -254,7 +254,7 @@ export async function safeAsync(fn, options = {}) {
     );
   } catch (error) {
     console.warn(
-      `⚠️ ${errorContext} failed (${error?.name || "Error"}): ${error?.message || error} — using fallback`,
+      `⚠️ ${errorContext} failed (${error?.name || "Error"}): ${error?.message || error}; using fallback`,
     );
     if (onError) {
       try {
@@ -271,7 +271,7 @@ export async function safeAsync(fn, options = {}) {
  * `fetch` with a hard deadline.
  *
  * Nothing on a render path may block unbounded. Note that `AbortSignal.timeout`
- * rejects with a `TimeoutError`, not an `AbortError` — code branching on the
+ * rejects with a `TimeoutError`, not an `AbortError`; code branching on the
  * error name must check for the former.
  *
  * @param {string} url - Request URL

@@ -1,8 +1,8 @@
 # Production Deployment
 
 Running G.G Requestz behind a reverse proxy, with the settings that are easy to
-get wrong. For a first install, start with [QUICKSTART.md](QUICKSTART.md)
-— this guide covers what comes after it works on localhost.
+get wrong. For a first install, start with [QUICKSTART.md](QUICKSTART.md);
+this guide covers what comes after it works on localhost.
 
 ## What the stack is
 
@@ -15,7 +15,7 @@ get wrong. For a first install, start with [QUICKSTART.md](QUICKSTART.md)
 | `redis`      | `redis:7-alpine`                      | Optional; in-memory fallback if absent |
 
 There is no bundled reverse proxy and no TLS termination. Compose defines no
-profiles — `--profile anything` is a no-op left over from an older layout.
+profiles: `--profile anything` is a no-op left over from an older layout.
 
 ## Set ORIGIN, or logins will fail
 
@@ -36,7 +36,7 @@ ORIGIN=https://requests.example.com
 The entrypoint derives `ORIGIN` from `PUBLIC_SITE_URL` when it is unset, so
 setting `PUBLIC_SITE_URL` correctly is usually enough. Set both if you are
 unsure. The same value must match the redirect URI registered at your OIDC
-provider — see [OIDC_SETUP.md](OIDC_SETUP.md).
+provider; see [OIDC_SETUP.md](OIDC_SETUP.md).
 
 ## Reverse proxy
 
@@ -88,8 +88,8 @@ external network.
 
 ## Hardening before you expose it
 
-**Generate real secrets.** The app refuses to start without `SESSION_SECRET` —
-that is deliberate, since it used to fall back to a placeholder committed to
+**Generate real secrets.** The app refuses to start without `SESSION_SECRET`.
+That is deliberate, since it used to fall back to a placeholder committed to
 this repository, which made session cookies forgeable.
 
 ```bash
@@ -99,7 +99,7 @@ openssl rand -base64 32  # POSTGRES_PASSWORD
 
 **Stop publishing the database port.** `docker-compose.yml` maps Postgres to
 the host so it is reachable during a first install. In production, delete the
-`ports:` block from the `postgres` service — the app reaches it over the
+`ports:` block from the `postgres` service. The app reaches it over the
 Compose network regardless. Same for `redis`.
 
 **Check that a reverse proxy is the only public path.** With `APP_PORT` bound
@@ -148,7 +148,7 @@ start period.
 
 Server-side `console` output is deliberately **not** stripped from the
 production bundle. Operators of a self-hosted app debug from container logs, so
-integration failures — a ROMM 403, an OIDC discovery timeout — are visible
+integration failures (a ROMM 403, an OIDC discovery timeout) are visible
 there and nowhere else. Read them after any upgrade.
 
 ## Backups
@@ -176,7 +176,7 @@ docker compose logs -f ggrequestz | grep -iE "schema|migration|error"
 ```
 
 Migrations run automatically at boot unless `AUTO_MIGRATE=false`. There is **no
-rollback path** — `rollback_sql` is recorded but never executed — so the dump
+rollback path**: `rollback_sql` is recorded but never executed, so the dump
 above is the only way back. Schema mismatches are logged rather than fatal, so
 the app starting is not by itself proof the upgrade succeeded; read the logs.
 
@@ -184,7 +184,7 @@ Check [CHANGELOG.md](../../CHANGELOG.md) for breaking changes first. Upgrading
 to 1.3.0 in particular requires `SESSION_SECRET` to be set, and invalidates
 existing basic-auth sessions once.
 
-Roll one instance at a time if you run several — migrations are not serialised
+Roll one instance at a time if you run several; migrations are not serialised
 between concurrently booting containers.
 
 ## Troubleshooting
@@ -199,7 +199,7 @@ The redirect URI the app advertises differs from the one registered, usually
 
 **Site loads, ROMM covers and "Play in ROMM" links are broken**
 `ROMM_SERVER_URL` is an address only the server can resolve. Set
-`ROMM_SERVER_URL_PUBLIC` to the browser-facing URL — see
+`ROMM_SERVER_URL_PUBLIC` to the browser-facing URL; see
 [INTEGRATIONS.md](../guides/INTEGRATIONS.md).
 
 **Container restarts in a loop**
@@ -219,7 +219,7 @@ deploy:
 
 ## Related
 
-- [CONFIGURATION.md](../CONFIGURATION.md) — every environment variable
-- [DATABASE_SETUP.md](DATABASE_SETUP.md) — migrations, pooling, backups
-- [OIDC_SETUP.md](OIDC_SETUP.md) — SSO and redirect URIs
-- [TESTING.md](TESTING.md) — disposable stack for rehearsing an upgrade
+- [CONFIGURATION.md](../CONFIGURATION.md) - every environment variable
+- [DATABASE_SETUP.md](DATABASE_SETUP.md) - migrations, pooling, backups
+- [OIDC_SETUP.md](OIDC_SETUP.md) - SSO and redirect URIs
+- [TESTING.md](TESTING.md) - disposable stack for rehearsing an upgrade

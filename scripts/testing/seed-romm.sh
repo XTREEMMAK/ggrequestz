@@ -145,6 +145,6 @@ ROMM_USERNAME=${LOW_USER}
 ROMM_PASSWORD=${LOW_PASS}
 
 Note the INTERNAL hostname (romm:8080). A public URL would hairpin out
-through DNS, TLS and the reverse proxy and back — the exact cost v1.3
+through DNS, TLS and the reverse proxy and back, the exact cost v1.3
 removed from the render path.
 EOF

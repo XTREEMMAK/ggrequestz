@@ -2,8 +2,8 @@
  * Required API key scope per route.
  *
  * Scopes were stored on every key and selected in the admin UI, but nothing
- * ever checked them — `verifyScopes` in `apiKeys.js` and its `checkApiScopes`
- * wrapper in `auth.server.js` both had zero callers — so a key stamped
+ * ever checked them: `verifyScopes` in `apiKeys.js` and its `checkApiScopes`
+ * wrapper in `auth.server.js` both had zero callers, so a key stamped
  * `games:read` carried its owner's full privileges. This table is what makes
  * the selection mean something.
  *
@@ -14,7 +14,7 @@
  */
 
 /**
- * Longest prefix wins, so the order of this array does not matter — see the
+ * Longest prefix wins, so the order of this array does not matter; see the
  * sort in `resolveRequiredScope`. Methods are matched exactly, except that HEAD
  * is treated as GET.
  *
@@ -79,7 +79,7 @@ const ROUTE_SCOPES = [
   // `admin:write` is a judgement call rather than an obvious fit: the endpoint
   // triggers outbound messages instead of acting on a resource, so no scope
   // matches it cleanly. It gets the strictest one because a caller chooses the
-  // title, message and priority that land in the operator's Gotify — that is
+  // title, message and priority that land in the operator's Gotify, that is
   // closer to an administrative capability than to writing a request.
   //
   // It needs an entry at all because it is *not* public, despite what

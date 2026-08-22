@@ -96,7 +96,7 @@ export async function POST({ request, cookies }) {
       // The root layout caches the appearance preferences to avoid a query per
       // authenticated page view. Without this, a theme or background change
       // appears not to apply until the TTL expires. The key comes from
-      // cache.js so it cannot drift from the one the layout writes —
+      // cache.js so it cannot drift from the one the layout writes;
       // invalidating a key nothing wrote is not an error, it just silently
       // does nothing.
       invalidateCache(appearanceCacheKey(userId)),

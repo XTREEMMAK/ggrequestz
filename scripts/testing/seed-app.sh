@@ -7,7 +7,7 @@
 #     endpoint, so the password is hashed and the admin role assigned exactly
 #     the way a real installation does it
 #
-# The stack is disposable — `make test-down` deletes its volumes — so this runs
+# The stack is disposable (`make test-down` deletes its volumes), so this runs
 # after every rebuild. Passwords are bcrypt and cannot be read back out, which
 # is why the credentials live here rather than in someone's memory.
 #
@@ -108,7 +108,7 @@ App fixture ready (${GGR_URL})
   admin  ${ADMIN_USER} / ${ADMIN_PASS}   (${ADMIN_MAIL})
 
 Sign in at ${GGR_URL}/login with AUTH_METHOD=basic, which is the default for
-this stack. The OIDC and Authentik paths are seeded separately — see
+this stack. The OIDC and Authentik paths are seeded separately; see
 ./scripts/testing/seed-keycloak.sh.
 
 The password is bcrypt cost-12 and unrecoverable. To change it, hash a new one

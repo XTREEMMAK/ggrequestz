@@ -21,7 +21,7 @@ async function pageState(page) {
 }
 
 // The admin these tests sign in as must exist before any of them run. See
-// ensureAdmin() in helpers.js — locally this is a no-op, in CI it creates it.
+// ensureAdmin() in helpers.js; locally this is a no-op, in CI it creates it.
 test.beforeAll(async ({ playwright, baseURL }) => {
   const context = await playwright.request.newContext({ baseURL });
   try {
@@ -101,7 +101,7 @@ test.describe("Authentication Flow", () => {
     await basicAuth.click();
     await expect(page).toHaveURL(/\/login\/basic/);
 
-    // The field is named "identifier" — it takes a username or an email.
+    // The field is named "identifier"; it takes a username or an email.
     await expect(page.locator('input[name="identifier"]')).toBeVisible();
     await expect(page.locator('input[name="password"]')).toBeVisible();
   });

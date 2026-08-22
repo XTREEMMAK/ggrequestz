@@ -27,7 +27,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # Per PM2 worker — the real ceiling is this times your core count
+      # Per PM2 worker; the real ceiling is this times your core count
       POSTGRES_POOL_MAX: ${POSTGRES_POOL_MAX:-10}
 
       # Authentication

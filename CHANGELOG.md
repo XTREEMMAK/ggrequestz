@@ -63,14 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The About popup lists release history.** The last ten releases with their
   dates, each linking to its GitHub release page, with the running version marked.
   Read from `CHANGELOG.md`, which is inlined at build time rather than opened at
-  runtime — the production image does not ship the file, so reading it on demand
+  runtime: the production image does not ship the file, so reading it on demand
   would have worked in development and shown nothing in Docker. The heading format
   is untouched, since the release workflow and `create-release.sh` both parse it.
 - **The sidebar shows an indicator when a newer release exists.** A dot beside the
   version number, and a line in the About popup naming the new version and linking
   to it. The check asks the GitHub releases API at most once every six hours,
   doubling to 24 hours while it keeps failing, and never blocks a page render. Set
-  `UPDATE_CHECK_ENABLED=false` to turn it off entirely — air-gapped installs, or
+  `UPDATE_CHECK_ENABLED=false` to turn it off entirely: air-gapped installs, or
   anywhere the app should not reach out; opted out, it makes no outbound request at
   all. A failed check shows nothing in the UI and logs the reason with its status
   code for the operator.
@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the availability breaker and caches the result for minutes, so a perfectly
   healthy ROMM reported as `Could not reach the ROMM server`. The per-attempt
   timeout also rises from 5s to 10s and the total retry budget from 12s to 30s, so
-  the first — cold, and much slower — probe after a container start has room to
+  the first (cold, and much slower) probe after a container start has room to
   finish. A genuinely dead ROMM consequently takes longer to declare dead; the
   breaker caches that verdict, so the cost is paid once per interval per worker
   rather than per request. Thanks to
@@ -114,8 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request went on showing as open. Approving from the request edit page had the
   same problem. All status changes now go through one owner.
 - **The homepage declared ROMM unreachable whenever the check took over 1.5s.**
-  It raced a live availability probe against its own 1500ms ceiling — 2250ms under
-  the Docker multiplier — which sat far below the ROMM client's request budget. Any
+  It raced a live availability probe against its own 1500ms ceiling (2250ms under
+  the Docker multiplier), which sat far below the ROMM client's request budget. Any
   library big enough to need seconds rather than milliseconds lost that race on
   every load, so the "New in Library" shelf showed an outage message, the
   in-library badges never appeared on any card, and the raised budgets above could
@@ -126,14 +126,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5-minute cache wrapped around it stored nothing on failure, so every load
   re-raced a fresh probe. Availability is now read from the background-refreshed
   snapshot, as the root layout and `/api/games/popular` already did, and is
-  optimistic until a probe has actually failed — the shelf streams, so a real
+  optimistic until a probe has actually failed. The shelf streams, so a real
   failure still arrives with an accurate reason once the request settles.
 
 ### 🔧 Technical Changes
 
 - **`scripts/create-release.sh` no longer aborts one step before tagging.**
   `package.json` is bumped in the release commit, so by the time the script ran
-  there was nothing left to stage and `git commit` exited non-zero — under
+  there was nothing left to stage and `git commit` exited non-zero. Under
   `set -e` that ended the run just before `git tag`, reporting no error of its
   own. This would have affected every release from 1.4.0 onward.
 - **The live `isRommAvailable()` probe is gone.** It had no callers left after the
@@ -152,7 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   operating with more privilege than it was granted; it now receives
   `403 Insufficient scope` on endpoints outside its scopes. Keys holding `*` are
   unaffected. If an integration breaks after upgrading, the 403 body names the
-  scope it needed — either add that scope to the key or reissue it. See the
+  scope it needed: either add that scope to the key or reissue it. See the
   scope table in [docs/API.md](docs/API.md).
 - **`POST /api/webhooks` now requires the `admin:write` scope.** The endpoint was
   listed among the server's public routes, but as `/api/webhooks/` with a
@@ -166,7 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **API key scopes were recorded but never checked.** Every key stored the scopes
   selected when it was created, the admin UI presented them as permissions, and
   `docs/API.md` told administrators to "use the minimum required scopes for each
-  key" — but no route ever consulted them. `verifyScopes()` in
+  key," but no route ever consulted them. `verifyScopes()` in
   `src/lib/apiKeys.js` and its `checkApiScopes()` wrapper in
   `src/lib/auth.server.js` both had zero callers, so a key stamped `games:read`
   carried its owner's full privileges, including writes. Anyone who delegated a
@@ -191,7 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   translucent, blurred sidebar and header. It is separate from the animated
   background, so either can be used without the other, and it falls back to solid
   chrome where `backdrop-filter` is unsupported. Scoped to the chrome
-  deliberately — cards, modals and form controls keep full opacity.
+  deliberately: cards, modals and form controls keep full opacity.
 - **The animated background is now a named selection.** Profile → Settings →
   Themes offers **None** (the default) and **Drifty Stars**, the effect that
   shipped in 1.3.0, rather than a single on/off checkbox. Existing opt-ins are
@@ -202,7 +202,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The outbound request webhook never fired when a request was submitted.**
   `sendGameRequestNotification` posted to the relative URL `/api/webhooks`, which
-  only resolves in a browser, and nothing imported it — `POST /api/request`
+  only resolves in a browser, and nothing imported it. `POST /api/request`
   notified Gotify and stopped. So the webhook dispatched only for whoever POSTed
   to `/api/webhooks` directly, which nothing did. Dispatch now happens
   server-side from the request handler, sharing one sender with `/api/webhooks`
@@ -210,8 +210,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Thanks to [@BlizzHacker](https://github.com/BlizzHacker), who found it while
   building against the documented behaviour.
 - **`urgent` ranked below `high` in the webhook payload.** The priority mapping
-  was `high → 8, low → 3, else → 5`, so `urgent` — a value the database
-  explicitly allows — fell through to the medium score. Now `low` 3, `medium` 5,
+  was `high → 8, low → 3, else → 5`, so `urgent` (a value the database
+  explicitly allows) fell through to the medium score. Now `low` 3, `medium` 5,
   `high` 8, `urgent` 9.
 - **The documented payload had the wrong id types.** `request_id` was shown as an
   integer and `igdb_id` as a number; `ggr_game_requests.id` is a `UUID` and
@@ -227,7 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Chromium and Firefox against the built stylesheet rather than the source.
 - **A saved preference sometimes did not take effect until the cache expired.**
   Invalidation deletes from Redis and from the memory of the one worker handling
-  that request, but a Redis miss fell through to worker-local memory — so with PM2
+  that request, but a Redis miss fell through to worker-local memory, so with PM2
   running a process per core, the other workers kept serving their stale copies
   and whether a theme change appeared depended on which worker answered next. With
   Redis healthy, a miss now means "not cached". Memory remains the fallback for an
@@ -262,7 +262,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hardcoded `"your-secret-key"` when the variable was unset, which meant session
   tokens on those installs were signed with a value published in this
   repository. That fallback is gone and the app now refuses to start without a
-  real secret. **Set `SESSION_SECRET` before upgrading** — generate one with
+  real secret. **Set `SESSION_SECRET` before upgrading**: generate one with
   `openssl rand -hex 32`.
 - **Basic-auth session tokens are now signed.** Existing `basic_auth_session`
   cookies are invalidated, so basic-auth users must log in again after upgrading.
@@ -276,8 +276,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clearing the games cache required no privileges.** `/api/cache/clear` and
   `/api/admin/clear-cache` each ran an unqualified `DELETE FROM ggr_games_cache`
   with no permission check of their own. The only gate was the global one in
-  `hooks.server.js`, which requires merely an authenticated principal — and
-  accepts a bearer API key — so any signed-in user could empty a table shared by
+  `hooks.server.js`, which requires merely an authenticated principal (and
+  accepts a bearer API key), so any signed-in user could empty a table shared by
   the whole instance. The hardening below covered `/admin/api/*`; these two sit
   at `/api/admin/*` and `/api/cache/*`, the inverted prefix, and fell through.
   Both now require `admin.panel`.
@@ -287,7 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Your submitted requests are now visible from the Requests page.** The list
   lived only inside a profile tab, so the sidebar's "Requests" entry led
   somewhere you could file a request but not see one. `/request` is now two tabs
-  — Submit a Request, and My Requests — and accepts `?tab=requests` to deep link
+  (Submit a Request, and My Requests) and accepts `?tab=requests` to deep link
   into the latter. The profile tab is unchanged and renders the same component.
 - **ROMM availability now backs off.** Consecutive failures escalate the
   re-probe interval 5 → 10 → 20 → 30 minutes instead of pinning it at 5, and
@@ -299,8 +299,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `make test-up` / `test-seed` gave no way to ask for a blank instance and keep
   it, which made the first-run wizard untestable.
 - **Deterministic offline seed data**, via `scripts/testing/seed-data.js`.
-- **Generic OIDC support.** Works with any standards-compliant provider —
-  Keycloak, Pocket ID, Auth0, Okta, Entra ID — with endpoints resolved from the
+- **Generic OIDC support.** Works with any standards-compliant provider
+  (Keycloak, Pocket ID, Auth0, Okta, Entra ID) with endpoints resolved from the
   provider's discovery document and `id_token` validation via JWKS. Manual
   endpoint overrides are available for providers without discovery. `AUTH_METHOD`
   accepts `oidc`, `oidc_generic` and `authentik` as equivalents, and the existing
@@ -334,7 +334,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Bug Fixes
 
 - **Clearing the cache deleted every user's watchlist.** `gamesCache.clear()`
-  removed all `ggr_user_watchlist` rows — for every user, not the caller — and
+  removed all `ggr_user_watchlist` rows (for every user, not the caller) and
   nulled `igdb_id` on every game request before emptying the cache table. Both
   steps existed to satisfy foreign keys into `ggr_games_cache` that
   `002_complete_schema_updates.sql` drops, so they had been unnecessary for two
@@ -344,7 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ROMM degrades to permanent HTTP 500s until the container is restarted.**
   The bearer token was cached in module scope with no expiry tracking and
   discarded only on an exact `401`. RomM's password grant issues a 30-minute
-  token, and once it lapses RomM answers with **500**, not 401 — so the dead
+  token, and once it lapses RomM answers with **500**, not 401, so the dead
   token was never cleared and every subsequent request from that worker re-sent
   it. The retry loop then replayed the same dead token four times.
   - The token now tracks the lifetime RomM reports and renews a minute ahead of
@@ -353,7 +353,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Setting `ROMM_API_TOKEN` to a Client API Token avoids the expiry entirely
     and remains the recommended configuration.
 - **`/api/games/popular` took up to 12 seconds.** It awaited an uncached
-  `isRommAvailable()` probe whose only consumer — the cross-reference call — had
+  `isRommAvailable()` probe whose only consumer (the cross-reference call) had
   been commented out, so the route paid a full ROMM round trip, retries
   included, for a value it discarded.
 - **Every log line was printed twice.** `out_file: /dev/stdout` in
@@ -361,8 +361,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-emitted the same line from its own tail. This was widely read as evidence
   of two cluster workers; it was not.
 - **ROMM cross-referencing hammered a failing server.** It probed availability
-  live and then issued its own request — eight HTTP calls per invocation with
-  retries — on every game page load. It now reads the background-refreshed
+  live and then issued its own request (eight HTTP calls per invocation with
+  retries) on every game page load. It now reads the background-refreshed
   availability snapshot.
 - **The ROMM setup check could hang the first-run wizard.** Its `fetch` had no
   `AbortSignal`, it reported failures as successes, and it did not recognise
@@ -384,7 +384,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page.** Reverted. Nested `withCache()` calls on the same key awaited their own
   outer promise forever; `/login` was unaffected, which is why it went unnoticed.
 - ROMM failures reported real status codes instead of being swallowed into an
-  empty list — a 403 from an under-privileged account is now distinguishable
+  empty list. A 403 from an under-privileged account is now distinguishable
   from a timeout.
 - The basic-auth fallback no longer logs as an error when it is working normally.
 - **The startup cache warm-up no longer makes an HTTP call at all**, so it can no
@@ -402,7 +402,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Cold start went from roughly 9 seconds to milliseconds.** The root layout
   awaited an outbound ROMM call on _every_ route, including the unauthenticated
-  `/login`, with no timeout — so when ROMM was unreachable, the first byte of
+  `/login`, with no timeout, so when ROMM was unreachable, the first byte of
   every page waited for a TCP timeout.
 - Every outbound call now has a hard deadline via `AbortSignal.timeout()`.
 - Database pool construction and cache warming moved to boot rather than the
@@ -419,8 +419,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and exited immediately without it, and all three referenced the `typesense`
   service removed several releases ago. `scripts/README.md` nonetheless told
   users to run them. `deploy-production.sh` was the dangerous one: it invoked
-  `db-manager.js fix` — which drops and recreates `ggr_migrations`
-  unconditionally — as a routine "ensuring migration table structure is
+  `db-manager.js fix` (which drops and recreates `ggr_migrations`
+  unconditionally) as a routine "ensuring migration table structure is
   compatible" step on every deploy, so anyone who supplied the missing
   `.env.docker` would have silently lost their migration history each time.
   `docker-entrypoint.js`, the entrypoint the image actually uses, is unaffected.
@@ -432,7 +432,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never appear. The stack now runs with `--env-file /dev/null`.
 - **The local e2e suite ran against `.env.development`.** Playwright had a
   hardcoded env block for CI and nothing for local runs, where its `webServer`
-  booted `npm run dev` — pointed at a live remote database. It now targets the
+  booted `npm run dev`, pointed at a live remote database. It now targets the
   Docker test stack, and refuses to start when the stack is not up.
 - **e2e assertions that had never executed.** Every test branched on "`/setup`
   or everything else" and treated everything else as the signed-in application;
@@ -443,7 +443,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ROMM credential lifecycle against a mocked `fetch`. `npm run test:integration`.
 - **Upgrades are now testable against a real past release.** No existing tooling
   could stand up a tagged release and then swap it to the working tree over the
-  same database — `docker-compose.test.yml` always builds from HEAD. Adds an
+  same database. `docker-compose.test.yml` always builds from HEAD. Adds an
   isolated stack (`docker-compose.test.upgrade.yml`, Postgres 15 to match what a
   release actually ships) and three targets:
   `make test-upgrade-old FROM=v1.2.5`, `make test-upgrade-new`,
@@ -460,11 +460,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failures became invisible to self-hosters reading container logs.
 - CSP set to `nonce` mode, required for streamed rendering.
 - `.dockerignore` is now tracked in git. It had been listed in `.gitignore`, so
-  the GHCR build — which runs from a fresh checkout — was building with no
+  the GHCR build (which runs from a fresh checkout) was building with no
   `.dockerignore` at all. Tests, fixtures and seed scripts no longer ship inside
   the published image.
 - `Makefile`: migrated to Compose v2, and repaired `dev`, `prod`, `setup` and
-  `dev-setup`, which referenced `.env.dev` and `.env.docker` — neither of which
+  `dev-setup`, which referenced `.env.dev` and `.env.docker`, neither of which
   exists in the repo. Removed `prod-full`, which enabled two Compose profiles
   that are not defined anywhere and was therefore identical to `prod`.
 
@@ -472,10 +472,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Consolidated the documentation and removed guides that described software
   that does not exist.** Several files documented environment variables no code
-  reads and commands that fail immediately — the same class of problem that
+  reads and commands that fail immediately, the same class of problem that
   produced #4 and #7 on the OIDC side.
-  - **Deleted** `DOCKER_UPDATES.md` (every path in it — `docker-init.sql`,
-    `scripts/migrate.sh`, `migrations/deprecated/` — is absent from the repo),
+  - **Deleted** `DOCKER_UPDATES.md` (every path in it, including `docker-init.sql`,
+    `scripts/migrate.sh` and `migrations/deprecated/`, is absent from the repo),
     `MIGRATION_v1.0.3.md` (a one-time note three minors stale), and
     `DOCKER_SETUP.md` (duplicated QUICKSTART, and listed Typesense as required
     two years after its removal).
@@ -483,7 +483,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     readers to set `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
     `SUPABASE_SERVICE_KEY`; none of the three is read anywhere. Now documents
     the actual `POSTGRES_*` connection, the `npm run db:*` commands, and the
-    migration system's real limitations — no locking, no rollback, non-fatal
+    migration system's real limitations: no locking, no rollback, non-fatal
     schema verification.
   - **`DEPLOYMENT.md` rewritten.** It was titled "Docker Testing Guide" while
     being linked as the production deployment guide, and referenced four Compose
@@ -521,8 +521,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CONTRIBUTING.md` no longer claims ESLint, `npm run lint:fix` or
   `npm run test:integration`, none of which exist.
 - `SETUP.md` merged into `QUICKSTART.md`. It documented Supabase environment
-  variables for an app that uses raw `pg` — those names survive only as legacy
-  fallback aliases — and claimed other OIDC providers required editing
+  variables for an app that uses raw `pg` (those names survive only as legacy
+  fallback aliases), and claimed other OIDC providers required editing
   `auth.js`. `QUICKSTART.md` gains the running-from-source section it lacked.
 - `docs/guides/RELEASE_GUIDE.md` documented plain `### Added / Changed / Fixed`
   changelog headers; the file has used emoji headers for several releases.
@@ -1657,7 +1657,7 @@ openssl rand -hex 32
 ```
 
 Add the result to your `.env` as `SESSION_SECRET=`, then upgrade. If the app
-exits immediately on start, this is why — check the container logs.
+exits immediately on start, this is why: check the container logs.
 
 Also:
 
@@ -1670,7 +1670,7 @@ Also:
 3. **Authentik users need no configuration changes.** The `AUTHENTIK_*`
    variables still work. To move to the generic names, rename them to `OIDC_*`
    and set `OIDC_ISSUER_URL` to your issuer.
-4. If you previously set `OIDC_SCOPE`, rename it to `OIDC_SCOPES` — the singular
+4. If you previously set `OIDC_SCOPE`, rename it to `OIDC_SCOPES`: the singular
    form was documented but never read.
 5. Run database migrations: `npm run db:migrate` (or leave `AUTO_MIGRATE=true`).
 

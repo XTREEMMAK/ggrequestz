@@ -2,7 +2,7 @@
 #
 # Postgres and Redis only. The app container is built and run separately for
 # the "old" and "new" legs of the test (see the Makefile) so that swapping
-# versions never means editing a compose file mid-test — both legs point at
+# versions never means editing a compose file mid-test: both legs point at
 # the same database and cache, just a different app image.
 #
 # Distinct project name, ports and volumes from docker-compose.test.yml, so
@@ -10,7 +10,7 @@
 # test-seeded / test-live) without colliding.
 #
 # postgres:15-alpine to match what v1.2.5 and the real docker-compose.yml both
-# run — docker-compose.test.yml deliberately uses 16, which is fine for that
+# run; docker-compose.test.yml deliberately uses 16, which is fine for that
 # stack's own purposes but is not what this test is trying to reproduce.
 name: ggr-upgrade
 

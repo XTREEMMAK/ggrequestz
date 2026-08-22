@@ -1,7 +1,7 @@
 # Database Setup
 
 G.G Requestz stores everything in a single PostgreSQL database, accessed
-through the `pg` driver directly — there is no ORM. All tables carry a `ggr_`
+through the `pg` driver directly. There is no ORM. All tables carry a `ggr_`
 prefix so the app can share a database with other software.
 
 > **Changed in v1.3.** Earlier versions of this guide described a Supabase
@@ -57,7 +57,7 @@ POSTGRES_USER=ggrequestz
 POSTGRES_PASSWORD=...
 ```
 
-The database must exist and the user must own it — the app creates tables, not
+The database must exist and the user must own it. The app creates tables, not
 databases.
 
 ## Running from source
@@ -90,7 +90,7 @@ Two consequences worth knowing:
 - Ordering is lexicographic, not numeric, so a hypothetical `010_` sorts before
   `002_`. Keep the three-digit prefix.
 
-Write new migrations defensively — `IF NOT EXISTS`, `ON CONFLICT DO NOTHING` —
+Write new migrations defensively (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`)
 because there is no transaction wrapping the whole run and a partial failure
 leaves the schema half-applied.
 
@@ -116,7 +116,7 @@ These are real gaps in the current implementation. Do not rely on them working:
   no upgrade path keyed on schema version.
 - **Schema mismatches do not stop the app.** `verifySchemaIntegrity()` logs to
   stderr and returns. An instance that refuses to boot is harder to repair than
-  one running degraded, so this is deliberate — but it means **you have to read
+  one running degraded, so this is deliberate, but it means **you have to read
   the container logs after an upgrade** to know whether the schema is sound.
 
 `migrations/legacy/` holds migrations from before the tracking table existed.
@@ -140,7 +140,7 @@ the only way to undo a migration.
 **App exits with "Failed to connect to database after maximum retries"**
 The entrypoint retries with a delay before giving up. Check that Postgres is
 healthy (`docker compose ps`) and that `POSTGRES_HOST` resolves _from inside
-the app container_ — `localhost` is the container itself, not the host.
+the app container_: `localhost` is the container itself, not the host.
 
 **"too many connections for role"**
 `POSTGRES_POOL_MAX` × `PM2_INSTANCES` exceeds `max_connections`. Lower the pool,

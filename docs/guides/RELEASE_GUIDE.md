@@ -41,7 +41,7 @@ Add your new version section to `CHANGELOG.md` following the existing format:
 ### 📚 Documentation
 ```
 
-Use the emoji headers — that is what `CHANGELOG.md` actually contains, and
+Use the emoji headers: that is what `CHANGELOG.md` actually contains, and
 matching it keeps the file consistent. Include only the sections you need.
 
 **The `## [X.Y.Z]` heading is load-bearing.** `.github/workflows/release.yml`

@@ -42,7 +42,7 @@ const DISCOVERY_TTL_MS = 60 * 60 * 1000;
  *   `load-env.js` preload.
  *
  * Reading only the first and last happened to work, because Compose and
- * `load-env.js` both populate `process.env` — but that made resolution depend
+ * `load-env.js` both populate `process.env`, but that made resolution depend
  * on one of those running rather than on consulting the correct source.
  */
 function cfg(...names) {
@@ -92,7 +92,7 @@ export function getOidcConfig() {
 /**
  * Warn when a configured URL is not absolute.
  *
- * A value such as `192.0.2.10:5174/api/auth/callback` — the scheme omitted —
+ * A value such as `192.0.2.10:5174/api/auth/callback` (the scheme omitted)
  * flows through to the authorization request unchanged, and the only feedback is
  * the provider's generic "missing, invalid, or mismatching redirection URI".
  * Naming the variable and the offending value turns that into a one-line fix.
@@ -176,7 +176,7 @@ let discoveryCache = { url: null, doc: null, fetchedAt: 0 };
  *
  * Note the issuer path is preserved. Authentik issuers look like
  * `https://auth.example.com/application/o/my-app`, and the discovery document
- * lives beneath that path — the previous implementation stripped it.
+ * lives beneath that path; the previous implementation stripped it.
  *
  * @returns {Promise<Object|null>} - Discovery document, or null if unavailable
  */
@@ -321,7 +321,7 @@ let jwksCache = { uri: null, jwks: null };
 /**
  * Verify an id_token against the provider's published keys.
  *
- * The previous implementation never read the id_token at all — identity came
+ * The previous implementation never read the id_token at all; identity came
  * from an unverified /userinfo response.
  *
  * @param {string} idToken - Raw id_token
@@ -418,7 +418,7 @@ export async function resolveIdentity(tokens, nonce) {
   }
 
   // If the id_token could not be verified but is present, fall back to its
-  // unverified claims only when there is no userinfo at all — better a
+  // unverified claims only when there is no userinfo at all: better a
   // degraded login than none, but say so loudly.
   let claims = verified;
   if (!claims && !userinfo && tokens.id_token) {

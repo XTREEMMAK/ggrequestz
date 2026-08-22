@@ -5,7 +5,7 @@
  *
  * This exists so "a seeded instance" means something specific and repeatable.
  * Migrations create the schema plus system roles and permissions, but no domain
- * data at all — a freshly migrated database has no games, no requests and no
+ * data at all: a freshly migrated database has no games, no requests and no
  * users, which makes most of the UI impossible to look at.
  *
  * Runs entirely offline. No IGDB, ROMM or OIDC credentials are required, so it
@@ -128,7 +128,7 @@ async function seedUsers(db) {
   for (const user of USERS) {
     const { rows } = await db.query(
       // username is VARCHAR(255) and preferred_username is TEXT, so the same
-      // placeholder cannot serve both — Postgres cannot deduce one type for it.
+      // placeholder cannot serve both; Postgres cannot deduce one type for it.
       `INSERT INTO ggr_users
          (email, name, username, preferred_username, password_hash,
           is_active, is_admin)
@@ -261,7 +261,7 @@ async function seedNavigation(db) {
  * Refuse to write demo rows into what looks like a real instance.
  *
  * The fixtures use synthetic 99xxxx igdb_ids, so any *other* cached game means
- * this database has talked to IGDB — which a disposable test stack seeded only
+ * this database has talked to IGDB, which a disposable test stack seeded only
  * by this script never does.
  *
  * @param {import("pg").Client} db

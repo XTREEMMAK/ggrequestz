@@ -20,8 +20,8 @@ help:
 	@echo "  dev-logs  Follow development logs"
 	@echo ""
 	@echo "🧪 Local test stack (docker-compose.test.yml):"
-	@echo "  test-blank   Fresh empty instance — lands on the /setup wizard"
-	@echo "  test-seeded  Admin + demo library — lands on /login"
+	@echo "  test-blank   Fresh empty instance, lands on the /setup wizard"
+	@echo "  test-seeded  Admin + demo library, lands on /login"
 	@echo "  test-live    Seeded, plus real IGDB/ROMM credentials from .env"
 	@echo "  test-seed    Re-run the fixture seeding against a running stack"
 	@echo "  test-logs    Follow test stack logs"
@@ -170,7 +170,7 @@ dev-setup:
 	@echo "🗄️ PostgreSQL: localhost:5432"
 
 # ---------------------------------------------------------------------------
-# Local test stack — a real Docker install built from this working tree, plus
+# Local test stack: a real Docker install built from this working tree, plus
 # RomM and Keycloak fixtures. See docs/setup/TESTING.md.
 #
 # Two modes, because they test different things and are mutually exclusive:
@@ -181,7 +181,7 @@ dev-setup:
 #   test-seeded  admin, demo library, requests, watchlist. Lands on /login.
 #
 # Both start from an empty volume, so switching between them means test-down
-# first — which the targets do for you.
+# first, which the targets do for you.
 # ---------------------------------------------------------------------------
 
 # --env-file /dev/null is load-bearing. Compose automatically reads ./.env for
@@ -194,7 +194,7 @@ TEST_COMPOSE = docker compose --env-file /dev/null -f docker-compose.test.yml
 
 # test-live is the deliberate exception: it reads .env so the real IGDB and ROMM
 # credentials interpolate through. docker-compose.test.live.yml pins everything
-# else back to the test values. No romm profile — it points at a real ROMM.
+# else back to the test values. No romm profile; it points at a real ROMM.
 TEST_LIVE_COMPOSE = docker compose --env-file .env \
 	-f docker-compose.test.yml -f docker-compose.test.live.yml
 TEST_LIVE_PROFILES = --profile oidc
@@ -222,7 +222,7 @@ test-blank:
 	$(call test_stack_up,$(TEST_COMPOSE),$(TEST_PROFILES))
 	$(call test_stack_banner)
 	@echo "Blank instance. Open the app and it will redirect to /setup."
-	@echo "Do NOT run 'make test-seed' — creating the admin ends the blank state."
+	@echo "Do NOT run 'make test-seed': creating the admin ends the blank state."
 
 # A populated installation: admin, demo library, requests, watchlist.
 test-seeded:
@@ -236,7 +236,7 @@ test-seeded:
 # Seeded, plus the real IGDB and ROMM credentials from .env, for exercising the
 # live integrations. The database and cache stay disposable.
 test-live:
-	@test -f .env || { echo "❌ .env not found — test-live layers it for credentials"; exit 1; }
+	@test -f .env || { echo "❌ .env not found; test-live layers it for credentials"; exit 1; }
 	$(call test_stack_up,$(TEST_LIVE_COMPOSE),$(TEST_LIVE_PROFILES))
 	@$(MAKE) --no-print-directory test-seed
 	$(call test_stack_banner)
@@ -262,19 +262,19 @@ endif
 test-shell:
 	$(TEST_COMPOSE) exec app sh
 
-# Removes volumes too — the stack is disposable by design
+# Removes volumes too: the stack is disposable by design
 test-down:
 	$(TEST_COMPOSE) --profile all down -v
 
 # ---------------------------------------------------------------------------
-# Version-upgrade integrity test — does a database created by a real past
+# Version-upgrade integrity test: does a database created by a real past
 # release upgrade cleanly to this working tree?
 #
 # docker-compose.test.upgrade.yml brings up Postgres 15 + Redis only, isolated
 # from every other stack (separate project, ports, volumes). The app container
 # is built and run directly with `docker build`/`docker run`, once per leg, so
 # swapping versions is just building a different image against the same
-# database — no compose file to edit mid-test.
+# database, no compose file to edit mid-test.
 #
 # Usage:
 #   make test-upgrade-old FROM=v1.2.5   # stand up the old release, seed some data
@@ -322,10 +322,10 @@ test-upgrade-old:
 	@echo "$(UPGRADE_FROM) is up: http://127.0.0.1:$(UPGRADE_PORT)"
 	@echo ""
 	@echo "Next: sign up through the UI, create a request, a watchlist entry, and"
-	@echo "change a setting or two — then run 'make test-upgrade-new'."
+	@echo "change a setting or two, then run 'make test-upgrade-new'."
 
 test-upgrade-new:
-	@test -f $(UPGRADE_SECRET_FILE) || { echo "❌ No session secret found — run 'make test-upgrade-old' first"; exit 1; }
+	@test -f $(UPGRADE_SECRET_FILE) || { echo "❌ No session secret found; run 'make test-upgrade-old' first"; exit 1; }
 	docker rm -f ggr-upgrade-app >/dev/null 2>&1 || true
 	docker build -t ggr-upgrade:new .
 	docker run -d --name ggr-upgrade-app \

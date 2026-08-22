@@ -26,7 +26,7 @@ whose `Origin` header disagrees with it, so a wrong value makes logins fail with
 `UPDATE_CHECK_ENABLED` controls the only outbound call the app makes on its own
 behalf: an unauthenticated request to the GitHub releases API, at most once every
 six hours, backing off to 24 hours while it keeps failing. Set it to `false` on an
-air-gapped install or anywhere the app should not reach out — the sidebar simply
+air-gapped install or anywhere the app should not reach out; the sidebar simply
 shows no update indicator. Failures never affect a page render; they are logged
 with their status code and nothing is shown to the user. `false`, `0`, `no` and
 `off` all disable it.
@@ -193,7 +193,7 @@ ROMM_SERVER_URL_PUBLIC=https://romm.example.com
 ```
 
 `ROMM_API_TOKEN` is preferred: it does not expire, and it avoids storing a
-password. The account behind either method must hold the `roms.read` scope —
+password. The account behind either method must hold the `roms.read` scope:
 RomM issues a token containing only the scopes the account actually has, so an
 under-privileged account authenticates successfully and then gets a 403 on every
 library request.
@@ -207,7 +207,7 @@ library request.
 
 #### Outbound Request Webhook
 
-Posts request events as JSON to any endpoint that accepts them — n8n, a download
+Posts request events as JSON to any endpoint that accepts them: n8n, a download
 automation service, a script, a chat bridge. See
 [Integrations](guides/INTEGRATIONS.md) for the payload.
 
@@ -242,8 +242,8 @@ POSTGRES_PASSWORD=your_password
 
 ### Services
 
-`docker-compose.yml` defines exactly three services — `ggrequestz`, `postgres`
-and `redis` — and **no Compose profiles**. Older documentation referred to
+`docker-compose.yml` defines exactly three services (`ggrequestz`, `postgres`
+and `redis`) and **no Compose profiles**. Older documentation referred to
 `--profile notifications`, `--profile proxy`, `--profile search` and
 `--profile all`; those select nothing. Gotify, n8n and a reverse proxy are
 things you run yourself and point the app at.

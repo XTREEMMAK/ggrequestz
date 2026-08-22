@@ -13,14 +13,14 @@ export const USER = { identifier: "player", password: "ggr-test-user" };
  * Make sure the instance has the admin these tests sign in as.
  *
  * Locally the seeded stack already created it and this is a no-op. In CI there
- * is no seeding step for the admin — the workflow only migrates — so without
+ * is no seeding step for the admin (the workflow only migrates), so without
  * this every sign-in assertion fails against an account that does not exist.
  * That is exactly what happened the first time this suite ran on main: the
  * suite had only ever run against `make test-seeded`.
  *
  * POST /api/auth/basic/setup is unauthenticated but guarded by
  * needsInitialSetup(), so it succeeds exactly once per database. A 400 on later
- * calls is the expected already-seeded response, not a failure — the same
+ * calls is the expected already-seeded response, not a failure; the same
  * contract scripts/testing/seed-app.sh relies on.
  *
  * @param {import("@playwright/test").APIRequestContext} request
@@ -42,7 +42,7 @@ export async function ensureAdmin(request, baseURL) {
   // Any non-2xx is ambiguous on its own: "already exists", a unique-constraint
   // violation from another worker racing this one, or a real failure all arrive
   // as 400. Rather than pattern-match the message, assert the postcondition we
-  // actually care about — that this account can authenticate.
+  // actually care about: that this account can authenticate.
   const login = await request.post("/api/auth/basic/login", {
     headers: { Origin: baseURL },
     multipart: {

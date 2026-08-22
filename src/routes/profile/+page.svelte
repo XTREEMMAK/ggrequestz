@@ -49,7 +49,7 @@
   ]);
 
   // Settings holds several unrelated groups of controls, so they are split
-  // across sub-tabs rather than one long scroll. Local state only — this is a
+  // across sub-tabs rather than one long scroll. Local state only: this is a
   // view concern, not something worth putting in the URL.
   //
   // Opens on Content: filtering is what people come here to change, and the

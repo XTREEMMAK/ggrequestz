@@ -20,17 +20,17 @@ Each link carries three settings that are evaluated in order:
 | `visible_to_all`    | Every signed-in user can see it, regardless of role           |
 | `minimum_role`      | When `visible_to_all` is off, the lowest role that may see it |
 
-`minimum_role` is **hierarchical** — it grants access to that role and every
+`minimum_role` is **hierarchical**: it grants access to that role and every
 role above it, so a link with `minimum_role = manager` is visible to managers
 and admins but not to users or viewers.
 
 Roles, highest to lowest:
 
-1. `admin` — full system access
-2. `manager` — management access
-3. `moderator` — content moderation
-4. `user` — standard access
-5. `viewer` — read-only
+1. `admin`: full system access
+2. `manager`: management access
+3. `moderator`: content moderation
+4. `user`: standard access
+5. `viewer`: read-only
 
 `allowed_roles` is also present on the table. It is derived from `minimum_role`
 and kept only for backward compatibility; set `minimum_role` and leave it alone.
@@ -46,7 +46,7 @@ A staff-only link:
 
 - Visible to guests: **off**
 - Visible to all: **off**
-- Minimum role: **manager** — managers and admins see it
+- Minimum role: **manager** (managers and admins see it)
 
 Signed-in users only, any role:
 
@@ -60,7 +60,7 @@ Links take an [Iconify](https://icon-sets.iconify.design/) identifier, such as
 
 ## Troubleshooting
 
-**A link doesn't appear for the right people.** Check `visible_to_all` first —
+**A link doesn't appear for the right people.** Check `visible_to_all` first:
 while it is on, `minimum_role` is not consulted at all, which makes a link
 intended for admins visible to everyone.
 
@@ -68,5 +68,5 @@ intended for admins visible to everyone.
 switch from `visible_to_all`; a link needs it on to render for guests.
 
 **The Navigation admin page is empty or errors.** The schema is older than the
-feature. Run `npm run db:migrate` and check `npm run db:status` — see
+feature. Run `npm run db:migrate` and check `npm run db:status`; see
 [DATABASE_SETUP.md](../setup/DATABASE_SETUP.md).

@@ -30,7 +30,7 @@ export async function GET({ url, cookies, getClientAddress, request, locals }) {
       throw redirect(302, `/?error=${errorParam}`);
     }
 
-    // Verify state parameter. Compared in constant time — a plain !== leaks
+    // Verify state parameter. Compared in constant time; a plain !== leaks
     // timing information about a CSRF-relevant secret.
     if (!state || !storedState || !timingSafeEqual(state, storedState)) {
       console.error("❌ Invalid state parameter");

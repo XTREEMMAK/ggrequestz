@@ -8,7 +8,7 @@
 # IGDB_*, ROMM_* and notification credentials interpolate through, letting you
 # exercise the live integrations against a throwaway database.
 #
-# That would also pull in everything else .env defines — AUTH_METHOD=authentik,
+# That would also pull in everything else .env defines: AUTH_METHOD=authentik,
 # the production SESSION_SECRET, the production Postgres host. This file pins
 # those back. Anything that decides *what kind of instance this is* stays on the
 # test values; only outbound integration credentials come from .env.
@@ -16,7 +16,7 @@
 #   docker compose --env-file .env \
 #     -f docker-compose.test.yml -f docker-compose.test.live.yml up -d --build
 #
-# The local RomM fixture profile is not started for this mode — you are pointing
+# The local RomM fixture profile is not started for this mode; you are pointing
 # at a real ROMM, so running the fixture too would be contradictory.
 
 services:

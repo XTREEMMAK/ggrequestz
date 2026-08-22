@@ -4,7 +4,7 @@
  * `set` writes to Redis and the local memory map; `delete` can only reach the
  * memory of the worker handling that request. Under PM2 (one process per core by
  * default) a Redis miss used to fall through to local memory, so invalidation
- * cleared Redis plus one worker while the others kept serving stale copies —
+ * cleared Redis plus one worker while the others kept serving stale copies:
  * a saved preference applied or not depending on which worker answered next.
  *
  * With Redis healthy, a miss must now mean "not cached".
@@ -40,7 +40,7 @@ describe("invalidation with Redis connected", () => {
     expect(await cache.get("appearance-1")).toEqual({ uiTheme: "glass" });
 
     // Another worker invalidates: Redis is cleared, but this worker's memory
-    // still holds the value — `delete` there cannot reach across processes.
+    // still holds the value; `delete` there cannot reach across processes.
     redis.store.delete("appearance-1");
     expect(cache.memoryCache.has("appearance-1")).toBe(true);
 

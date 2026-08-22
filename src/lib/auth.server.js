@@ -41,7 +41,7 @@ const SESSION_SECRET = env.SESSION_SECRET || process.env.SESSION_SECRET;
 //
 // Fails closed. This previously fell back to the literal string
 // "your-secret-key", so an install that forgot SESSION_SECRET signed every
-// session JWT with a value published in this repository — anyone could mint a
+// session JWT with a value published in this repository: anyone could mint a
 // valid session for any user.
 if (!SESSION_SECRET || SESSION_SECRET === "your-secret-key") {
   throw new Error(
@@ -232,7 +232,7 @@ export async function verifySessionToken(token) {
     // outcome, not a failure: getSession() tries JWT verification first and
     // then falls back to the basic-auth token format, so a basic-auth cookie
     // always lands here on the way to succeeding. Logging it as an error made
-    // every such request look broken — including ones that returned 200.
+    // every such request look broken, including ones that returned 200.
     if (
       error?.code === "ERR_JWS_INVALID" ||
       error?.code === "ERR_JWT_INVALID"

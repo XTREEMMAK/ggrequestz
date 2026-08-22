@@ -102,11 +102,11 @@ function startLibrarySync() {
 }
 
 /**
- * Server startup hook — runs once at boot, before the first request.
+ * Server startup hook: runs once at boot, before the first request.
  *
  * Everything expensive belongs here rather than on the request path. Cache
  * warming used to be triggered by the first request, so whoever arrived after
- * a restart paid for a full-table DELETE plus IGDB round trips — and because
+ * a restart paid for a full-table DELETE plus IGDB round trips, and because
  * the "already warmed" flag was reset on failure, a failing warm-up re-ran on
  * *every* subsequent request.
  */
@@ -119,7 +119,7 @@ export async function init() {
   console.log(
     pooled
       ? "✅ Database pool ready"
-      : "⚠️ Database pool not ready — will connect on first query",
+      : "⚠️ Database pool not ready, will connect on first query",
   );
 
   // Not awaited: these reach external services, and a slow or unreachable
@@ -336,7 +336,7 @@ const authGuard = async ({ event, resolve }) => {
   //
   // Scopes were recorded on every key and offered in the admin UI, but no route
   // ever checked them, so a key stamped `games:read` still carried its owner's
-  // full privileges. Only API keys are subject to this — cookie sessions carry
+  // full privileges. Only API keys are subject to this; cookie sessions carry
   // no scopes and are governed by the permission system instead.
   if (user?.auth_type === "api_key" && url.pathname.startsWith("/api/")) {
     const requiredScope = resolveRequiredScope(url.pathname, request.method);

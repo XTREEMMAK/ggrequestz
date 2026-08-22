@@ -3,7 +3,7 @@
  *
  * A preference needs a column, an entry in getUserPreferences()'s returned
  * object, the column and value in saveUserPreferences()'s upsert, and a place in
- * the API's whitelist. Miss any one and nothing errors — the value is simply
+ * the API's whitelist. Miss any one and nothing errors: the value is simply
  * discarded, so the control appears to work and reverts on reload.
  *
  * migration 008 carries this warning in a comment; these assert it.

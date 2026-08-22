@@ -84,7 +84,7 @@ async function freshRomm() {
  * one logical `rommRequest` per call, with no availability state of its own. It
  * resolves to `[]` against `{ items: [] }` and rethrows on failure.
  *
- * `probeRommAvailability` would be the wrong driver here — it single-flights on
+ * `probeRommAvailability` would be the wrong driver here: it single-flights on
  * `availabilityState.inFlight`, so the concurrency test below would collapse to
  * one request and pass without proving anything about the token.
  */

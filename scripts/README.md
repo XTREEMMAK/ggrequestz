@@ -16,7 +16,7 @@ scripts/
 │   └── docker-entrypoint.js    # Docker container entry point
 ├── maintenance/           # Maintenance and data management
 │   └── update-game-slugs.js    # Update game slugs in cache
-└── testing/               # Local test stack fixtures — see docs/setup/TESTING.md
+└── testing/               # Local test stack fixtures, see docs/setup/TESTING.md
     ├── seed-app.sh             # Initial admin, via the app's first-run endpoint
     ├── seed-data.js            # Games, users, requests, watchlist fixtures
     ├── seed-romm.sh            # RomM admin, API token, and a 403 repro account
@@ -81,7 +81,7 @@ Fixtures for the local Docker test stack. They target `127.0.0.1` on the test
 stack's ports and are not for use against a real deployment. See
 [docs/setup/TESTING.md](../docs/setup/TESTING.md).
 
-Normally you do not run these directly — `make test-seeded` does.
+Normally you do not run these directly; `make test-seeded` does.
 
 ### `testing/seed-app.sh`
 

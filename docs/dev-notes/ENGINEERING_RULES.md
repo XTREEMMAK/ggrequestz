@@ -3,7 +3,7 @@
 Constraints that are not obvious from reading the code, and cost real incidents
 when broken. Read before making changes.
 
-[CONTRIBUTING.md](../../CONTRIBUTING.md) covers process — how to open a PR, how
+[CONTRIBUTING.md](../../CONTRIBUTING.md) covers process: how to open a PR, how
 to run the suite. This file covers the things the codebase itself will not tell
 you.
 
@@ -16,7 +16,7 @@ SvelteKit 2 + Svelte 5 (runes) · `@sveltejs/adapter-node` · PostgreSQL via raw
 session JWTs · PM2 cluster in Docker.
 
 New components use **runes** (`$state`, `$props`, `$derived`). Some older
-components still use Svelte 4 syntax (`export let`) — migrate them when you
+components still use Svelte 4 syntax (`export let`). Migrate them when you
 touch them.
 
 Server-only modules end in `.server.js` or live under `src/lib/server/`.
@@ -52,7 +52,7 @@ them. See [V1.3_FINDINGS.md](V1.3_FINDINGS.md).
      `"hash"`, streamed inline `<script>` chunks are emitted after headers flush,
      get blocked, and the sections never resolve. Note that while
      `'unsafe-inline'` stays in `script-src`, SvelteKit emits neither hashes nor
-     nonces, so the mode is inert — but it must be correct before
+     nonces, so the mode is inert, but it must be correct before
      `'unsafe-inline'` is removed.
 
 6. **Never strip `console` from the server bundle.** `drop_console` in
@@ -66,7 +66,7 @@ them. See [V1.3_FINDINGS.md](V1.3_FINDINGS.md).
 ### Cached credentials need an expiry
 
 Any credential held in module scope must track when it dies and renew ahead of
-that, and must be discarded on _any_ response that suggests it is stale — not
+that, and must be discarded on _any_ response that suggests it is stale, not
 just the status code the provider's documentation promises.
 
 The ROMM client learned this the expensive way: it cached a bearer token with no
@@ -91,11 +91,11 @@ npm run db:migrate
 npm run db:status
 ```
 
-Known limitations — do not rely on these working:
+Known limitations. Do not rely on these working:
 
 - `ggr_schema_version` and `ggr_migration_lock` are created by
   `001_initial_schema.sql` but are **never read by any code**. There is no
-  version-delta upgrade path, and no locking — concurrent migration runs are not
+  version-delta upgrade path, and no locking: concurrent migration runs are not
   serialised.
 - `rollback_sql` is stored but never executed.
 - `verifySchemaIntegrity()` in `db-manager.js` **does not throw**. A schema
@@ -152,7 +152,7 @@ change without losing four good ones, or review anything meaningfully.
   is the version bump and changelog entry.
 - Formatting-only changes (`npm run format`) go in their own commit, never mixed
   with logic.
-- If a change touches multiple workstreams, split it — even when the work
+- If a change touches multiple workstreams, split it, even when the work
   happened in one sitting.
 
 **Format:** [Conventional Commits](https://www.conventionalcommits.org/).
@@ -176,7 +176,7 @@ npm run test:unit       # vitest, jsdom project
 npm run test:integration # vitest, node project
 ```
 
-Run `npm run format` if lint fails — but commit the formatting separately from
+Run `npm run format` if lint fails, but commit the formatting separately from
 the logic change.
 
 ---
@@ -201,7 +201,7 @@ in practice:
 > `docs/guides/RELEASE_GUIDE.md` documents plain `### Added / Changed / Fixed`
 > headers. The file itself uses emoji. The docs are out of date; follow the file.
 
-**The `## [X.Y.Z]` heading is load-bearing** — `.github/workflows/release.yml`
+**The `## [X.Y.Z]` heading is load-bearing**: `.github/workflows/release.yml`
 extracts release notes from it with `awk`, and `scripts/create-release.sh` gates
 on `grep -q "^## \[$version\]"`. Do not reformat it.
 
@@ -224,7 +224,7 @@ say so explicitly.
 
 ## Planning records
 
-Multi-phase work is tracked in `tmp/` — one document per workstream, with
+Multi-phase work is tracked in `tmp/`: one document per workstream, with
 evidence and a task checklist. `tmp/` is **not** tracked in git, so these records
 are local to whoever did the work.
 

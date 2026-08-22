@@ -58,7 +58,7 @@ class SimpleCache {
         }
         if (this.redisConnected) {
           console.warn(
-            "⚠️ Redis connection lost — falling back to in-memory cache",
+            "⚠️ Redis connection lost, falling back to in-memory cache",
           );
         }
         this.redisConnected = false;
@@ -80,7 +80,7 @@ class SimpleCache {
       await this.redisClient.connect();
     } catch (error) {
       console.warn(
-        `⚠️ Redis unavailable (${error?.message}) — using in-memory cache`,
+        `⚠️ Redis unavailable (${error?.message}), using in-memory cache`,
       );
       this.redisConnected = false;
     }
@@ -107,7 +107,7 @@ class SimpleCache {
         this.redisConnected = false;
       }
 
-      // A miss in a healthy Redis means "not cached" — do not consult this
+      // A miss in a healthy Redis means "not cached": do not consult this
       // worker's memory.
       //
       // `set` writes to both stores but `delete` can only reach the memory of
@@ -117,7 +117,7 @@ class SimpleCache {
       // saved preference appeared to apply only sometimes: it depended on which
       // worker answered the next request.
       //
-      // Memory stays the fallback for an actual outage — `redisConnected` goes
+      // Memory stays the fallback for an actual outage: `redisConnected` goes
       // false on error, and this branch is then skipped entirely.
       if (this.redisConnected) return null;
     }
@@ -238,8 +238,8 @@ const inFlight = new Map();
  *
  * An earlier version did, so that N concurrent misses on a cold key shared one
  * rebuild. That is unsafe here: if `fn()` itself calls `withCache()` with the
- * same key — which `getUserPermissions()` did, under a wrapper using an
- * identical key — the nested call is handed the outer call's own in-flight
+ * same key (which `getUserPermissions()` did, under a wrapper using an
+ * identical key), the nested call is handed the outer call's own in-flight
  * promise and awaits itself. The result is a permanent deadlock, and because it
  * only triggers for authenticated users it survived every unauthenticated
  * smoke test.
@@ -272,7 +272,7 @@ export async function withCache(key, fn, ttl = 5 * 60 * 1000) {
  * refresh keeps the previous value rather than propagating the error.
  *
  * This one DOES single-flight, so `fn` must never call back into this function
- * (or `withCache`) with the same key — it would await its own rebuild and
+ * (or `withCache`) with the same key: it would await its own rebuild and
  * deadlock. See the note on `withCache`.
  *
  * @param {string} key - Cache key
@@ -347,7 +347,7 @@ export const cacheAuthCredentials = (key, fn) =>
  * Exported because two modules have to agree on it: the root layout writes it,
  * and the preferences endpoint invalidates it on save. When those drifted apart,
  * the endpoint cleared a key nothing wrote and a theme change silently did not
- * apply until the TTL expired — invalidating a missing key is not an error.
+ * apply until the TTL expired. Invalidating a missing key is not an error.
  * Deriving both from here removes the opportunity.
  *
  * @param {number|string} userId - Local user ID

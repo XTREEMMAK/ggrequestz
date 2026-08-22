@@ -89,7 +89,7 @@ update_package_version() {
 
 # Function to check we are releasing from the default branch.
 # The push step below is hardcoded to main, so tagging from a feature branch
-# would publish a tag whose commit is not on main — and the generated release
+# would publish a tag whose commit is not on main, and the generated release
 # notes link to blob/main.
 check_on_main() {
     local branch
@@ -165,7 +165,7 @@ main() {
     fi
     
     # Commit version bump.
-    # Nothing is staged when package.json already carried the target version —
+    # Nothing is staged when package.json already carried the target version:
     # the same "bumped ahead of the release" case update_package_version handles.
     # `git commit` exits non-zero on an empty index, which under `set -e` aborted
     # the run one step before the tag was created.

@@ -4,8 +4,8 @@
  * The root layout caches appearance preferences per user; the preferences
  * endpoint invalidates that entry on save. Those were two separate string
  * literals, and when the layout's key changed from `ambient-background-${id}` to
- * `appearance-${id}` the endpoint kept clearing the old one. Nothing failed —
- * invalidating a key that was never written is a no-op — so saving a theme
+ * `appearance-${id}` the endpoint kept clearing the old one. Nothing failed:
+ * invalidating a key that was never written is a no-op, so saving a theme
  * appeared to succeed while the UI kept the previous value until the 60s TTL
  * expired.
  *

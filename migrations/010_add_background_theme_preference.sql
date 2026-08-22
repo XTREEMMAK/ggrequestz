@@ -10,7 +10,7 @@
 --
 -- `animated_background` is deliberately left in place rather than dropped:
 -- dropping is destructive, the migration runner has no transaction around a
--- run, and a stale column costs nothing. Nothing reads it any more — the
+-- run, and a stale column costs nothing. Nothing reads it any more; the
 -- successor is `background_theme`.
 --
 -- Note this column alone is not enough for the preference to take effect.
@@ -27,7 +27,7 @@ ALTER TABLE ggr_user_preferences
 -- someone who opted in under the old boolean and has since chosen None still
 -- reads as `animated_background IS TRUE`, so a second run would resurrect their
 -- old setting. Migrations are tracked by filename in ggr_migrations and run
--- once, which is what makes that acceptable — do not re-run this by hand
+-- once, which is what makes that acceptable. Do not re-run this by hand
 -- against a live database.
 UPDATE ggr_user_preferences
   SET background_theme = 'drifty-stars'

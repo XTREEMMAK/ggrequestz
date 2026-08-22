@@ -5,7 +5,7 @@ const isCI = !!process.env.CI;
 // Locally the suite runs against the Docker test stack (`make test-seeded`),
 // not against `npm run dev`.
 //
-// It used to boot the dev server, which loads .env.development — a file that
+// It used to boot the dev server, which loads .env.development, a file that
 // points at whatever database the developer happens to be working against. On
 // this repo that is a live remote Postgres, so running the e2e suite locally
 // wrote to real data. There was a hardcoded env block for CI and nothing at all

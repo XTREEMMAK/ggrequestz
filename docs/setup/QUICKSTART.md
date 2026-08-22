@@ -193,7 +193,7 @@ cp .env.example .env
 npm run dev
 ```
 
-The app serves on <http://localhost:5174>. The port is fixed — `vite.config.js`
+The app serves on <http://localhost:5174>. The port is fixed: `vite.config.js`
 sets `strictPort: true`, so the dev server exits rather than falling through to
 another port if 5174 is taken.
 
@@ -214,15 +214,15 @@ useful as you add:
 | Service        | Variables                              | Without it                                       |
 | -------------- | -------------------------------------- | ------------------------------------------------ |
 | **PostgreSQL** | `POSTGRES_*`                           | The app does not start                           |
-| **IGDB**       | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | No game data — search and browse return nothing  |
+| **IGDB**       | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | No game data, search and browse return nothing   |
 | **Redis**      | `REDIS_URL`                            | Falls back to an in-memory cache, per PM2 worker |
 | **OIDC**       | `OIDC_*`                               | Basic auth only (which is the default anyway)    |
 | **ROMM**       | `ROMM_SERVER_URL` + `ROMM_API_TOKEN`   | No library section                               |
 | **Gotify**     | `GOTIFY_*`                             | No push notifications                            |
 | **Webhook**    | `REQUEST_WEBHOOK_URL`                  | No outbound request events                       |
 
-Get IGDB credentials from the [Twitch Developer Console](https://dev.twitch.tv/console)
-— register an application with OAuth redirect URL `http://localhost:5174`, then
+Get IGDB credentials from the [Twitch Developer Console](https://dev.twitch.tv/console):
+register an application with OAuth redirect URL `http://localhost:5174`, then
 use its Client ID and Secret. See [api-docs.igdb.com](https://api-docs.igdb.com/#getting-started).
 
 ### Development commands

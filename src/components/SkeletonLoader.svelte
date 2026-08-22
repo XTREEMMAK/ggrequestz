@@ -15,8 +15,8 @@
   } = $props();
 
   // Utility classes must appear as literal strings somewhere in the source, or
-  // Tailwind's scanner never emits them. Building them by interpolation —
-  // `aspect-{aspectRatio}`, `rounded-{rounded}` — silently produced classes with
+  // Tailwind's scanner never emits them. Building them by interpolation
+  // (`aspect-{aspectRatio}`, `rounded-{rounded}`) silently produced classes with
   // no matching rule: the card variant asked for `aspect-2/3`, no such rule was
   // ever generated, and with no `grid-auto-rows` on `.responsive-grid` every card
   // skeleton collapsed to zero height. The loading state was therefore invisible,

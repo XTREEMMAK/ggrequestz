@@ -125,7 +125,7 @@ export async function load({ parent, cookies, url, depends }) {
       userPreferences = null;
     }
 
-    // Whether ROMM is set up at all. Pure config read, no I/O — this decides
+    // Whether ROMM is set up at all. Pure config read, no I/O: this decides
     // whether the "New in Library" section exists on the page. Availability
     // (below) only decides what that section *shows*, so a broken ROMM
     // surfaces an error instead of silently vanishing.
@@ -134,8 +134,8 @@ export async function load({ parent, cookies, url, depends }) {
     // Availability comes from the background-refreshed snapshot; nothing here
     // probes ROMM. Racing a live `isRommAvailable()` against a 1500ms ceiling
     // (2250ms under the Docker multiplier) capped this check far below the
-    // client's own request budget, so a large library — where the probe needs
-    // seconds, not milliseconds — lost the race every time and the page
+    // client's own request budget, so a large library (where the probe needs
+    // seconds, not milliseconds) lost the race every time and the page
     // reported an outage against a healthy server. The race also left the
     // request running, uncancelled, with its result discarded.
     //
@@ -274,7 +274,7 @@ export async function load({ parent, cookies, url, depends }) {
       });
     }
     return {
-      // Deliberately an unawaited promise — this is what makes it stream.
+      // Deliberately an unawaited promise: this is what makes it stream.
       newInLibraryStream,
       newReleases,
       popularGames,

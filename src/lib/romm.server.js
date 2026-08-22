@@ -8,7 +8,7 @@ import { getGameById } from "./gameCache.js";
 import { fetchWithTimeout, isTimeoutOrNetworkError } from "./utils.js";
 import { rommCoverUrl, rommPlatformName } from "./library/romm-fields.js";
 
-// Outbound deadlines. Nothing here may block unbounded — ROMM is typically
+// Outbound deadlines. Nothing here may block unbounded: ROMM is typically
 // reached over a public URL, so a slow or unreachable instance previously
 // stalled every request that touched it.
 const AUTH_TIMEOUT_MS = 5000;
@@ -148,7 +148,7 @@ function hasUsableToken() {
  *
  * A Client API Token is a fixed string read from the environment, so asking for
  * it again returns the same value. And when RomM has already told us this
- * account lacks `roms.read`, a fresh token will lack it too — replaying would
+ * account lacks `roms.read`, a fresh token will lack it too. Replaying would
  * only double the load on a server that is answering correctly.
  *
  * @returns {boolean}
@@ -204,7 +204,7 @@ async function authenticateROMM() {
 
   await loadEnvironmentVariables();
 
-  // A Client API Token is used verbatim as the bearer credential — there is no
+  // A Client API Token is used verbatim as the bearer credential; there is no
   // token exchange to perform, and no expiry to track.
   if (ROMM_API_TOKEN) {
     return { token: ROMM_API_TOKEN, expiresAt: Infinity };
@@ -239,7 +239,7 @@ async function authenticateROMM() {
       const errorText = await response.text();
 
       // RomM rejects the token request outright when the account lacks a
-      // requested scope — verified against RomM 5.0.0, which answers
+      // requested scope, verified against RomM 5.0.0, which answers
       // 403 {"detail":"Insufficient scope"}. This is the exact failure a
       // RomM 5.0 permission change produces, so name the remedy rather than
       // dumping a bare status line.
@@ -311,7 +311,7 @@ async function authenticateROMM() {
  *
  * RomM grants the *intersection* of the requested scopes and what the account
  * actually has, so a user who has lost `roms.read` still receives HTTP 200 and
- * a perfectly valid token here — every subsequent library call then fails with
+ * a perfectly valid token here; every subsequent library call then fails with
  * 403. RomM 5.0's group-based permission system made this easy to fall into.
  *
  * The payload is only inspected for diagnostics; it is never trusted, so no
@@ -346,7 +346,7 @@ function warnIfMissingReadScope(token) {
       return true;
     }
   } catch {
-    // Non-JWT or unexpected shape — nothing to diagnose, carry on.
+    // Non-JWT or unexpected shape: nothing to diagnose, carry on.
   }
 
   return false;
@@ -434,10 +434,10 @@ async function rommAttempt(
 
   // Note: `cookies` is accepted for call-site compatibility but deliberately
   // not forwarded. Callers pass GGR's own `session=<JWT>` cookie, which ROMM
-  // cannot consume — sending it achieved nothing and leaked a GGR session
+  // cannot consume; sending it achieved nothing and leaked a GGR session
   // token to a third-party service.
 
-  // Renewed proactively — a token inside the refresh margin is treated as
+  // Renewed proactively: a token inside the refresh margin is treated as
   // already gone, rather than waiting for RomM to reject it.
   const token = await getSessionToken();
   if (token) {
@@ -537,7 +537,7 @@ async function rommAttempt(
     return await response.json();
   } catch (error) {
     // Retry only genuine timeout/network failures. Note AbortSignal.timeout()
-    // rejects with a TimeoutError, not an AbortError — the previous check for
+    // rejects with a TimeoutError, not an AbortError. The previous check for
     // "AbortError" never matched, so this path relied on a substring test
     // against the message.
     if (
@@ -698,8 +698,8 @@ const AVAILABILITY_MAX_TTL_MS = 30 * 60 * 1000;
 /**
  * How long the current result stays authoritative.
  *
- * A flat five minutes for both outcomes meant a dead ROMM was re-probed — four
- * requests and seven seconds of backoff — every five minutes per worker, for as
+ * A flat five minutes for both outcomes meant a dead ROMM was re-probed (four
+ * requests and seven seconds of backoff) every five minutes per worker, for as
  * long as the outage lasted. The interval now doubles with each consecutive
  * failure (5 → 10 → 20 → 30) and resets the moment ROMM answers.
  *
@@ -781,7 +781,7 @@ async function refreshRommAvailability() {
       console.warn(
         `⚠️ ROMM availability probe failed (${reason}): ${
           error?.message || error
-        } — next probe in ${Math.round(availabilityTtl() / 60000)}min`,
+        }; next probe in ${Math.round(availabilityTtl() / 60000)}min`,
       );
     } finally {
       availabilityState.checkedAt = Date.now();
@@ -798,7 +798,7 @@ async function refreshRommAvailability() {
  * Read ROMM availability without ever touching the network.
  *
  * Returns the last known result and triggers a background refresh when stale.
- * This is what render paths must use — awaiting a live probe in the root layout
+ * This is what render paths must use: awaiting a live probe in the root layout
  * is what previously blocked every page render, including `/login`.
  *
  * @returns {Object} - `{ ok, status, reason, checkedAt, stale }`
@@ -810,7 +810,7 @@ export function getRommAvailabilitySnapshot() {
   const stale = availabilityState.checkedAt === 0 || age > AVAILABILITY_TTL_MS;
 
   if (stale) {
-    // Fire and forget — the caller gets the previous value immediately.
+    // Fire and forget: the caller gets the previous value immediately.
     refreshRommAvailability().catch(() => {});
   }
 
@@ -825,7 +825,7 @@ export function getRommAvailabilitySnapshot() {
 
 /**
  * Force a fresh availability probe. For admin "test connection" flows and
- * startup warm-up — never for a render path.
+ * startup warm-up, never for a render path.
  * @returns {Promise<Object>} - Fresh snapshot
  */
 export async function probeRommAvailability() {
@@ -841,7 +841,7 @@ export async function probeRommAvailability() {
 // `probeRommAvailability()`, which records what it finds so the breaker and the
 // UI both learn from it. A probe that returns a bare boolean teaches the process
 // nothing, and every caller that had one ended up racing it against a timeout
-// too short to ever win — see the homepage in `src/routes/+page.server.js`.
+// too short to ever win; see the homepage in `src/routes/+page.server.js`.
 
 /**
  * Turn a ROMM failure into something that can be shown to a user and acted on
@@ -937,8 +937,8 @@ async function batchFormatROMData(roms) {
       if (!rom) return null;
 
       // Public base: this URL is rendered as an <img src> in the browser.
-      // ROMM covers are not routed through /api/images/proxy — that only
-      // rewrites igdb.com URLs — so the browser fetches this directly. Shared
+      // ROMM covers are not routed through /api/images/proxy (that only
+      // rewrites igdb.com URLs), so the browser fetches this directly. Shared
       // with the library seam, which was passing the relative path straight
       // through.
       let cover_url = rommCoverUrl(ROMM_SERVER_URL_PUBLIC, rom.url_cover);
@@ -963,7 +963,7 @@ async function batchFormatROMData(roms) {
       }
 
       // Field mapping follows RomM's RomSchema. Several of these were
-      // previously read from properties RomM has never returned — there is no
+      // previously read from properties RomM has never returned: there is no
       // nested `rom.platform` object, and genres/release date/rating live
       // under `metadatum`, not at the top level. Those fields silently came
       // back empty. Fallbacks to the old names are kept so an older RomM (or a
@@ -1209,8 +1209,8 @@ function annotateFromIndex(igdbGames, entries) {
  */
 async function crossReferenceFromWindow(igdbGames, cookies) {
   // Read the snapshot instead of probing. This runs on every /game/[id] load,
-  // and a live probe here meant two ROMM round trips per page — eight requests
-  // once retries are counted, whenever ROMM was down.
+  // and a live probe here meant two ROMM round trips per page (eight requests
+  // once retries are counted), whenever ROMM was down.
   //
   // Only a known-bad snapshot short-circuits. `ok === null` means no probe has
   // completed yet on this worker, and skipping on that would drop ROMM badges

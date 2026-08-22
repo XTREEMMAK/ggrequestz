@@ -12,8 +12,8 @@
  *   - An apostrophe in a comment flipped quote tracking for the rest of the
  *     file, so every later semicolon looked like it was inside a string and
  *     the whole migration collapsed into one statement. That one still
- *     "worked" — node-postgres sends a parameterless query over the simple
- *     protocol, which allows multiple commands — but per-statement error
+ *     "worked": node-postgres sends a parameterless query over the simple
+ *     protocol, which allows multiple commands, but per-statement error
  *     attribution was silently lost.
  */
 
@@ -131,7 +131,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS t_b_uniq ON t (lower(b)) WHERE status IN ('ope
  * than 62: nothing after its `CREATE TRIGGER ... EXECUTE FUNCTION` says
  * `LANGUAGE`, so the flag stayed armed to end of file and every remaining
  * semicolon was ignored. Comment-skipping alone moved it to 14, which is why
- * these cases are worth pinning separately — they were not fixed by that.
+ * these cases are worth pinning separately; they were not fixed by that.
  */
 describe("splitSQLStatements and function bodies", () => {
   it("terminates CREATE TRIGGER ... EXECUTE FUNCTION at its own semicolon", () => {

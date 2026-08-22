@@ -6,7 +6,7 @@
    * drifting particles over four CSS-only gradient blobs on slow orbits.
    *
    * The original had no performance guards at all. This version adds the ones a
-   * decorative, always-running animation needs — see the constants below. It is
+   * decorative, always-running animation needs; see the constants below. It is
    * opt-in per user (`background_theme`), so the default cost is zero.
    */
   import { onMount } from "svelte";
@@ -21,8 +21,8 @@
 
   let canvas = $state(null);
 
-  // Cap the frame rate. The animation is ambient — particles drift at well
-  // under a pixel per frame — so 30fps is visually indistinguishable from 60
+  // Cap the frame rate. The animation is ambient (particles drift at well
+  // under a pixel per frame) so 30fps is visually indistinguishable from 60
   // and halves the compositing work.
   const TARGET_FPS = 30;
   const FRAME_MS = 1000 / TARGET_FPS;
@@ -167,8 +167,8 @@
 <style>
   /* Sits behind page content. body sets background-color, which propagates to
      the canvas because html has none, so a negative z-index paints above that
-     background but below in-flow content. The app has no light theme — :root in
-     app.css is dark unconditionally — so there is no light variant here. */
+     background but below in-flow content. The app has no light theme (:root in
+     app.css is dark unconditionally) so there is no light variant here. */
   .ambient-bg {
     position: fixed;
     inset: 0;

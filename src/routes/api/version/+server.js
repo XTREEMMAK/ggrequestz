@@ -43,7 +43,7 @@ export async function GET() {
       oidc: true,
       basicAuth: true,
       redis: !!process.env.REDIS_URL,
-      // ROMM_URL is not a variable this app has ever read — the correct name is
+      // ROMM_URL is not a variable this app has ever read; the correct name is
       // ROMM_SERVER_URL, so this always reported false.
       romm: libraryConfigured,
       typesense: !!process.env.TYPESENSE_URL,

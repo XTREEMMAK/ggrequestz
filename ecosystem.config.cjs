@@ -36,7 +36,7 @@ module.exports = {
 
       // Logging. Deliberately no out_file/error_file: pm2-runtime already
       // forwards worker output to the container's stdout, so pointing the log
-      // files at /dev/stdout wrote every line twice — once directly, once via
+      // files at /dev/stdout wrote every line twice, once directly, once via
       // pm2-runtime's tail. Setting them is what produced duplicate log lines,
       // not cluster mode.
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",

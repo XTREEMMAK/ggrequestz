@@ -9,12 +9,12 @@ a client secret are usually all you need.
 > paths were hardcoded to Authentik's `/application/o/…` scheme, and the
 > `OIDC_*` variables this guide previously documented were **not read by any
 > code**. Setting `AUTH_METHOD=oidc_generic` produced "No authentication
-> methods are configured" — issues
+> methods are configured": issues
 > [#4](https://github.com/XTREEMMAK/ggrequestz/issues/4) and
 > [#7](https://github.com/XTREEMMAK/ggrequestz/issues/7). Both are fixed, and
 > the flow is now verified end to end against Keycloak.
 >
-> **Existing Authentik installs need no changes** — the `AUTHENTIK_*` variables
+> **Existing Authentik installs need no changes**: the `AUTHENTIK_*` variables
 > are still accepted as aliases.
 
 ## Supported providers
@@ -33,7 +33,7 @@ OIDC_ISSUER_URL=https://id.example.com/realms/main
 OIDC_CLIENT_ID=ggrequestz
 OIDC_CLIENT_SECRET=<your client secret>
 
-# Label on the login button — renders as "Login with Keycloak"
+# Label on the login button, renders as "Login with Keycloak"
 OIDC_PROVIDER_NAME=Keycloak
 
 # Recommended; see "Redirect URI" below
@@ -55,7 +55,7 @@ URI at your provider.
 | `OIDC_CLIENT_ID`     | yes         | Client / application ID                                                                             |
 | `OIDC_CLIENT_SECRET` | yes         | Client secret                                                                                       |
 | `OIDC_ISSUER_URL`    | yes\*       | Issuer URL; discovery is read from `<issuer>/.well-known/openid-configuration`                      |
-| `OIDC_REDIRECT_URI`  | recommended | Callback URL — see below                                                                            |
+| `OIDC_REDIRECT_URI`  | recommended | Callback URL (see below)                                                                            |
 | `OIDC_PROVIDER_NAME` | no          | Login button label. Default `SSO`.                                                                  |
 | `OIDC_SCOPES`        | no          | Default `openid email profile`. Add `groups` if your provider requires it to emit group membership. |
 | `OIDC_GROUPS_CLAIM`  | no          | Claim carrying group membership. Default `groups`.                                                  |
@@ -105,7 +105,7 @@ locally**, and a warning is logged once per login.
 
 > Before v1.3 an absent groups claim was treated as "member of no groups",
 > which silently cleared `is_admin` on every login. Keycloak, among others,
-> does not send `groups` without an explicit mapper — so this affected a lot of
+> does not send `groups` without an explicit mapper, so this affected a lot of
 > non-Authentik setups.
 
 To drive roles from the provider:
@@ -136,7 +136,7 @@ someone from the group revokes their access immediately.
 
 In Authentik specifically: **Directory → Groups → Create Group**, named
 `gg-requestz-admins`, then add users under **Directory → Users → Groups**. The
-provider must actually emit the claim — check **Applications → Providers → your
+provider must actually emit the claim: check **Applications → Providers → your
 provider** for "Include claims in id_token", and that the `groups` scope is
 mapped. Keycloak needs a "Group Membership" mapper added by hand; it emits none
 by default.
@@ -157,8 +157,8 @@ Verify which one is in effect:
 SELECT email, is_admin FROM ggr_users WHERE email = 'you@example.com';
 ```
 
-**Admin access denied after adding the group?** Check the spelling — matching is
-case-sensitive — and confirm the claim is actually arriving. An absent groups
+**Admin access denied after adding the group?** Check the spelling (matching is
+case-sensitive) and confirm the claim is actually arriving. An absent groups
 claim is logged with a warning at each login; a claim that arrives empty is
 treated as "member of no groups" and is the usual culprit when only group-based
 admin was configured.
@@ -180,7 +180,7 @@ OIDC_REDIRECT_URI=https://requests.example.com/api/auth/callback
 
 Create a confidential client (Client authentication **on**) with the Standard
 flow enabled and the redirect URI registered. For role mapping, add a "Group
-Membership" mapper named `groups` to the client's dedicated scope — Keycloak
+Membership" mapper named `groups` to the client's dedicated scope. Keycloak
 does not emit one by default.
 
 ### Pocket ID
@@ -246,7 +246,7 @@ a reverse proxy.
 
 **"OIDC endpoints could not be resolved"**
 Discovery failed. Confirm `<OIDC_ISSUER_URL>/.well-known/openid-configuration`
-is reachable **from inside the container** — an issuer that resolves on your
+is reachable **from inside the container**; an issuer that resolves on your
 laptop may not resolve there.
 
 **Admin status keeps resetting**

@@ -86,7 +86,7 @@ Two things worth knowing:
     browser sees. They are different on purpose.
 
   * Keycloak does not emit a 'groups' claim without an explicit Group Membership
-    mapper. That is the case v1.3 fixed — an absent claim no longer clears
+    mapper. That is the case v1.3 fixed: an absent claim no longer clears
     is_admin on every login. To test role mapping, add the mapper and set
     OIDC_SCOPES / OIDC_ROLE_MAP.
 EOF

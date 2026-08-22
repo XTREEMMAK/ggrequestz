@@ -39,7 +39,7 @@ services:
     restart: "no"
     ports:
       # GGR_TEST_HOST defaults to loopback. Set it to 0.0.0.0 to reach the test
-      # stack from another machine — it also rewrites ORIGIN below, which
+      # stack from another machine; it also rewrites ORIGIN below, which
       # adapter-node checks on every POST.
       - "${GGR_TEST_HOST:-127.0.0.1}:${GGR_TEST_PORT:-3100}:3000"
     environment:
@@ -56,7 +56,7 @@ services:
 
       REDIS_URL: redis://redis:6379
 
-      # Required since v1.3 — the app refuses to start without it.
+      # Required since v1.3; the app refuses to start without it.
       # Test-only value; never reuse this anywhere real.
       SESSION_SECRET: ${SESSION_SECRET:-test-only-session-secret-do-not-use-in-production}
 

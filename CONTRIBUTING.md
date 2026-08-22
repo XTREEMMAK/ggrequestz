@@ -86,8 +86,8 @@ Before contributing, ensure you have:
 
 ### Docker Development
 
-For a complete isolated environment — a real installation built from your
-working tree, with live RomM and Keycloak fixtures:
+For a complete isolated environment (a real installation built from your
+working tree, with live RomM and Keycloak fixtures):
 
 ```bash
 make test-seeded  # admin, demo library and fixtures; lands on /login
@@ -97,7 +97,7 @@ make test-down    # stop and delete its volumes
 ```
 
 See [docs/setup/TESTING.md](docs/setup/TESTING.md). Use this rather than
-reasoning about an external API from its documentation — during the v1.3 work
+reasoning about an external API from its documentation. During the v1.3 work
 three separate diagnoses made that way turned out to be wrong.
 
 ## 🔄 Making Changes
@@ -150,8 +150,8 @@ git commit -m "test: add integration tests for auth"
 ### Running Tests
 
 ```bash
-npm run test:unit          # jsdom project — pure functions, components
-npm run test:integration   # node project — server modules, mocked fetch
+npm run test:unit          # jsdom project: pure functions, components
+npm run test:integration   # node project: server modules, mocked fetch
 npm run test:e2e           # Playwright; needs `make test-seeded` first
 npm run test:all           # all three, in order
 
@@ -163,7 +163,7 @@ which one a given test belongs in.
 
 ### Writing Tests
 
-1. **Unit tests** — pure functions and components, in `src/tests/unit/`. Runs
+1. **Unit tests**: pure functions and components, in `src/tests/unit/`. Runs
    under jsdom.
 
    ```javascript
@@ -178,7 +178,7 @@ which one a given test belongs in.
    });
    ```
 
-2. **Integration tests** — server-only modules, in `tests/integration/`. Runs
+2. **Integration tests**: server-only modules, in `tests/integration/`. Runs
    under node, because server code branches on `browser` and takes the wrong
    path when a DOM is present. Mock `fetch`; do not reach the network.
 
@@ -190,7 +190,7 @@ which one a given test belongs in.
    await expect(isRommAvailable()).resolves.toBe(false);
    ```
 
-3. **End-to-end tests** — real browser against the seeded Docker stack, in
+3. **End-to-end tests**: real browser against the seeded Docker stack, in
    `tests/e2e/`. Anything touching the application shell must sign in first;
    an unauthenticated visitor only ever sees `/login` or `/setup`.
 
@@ -247,7 +247,7 @@ signal about which one was authoritative.
 ### Code Style
 
 We use **Prettier** for consistent code formatting. There is no ESLint config in
-this repo — `npm run lint` is `prettier --check .`, and CI gates on it.
+this repo: `npm run lint` is `prettier --check .`, and CI gates on it.
 
 ```bash
 # Format code (this is also the "fix" command)

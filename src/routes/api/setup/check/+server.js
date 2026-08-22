@@ -151,7 +151,7 @@ async function testROMM() {
     return { success: true, warning: "ROMM not configured (optional)" };
   }
 
-  // A Client API Token is a complete credential on its own — requiring a
+  // A Client API Token is a complete credential on its own; requiring a
   // username and password alongside it reported a working configuration as
   // broken.
   if (!rommToken && !(rommUsername && rommPassword)) {

@@ -1,7 +1,7 @@
 -- Adds a UI theme preference for the application chrome.
 --
 -- Deliberately a string rather than a boolean. The first non-default theme is
--- "glass", but the point of the column is that later themes are additive — a new
+-- "glass", but the point of the column is that later themes are additive: a new
 -- value here plus a CSS block, not another migration and another toggle.
 --
 -- Independent of animated_background: the background and the chrome are themed

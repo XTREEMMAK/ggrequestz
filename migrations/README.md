@@ -13,7 +13,7 @@ In Docker this runs automatically at container start unless `AUTO_MIGRATE=false`
 ## Adding one
 
 Name it `NNN_description.sql`, taking the next free number. Migrations that have
-shipped are immutable — the tracker keys on the filename, so renaming or editing
+shipped are immutable: the tracker keys on the filename, so renaming or editing
 one either re-runs it or silently skips your change.
 
 Write defensively. There is no transaction around the run as a whole, so a
@@ -38,5 +38,5 @@ reference when tracing where a column came from. Numbers collide in here
 both exist); that collision is why the tracker moved to filenames.
 
 See [docs/setup/DATABASE_SETUP.md](../docs/setup/DATABASE_SETUP.md) for the
-limitations of this system — no locking, no rollback, non-fatal schema
+limitations of this system: no locking, no rollback, non-fatal schema
 verification.

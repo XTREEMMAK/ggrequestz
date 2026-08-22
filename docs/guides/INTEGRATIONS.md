@@ -5,7 +5,7 @@ cross-referencing, **Gotify** for push notifications, and **n8n** for webhook
 automation. All three are off unless configured, and the app runs without any
 of them.
 
-Authentication providers are **not** covered here — see
+Authentication providers are **not** covered here; see
 [OIDC_SETUP.md](../setup/OIDC_SETUP.md).
 
 > **Changed in v1.3.** Earlier versions of this guide described `AUTH_PROVIDER`,
@@ -23,7 +23,7 @@ Cross-references requested games against your ROMM library, shows availability
 on game pages, and links out to play them.
 
 **`LIBRARY_*` is the current, documented name for these settings.** `ROMM_*` is
-honoured as a fallback so an existing install needs no changes — the same
+honoured as a fallback so an existing install needs no changes, the same
 trade `REQUEST_WEBHOOK_URL` made with `N8N_WEBHOOK_URL`. `LIBRARY_*` wins when
 both are set. `LIBRARY_KIND` additionally selects the backend; `romm` is the
 default and is what the rest of this section describes. Every other backend has
@@ -38,7 +38,7 @@ LIBRARY_API_TOKEN=<client api token with roms.read>
 | ----------------------------------------------- | --------------------------------------------------------------- |
 | `LIBRARY_URL` / `ROMM_SERVER_URL`               | Server-side API base. Prefer an internal hostname               |
 | `LIBRARY_PUBLIC_URL` / `ROMM_SERVER_URL_PUBLIC` | Browser-facing base for links and covers. Defaults to the above |
-| `LIBRARY_API_TOKEN` / `ROMM_API_TOKEN`          | Client API Token, RomM 5.0+ — **recommended**                   |
+| `LIBRARY_API_TOKEN` / `ROMM_API_TOKEN`          | Client API Token, RomM 5.0+, **recommended**                    |
 | `LIBRARY_USERNAME` / `ROMM_USERNAME`            | Password-grant fallback for RomM 4.x                            |
 | `LIBRARY_PASSWORD` / `ROMM_PASSWORD`            | Password-grant fallback for RomM 4.x                            |
 | `LIBRARY_KIND`                                  | Backend selector: `romm` (default), `gaseous`, `retrom`         |
@@ -61,7 +61,7 @@ every library request afterwards.
 ### Two URLs, when the browser can't reach ROMM
 
 `ROMM_SERVER_URL` is used for server-side API calls, where an internal address
-is the right choice — it avoids hairpinning out through DNS, TLS and your
+is the right choice: it avoids hairpinning out through DNS, TLS and your
 reverse proxy just to come back in. But that address is not usable as a link.
 
 If the library list renders correctly while "Play in ROMM" links and cover
@@ -90,7 +90,7 @@ curl -X POST http://your-ggrequestz-host/api/setup/check \
 To check RomM directly, bypassing the app:
 
 ```bash
-# 4.x password grant — note the scope
+# 4.x password grant, note the scope
 curl -X POST http://romm:8080/api/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=USER&password=PASS&scope=roms.read"
@@ -103,7 +103,7 @@ curl -H "Authorization: Bearer $ROMM_API_TOKEN" \
 ### ROMM troubleshooting
 
 **`403 {"detail":"Insufficient scope"}` from `/api/token`**
-The account lacks `roms.read`, so no token is issued at all — authentication
+The account lacks `roms.read`, so no token is issued at all. Authentication
 fails outright rather than succeeding and failing later. Grant the account's
 group library read access in the ROMM admin UI, or issue a Client API Token
 that carries the scope. The app logs this case explicitly.
@@ -116,7 +116,7 @@ the token's scopes on receipt and logs which ones were actually granted.
 
 **Connection refused**
 Check the scheme is present in `ROMM_SERVER_URL`, and that the address resolves
-_from inside the app container_ — not from your laptop.
+_from inside the app container_, not from your laptop.
 
 **Library section missing entirely**
 It only appears when a server URL is set (`LIBRARY_URL` or `ROMM_SERVER_URL`)
@@ -128,26 +128,26 @@ silently.
 ### Library fields on a game
 
 A cross-referenced game carries `in_library`, and when it is in the library
-also `library_id` and `library_url`. A RomM-native card — as returned by the
-recently-added, search and by-id endpoints — additionally carries
+also `library_id` and `library_url`. A RomM-native card (as returned by the
+recently-added, search and by-id endpoints) additionally carries
 `is_library_game`.
 
 `is_in_romm`, `is_romm_game`, `romm_id` and `romm_url` are the **deprecated**
-aliases, kept because Svelte components still read them — `is_romm_game`
-alone in seven component branches — and will be removed in a future major
+aliases, kept because Svelte components still read them (`is_romm_game`
+alone in seven component branches) and will be removed in a future major
 release. Migrate a reader from `is_romm_game || is_in_romm` to
 `is_library_game || in_library`: the neutral pair covers every case the
 deprecated pair does, since `in_library` is set by both producers even where
 `is_library_game` is only set on RomM-native cards.
 
 Most deprecated fields are populated with the same value as their neutral
-counterpart — **with one deliberate exception**: `library_id` is a **string**
+counterpart, **with one deliberate exception**: `library_id` is a **string**
 and `romm_id` stays a **number**. Every id in the library seam is
 stringified, matching `LibraryEntry.id` and the `TEXT` column a later
 cross-reference-by-index phase will use, so `library_id` cannot revert to
 RomM's numeric id without silently changing type the day that phase lands.
 `romm_id` keeps the numeric type it has always had instead. Do not "fix"
-these two to match each other — a test comment says so in exactly those
+these two to match each other; a test comment says so in exactly those
 words.
 
 ---
@@ -156,8 +156,8 @@ words.
 
 Set `LIBRARY_KIND=gaseous` to point the library at a
 [Gaseous](https://github.com/gaseous-project/gaseous-server) server instead of
-RomM. Everything else on this page that is about ROMM specifically — the API
-token, the two-URL split for covers — does not apply; what follows does.
+RomM. Everything else on this page that is about ROMM specifically (the API
+token, the two-URL split for covers) does not apply; what follows does.
 
 ```env
 LIBRARY_KIND=gaseous
@@ -181,7 +181,7 @@ LIBRARY_PASSWORD=<account password>
 | Behaviour            | Gaseous                                                 |
 | -------------------- | ------------------------------------------------------- |
 | Recently added       | Yes, ordered by the server's own date-added             |
-| Search               | **Prefix only** — see below                             |
+| Search               | **Prefix only**, see below                              |
 | Cover images         | None. Gaseous exposes no working cover route for a game |
 | File size and path   | Not reported. They belong to a ROM, not to a game       |
 | Date added per entry | Not reported, though the server can sort by it          |
@@ -199,7 +199,7 @@ It is the single best reason to enable it for this backend.
 ### Cross-referencing against IGDB
 
 GG Requestz marks a game as owned by matching IGDB ids. Gaseous only reports
-one when the game was actually matched **against IGDB** — a game matched
+one when the game was actually matched **against IGDB**. A game matched
 against another metadata source, or not matched at all, reports no IGDB id and
 so is never marked owned, even though it is in the library.
 
@@ -227,7 +227,7 @@ LIBRARY_SYNC_ENABLED=true
 | `LIBRARY_KIND`         | `retrom`                                                  |
 | `LIBRARY_URL`          | Retrom's **service** port. Default 5101                   |
 | `LIBRARY_PUBLIC_URL`   | Browser-facing base, for cover art. Defaults to the above |
-| `LIBRARY_SYNC_ENABLED` | `true`. Not optional here — see below                     |
+| `LIBRARY_SYNC_ENABLED` | `true`. Not optional here, see below                      |
 
 ### There is no credential to set
 
@@ -252,7 +252,7 @@ string` with no format constraint and a relative one is allowed.
 
 `LIBRARY_SYNC_ENABLED=true` is effectively required for Retrom, which is not
 true of the other backends. Retrom's `GetGames` request message has exactly
-five fields — platform filter, id filter, and three booleans. It has no limit,
+five fields: platform filter, id filter, and three booleans. It has no limit,
 no offset, no ordering and no search term, so recently-added and search cannot
 be answered by the backend at all.
 
@@ -267,7 +267,7 @@ works either way.
 Retrom names a game from its metadata when it has matched one, and from the ROM
 file name when it has not, which is the common case on a library that has never
 been matched to a provider. Platform names come from platform metadata when
-present and otherwise from the library directory's own name — a directory
+present and otherwise from the library directory's own name. A directory
 called `nes` becomes the platform "nes".
 
 A game is only marked as owned against a request when Retrom carries a real
@@ -321,7 +321,7 @@ REQUEST_WEBHOOK_URL=https://automation.example.com/hook/ggrequestz
 need no change. When both are set, `REQUEST_WEBHOOK_URL` wins.
 
 A request dispatches when it enters `approved`, and only then. With
-`request.auto_approve` enabled — as a global setting or a per-role permission —
+`request.auto_approve` enabled (as a global setting or a per-role permission)
 requests are approved on submission, so the webhook fires immediately and
 behaves as it did before approval gating. With it disabled, nothing is
 dispatched until an admin approves, which is what makes the approval queue
@@ -330,12 +330,12 @@ meaningful.
 Note that **any `is_admin` user auto-approves unconditionally**, regardless of
 the global setting and without holding `request.auto_approve`: admins bypass
 permission checks entirely. Their own requests therefore never sit in the
-queue, and dispatch on submission. That is independent of both switches — if
+queue, and dispatch on submission. That is independent of both switches: if
 you want an admin's requests to be reviewed, they need a non-admin account.
 
 Re-opening a fulfilled request dispatches again, since the game needs fetching
-a second time. That re-dispatch is marked in the payload — see
-[Re-dispatch](#re-dispatch) — because it carries the same `request_id` as the
+a second time. That re-dispatch is marked in the payload (see
+[Re-dispatch](#re-dispatch)) because it carries the same `request_id` as the
 first one.
 
 Failures are logged and never block the transition that triggered them,
@@ -395,7 +395,7 @@ A first dispatch carries neither key, so nothing changes for a receiver that
 does not look for them.
 
 **A receiver that deduplicates on `request_id` alone must also consider
-`redispatch`**, or it will silently drop the re-fetch — the request is
+`redispatch`**, or it will silently drop the re-fetch: the request is
 re-approved, the operator is told it dispatched, and nothing arrives. Dedupe on
 the pair instead, or treat `redispatch: true` as a cache-buster.
 
@@ -407,8 +407,8 @@ indistinguishable from a first.
 
 ### Duplicate suppression is best-effort
 
-One open request per game is the intent — `status IN ('pending','approved')`,
-matched on `igdb_id` when present and on the normalised title when it is not —
+One open request per game is the intent (`status IN ('pending','approved')`,
+matched on `igdb_id` when present and on the normalised title when it is not)
 so two people wanting the same game produce one request and one dispatch. A
 submission that loses to it gets `409` with the existing request's id, and an
 admin re-opening a request into a game that is already open gets `409` too.
@@ -434,7 +434,7 @@ side using `data.igdb_id` and `data.game_title` rather than relying on this.
 ## General troubleshooting
 
 **Check the logs first.** Server-side `console` output is deliberately retained
-in production builds, so integration failures — a ROMM 403, a Gotify timeout —
+in production builds, so integration failures (a ROMM 403, a Gotify timeout)
 are visible in `docker compose logs ggrequestz` and generally say exactly what
 went wrong.
 

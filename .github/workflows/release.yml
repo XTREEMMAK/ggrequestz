@@ -29,7 +29,7 @@ jobs:
         run: npm run test:unit
 
       # SESSION_SECRET is required at import time since 1.3.0, and SvelteKit
-      # imports server modules during its build-time static analysis — so the
+      # imports server modules during its build-time static analysis, so the
       # build itself fails without one. This is a build-only placeholder and
       # never reaches a running instance; the Docker image does the same thing
       # via .env.docker-build, and test.yml via its generated .env. Without it,

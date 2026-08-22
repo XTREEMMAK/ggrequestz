@@ -45,7 +45,7 @@ const state = {
  * Whether the operator has opted out.
  *
  * Default is enabled, so the indicator works without configuration, but any
- * deployment that does not want the app phoning out can turn it off — air-gapped
+ * deployment that does not want the app phoning out can turn it off: air-gapped
  * installs being the obvious case. Read per call rather than cached at module load,
  * so it behaves the same as the rest of the app's environment handling.
  *
@@ -76,8 +76,8 @@ function checkTtl() {
 /**
  * Compare two semantic versions numerically.
  *
- * String comparison gets this wrong in the case that matters — "1.10.0" < "1.9.0"
- * lexically — and that case arrives on the tenth minor release, not never.
+ * String comparison gets this wrong in the case that matters ("1.10.0" < "1.9.0"
+ * lexically), and that case arrives on the tenth minor release, not never.
  *
  * @param {string} a
  * @param {string} b
@@ -157,7 +157,7 @@ async function refreshUpdateCheck() {
 
       // Logged, not surfaced. The sidebar simply shows no indicator.
       console.warn(
-        `⚠️ Update check failed (${kind}): ${error?.message || error} — next check in ${Math.round(
+        `⚠️ Update check failed (${kind}): ${error?.message || error}; next check in ${Math.round(
           checkTtl() / 3600000,
         )}h`,
       );
@@ -199,7 +199,7 @@ export function getUpdateSnapshot() {
   const stale =
     state.checkedAt === 0 || Date.now() - state.checkedAt > checkTtl();
   if (stale) {
-    // Fire and forget — this caller gets the previous value immediately.
+    // Fire and forget: this caller gets the previous value immediately.
     refreshUpdateCheck().catch(() => {});
   }
 
@@ -217,7 +217,7 @@ export function getUpdateSnapshot() {
 /**
  * Force a fresh check, bypassing the interval.
  *
- * For a startup warm-up or an admin "check now" action — never for a render path.
+ * For a startup warm-up or an admin "check now" action, never for a render path.
  * Mirrors `probeRommAvailability()` in `romm.server.js`.
  *
  * @returns {Promise<Object>} - Fresh snapshot

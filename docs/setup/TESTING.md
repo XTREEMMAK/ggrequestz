@@ -15,7 +15,7 @@ How this project is tested, and how to bring up an instance to test against.
 
 **Unit** (`src/tests/unit/`) covers pure functions in a jsdom environment.
 **Integration** (`tests/integration/`) covers server-side modules in a node
-environment — server code branches on `browser`, so it cannot be exercised
+environment: server code branches on `browser`, so it cannot be exercised
 correctly under a DOM. Both are Vitest _projects_, declared in
 `vitest.config.js`; `--project unit` or `--project integration` selects one.
 
@@ -23,7 +23,7 @@ Neither reaches the network. The ROMM client tests, for example, drive a mocked
 `fetch`, so the whole suite runs offline and in CI with no services.
 
 **End-to-end** drives a real browser against a real installation. Locally that
-is the Docker test stack, never `npm run dev` — the dev server loads
+is the Docker test stack, never `npm run dev`. The dev server loads
 `.env.development`, which usually points at a database you care about. A
 `globalSetup` refuses to run if the stack is not up. First run also needs the
 browsers:
@@ -38,8 +38,8 @@ npm run test:e2e
 
 ## The disposable stack
 
-A **real installation** of G.G Requestz — built from your working tree rather
-than pulled from GHCR — together with live fixtures for the integrations that
+A **real installation** of G.G Requestz (built from your working tree rather
+than pulled from GHCR) together with live fixtures for the integrations that
 are difficult to reason about from documentation alone.
 
 ## Why this exists
@@ -49,11 +49,11 @@ wrong about the actual mechanics, and each was settled in minutes by a live
 instance:
 
 - The ROMM outage was predicted to be `200` with an empty array. It is actually
-  `403 {"detail":"Insufficient scope"}` from `/api/token` — authentication
+  `403 {"detail":"Insufficient scope"}` from `/api/token`. Authentication
   fails outright, no token is ever issued.
 - The RomM response schema was assumed to have changed in 5.0. It had not; the
   parser had simply been reading fields RomM never returned.
-- The OIDC redirect URI looked correct until a real provider rejected it —
+- The OIDC redirect URI looked correct until a real provider rejected it:
   adapter-node advertises `https` when no `ORIGIN` is configured.
 
 Reasoning about an external API from its docs produces confident wrong answers.
@@ -68,7 +68,7 @@ between them is just running the other target.
 
 | Command            | State                                               | Lands on | For                                        |
 | ------------------ | --------------------------------------------------- | -------- | ------------------------------------------ |
-| `make test-blank`  | schema and system roles only — no admin, no data    | `/setup` | the first-run wizard, fresh-install checks |
+| `make test-blank`  | schema and system roles only, no admin, no data     | `/setup` | the first-run wizard, fresh-install checks |
 | `make test-seeded` | admin, 30 games, requests, watchlist, fixtures      | `/login` | everything else, and the e2e suite         |
 | `make test-live`   | seeded, plus real IGDB/ROMM credentials from `.env` | `/login` | exercising the live integrations           |
 
@@ -95,7 +95,7 @@ Two things about `test-blank` worth knowing:
 | Fixture             | Detail                                                            |
 | ------------------- | ----------------------------------------------------------------- |
 | 30 games            | `tests/fixtures/games.json`, synthetic `99xxxx` IGDB ids          |
-| 2 non-admin users   | `player` (user), `curator` (manager) — both `ggr-test-user`       |
+| 2 non-admin users   | `player` (user), `curator` (manager), both `ggr-test-user`        |
 | 5 requests          | one per status: pending, approved, rejected, fulfilled, cancelled |
 | 8 watchlist entries | split across the two users                                        |
 | 1 custom nav link   | for the role-visibility logic in `guides/NAVIGATION.md`           |
@@ -130,7 +130,7 @@ The form field takes either the username or the email.
 `make test-seeded` creates the admin via `scripts/testing/seed-app.sh`. That script posts
 to the app's own first-run endpoint (`POST /api/auth/basic/setup`) rather than
 inserting a row, so the password is hashed and the `admin` role assigned exactly
-the way a real installation does it — a direct `INSERT` sets `is_admin` but
+the way a real installation does it: a direct `INSERT` sets `is_admin` but
 leaves `ggr_user_roles` empty. Re-running it is safe: the endpoint refuses a
 second admin, and the script treats that as success.
 
@@ -141,7 +141,7 @@ Run it on its own against a stack that is already up:
 ```
 
 Pass a base URL as the first argument if the app's `ORIGIN` is not the loopback
-default — `checkOrigin: true` in `svelte.config.js` rejects a POST whose `Origin`
+default: `checkOrigin: true` in `svelte.config.js` rejects a POST whose `Origin`
 disagrees, and the script reports that case explicitly rather than looking like a
 bad password.
 
@@ -160,7 +160,7 @@ docker exec ggr-test-postgres-1 psql -U ggrequestz -d ggrequestz \
 ### Reaching the stack from another machine
 
 The published ports are loopback-only by default. To test from a browser on a
-different host, set the bind address **and** the origin host — `adapter-node`
+different host, set the bind address **and** the origin host: `adapter-node`
 rejects POSTs whose `Origin` header does not match, so the login form fails with
 a 403 if only the bind address changes:
 
@@ -195,7 +195,7 @@ docker compose -f docker-compose.test.yml --profile romm --profile oidc up -d ap
 
 > **Internal vs public hostnames.** Server-side calls use the compose service
 > name (`http://romm:8080`, `http://keycloak:8080`). Only values the _browser_
-> follows — `OIDC_REDIRECT_URI`, `PUBLIC_SITE_URL` — use `127.0.0.1`. A public
+> follows (`OIDC_REDIRECT_URI`, `PUBLIC_SITE_URL`) use `127.0.0.1`. A public
 > URL for a server-side call hairpins out through DNS, TLS and the reverse
 > proxy and back, which is precisely the cost v1.3 removed from the render path.
 
@@ -222,7 +222,7 @@ The broken state reproduces the real outage. Expect:
 
 Notes that cost time to work out:
 
-- RomM enforces **CSRF** on writes — fetch the `romm_csrftoken` cookie and echo
+- RomM enforces **CSRF** on writes: fetch the `romm_csrftoken` cookie and echo
   it in an `x-csrftoken` header.
 - The first admin can be created **unauthenticated** while the setup wizard is
   active; everything after needs `Authorization: Bearer`.
@@ -237,7 +237,7 @@ Notes that cost time to work out:
 `scripts/testing/seed-keycloak.sh` creates a confidential client and a test
 user. Keycloak is deliberately the OIDC fixture because its endpoint paths
 (`/realms/{r}/protocol/openid-connect/auth`) share nothing with Authentik's
-(`/application/o/authorize/`) — so it catches any regression back toward
+(`/application/o/authorize/`), so it catches any regression back toward
 provider-specific assumptions.
 
 Keycloak does **not** emit a `groups` claim without an explicit Group Membership
@@ -254,7 +254,7 @@ docker compose -f docker-compose.test.yml --profile authentik up -d
 Available at <http://127.0.0.1:9000>, bootstrapped as `akadmin` /
 `AkAdminPass123!` with API token `ggr-bootstrap-token-for-testing`.
 
-Use this to verify the **pre-1.3 configuration still works** — set only
+Use this to verify the **pre-1.3 configuration still works**: set only
 `AUTH_METHOD=authentik` and `AUTHENTIK_CLIENT_ID` / `AUTHENTIK_CLIENT_SECRET` /
 `AUTHENTIK_ISSUER`, with no `OIDC_*` at all. The login button should still read
 "Login with Authentik".
@@ -268,7 +268,7 @@ would otherwise succeed return `403`.
 
 A separate, isolated stack (`docker-compose.test.upgrade.yml`, project name
 `ggr-upgrade`) for verifying that a database created by a past release upgrades
-cleanly to this working tree — migrations apply in the right order, nothing
+cleanly to this working tree: migrations apply in the right order, nothing
 gets re-run, and existing data survives.
 
 ```bash
@@ -279,7 +279,7 @@ make test-upgrade-new               # swaps to this working tree, same database
 make test-upgrade-down              # tears down and removes the worktree
 ```
 
-Both legs run on port `3200` and share the same Postgres 15 volume — only the
+Both legs run on port `3200` and share the same Postgres 15 volume. Only the
 app container is rebuilt between them, so the "upgrade" is exactly what a real
 one is: new code, old data. `FROM` accepts any tag; it defaults to `v1.2.5`.
 
@@ -292,11 +292,11 @@ Watch `docker logs ggr-upgrade-app` for the migration sequence:
 ```
 
 If a future release adds migrations beyond `008`, expect exactly the new ones
-to run — anything already recorded in `ggr_migrations` at the old version
+to run. Anything already recorded in `ggr_migrations` at the old version
 should be skipped, never re-executed. Compare `executed_at` timestamps for the
 pre-existing rows before and after to confirm nothing touched them.
 
-This is separate from `test-blank`/`test-seeded`/`test-live` on purpose — it
+This is separate from `test-blank`/`test-seeded`/`test-live` on purpose: it
 runs on Postgres 15, matching what a real release actually ships, rather than
 the 16 used by the disposable stack, and it is the only mode that runs code
 from anywhere other than the current working tree.
@@ -306,7 +306,7 @@ from anywhere other than the current working tree.
 ## Things worth checking here
 
 - **Cold start.** Point `ROMM_SERVER_URL` at an unroutable address
-  (`https://10.255.255.1`) and measure `/login`. TTFB must not move — that is
+  (`https://10.255.255.1`) and measure `/login`. TTFB must not move; that is
   the regression test for the v1.3 cold-start fix.
   ```bash
   curl -w "%{time_starttransfer}\n" -o /dev/null -s http://127.0.0.1:3100/login
@@ -328,7 +328,7 @@ from anywhere other than the current working tree.
   into `tmp/test-fixtures/romm-library/roms/` and rescan in RomM to populate the
   library. `tmp/` is gitignored.
 - PM2 runs one worker per core, and each worker warms its own cache at boot, so
-  the startup logs repeat per worker. That is expected — but note it means N
+  the startup logs repeat per worker. That is expected, but note it means N
   parallel IGDB warm-ups on an N-core host.
   Genuinely _identical_ duplicate lines are a different problem, and were caused
   by `out_file: /dev/stdout` in `ecosystem.config.cjs` racing pm2-runtime's own

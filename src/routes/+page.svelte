@@ -38,8 +38,8 @@
   let currentPath = $derived($page.url.pathname);
 
   // How long a saved homepage snapshot stays usable when navigating back.
-  // This was previously two different numbers — 15 minutes here and 5 minutes in
-  // restoreHomepageState() — so between those bounds the two paths disagreed:
+  // This was previously two different numbers (15 minutes here and 5 minutes in
+  // restoreHomepageState()), so between those bounds the two paths disagreed:
   // restoreHomepageState() deleted the snapshot before it had restored the
   // showMore/expanded flags, collapsing every section back to its initial card
   // count even though the arrays had been repopulated.
@@ -149,7 +149,7 @@
   // Real-time watchlist status tracking
   let watchlistStatuses = $state(new Map());
   let rommAvailable = $derived(data?.rommAvailable || false);
-  // Whether ROMM is set up at all — this controls whether the "New in Library"
+  // Whether ROMM is set up at all: this controls whether the "New in Library"
   // section is rendered. `rommAvailable` only controls what it shows, so a
   // broken ROMM reports an error instead of silently disappearing.
   let rommConfigured = $derived(data?.rommConfigured ?? data?.rommAvailable ?? false);
@@ -165,7 +165,7 @@
 
   // How many card placeholders to render while a Load More request is in flight.
   // Previously the grid simply grew when the data arrived, so the interval between
-  // the click and the response was blank canvas — which reads as a rendering fault
+  // the click and the response was blank canvas, which reads as a rendering fault
   // rather than as loading. Each skeleton is replaced one-for-one as its card
   // lands, so the region is never both reserved and empty.
   let pendingNewInLibrary = $state(0);
@@ -174,7 +174,7 @@
 
   // Cards already on screen when the current batch started. The grid's entry
   // transition is keyed on absolute index, so without this an appended card waits
-  // `index * 50`ms on top of its insertion delay — 1.6s for card 32, growing with
+  // `index * 50`ms on top of its insertion delay (1.6s for card 32), growing with
   // every page. Cards at or past this mark get no transition delay and take their
   // stagger from the insertion loop alone.
   let staggerFrom = $state(Infinity);
@@ -633,7 +633,7 @@
    * Append games one at a time so the mount and layout cost spreads across frames
    * instead of landing in one.
    *
-   * `onEach` fires after every insertion — callers use it to retire one skeleton
+   * `onEach` fires after every insertion; callers use it to retire one skeleton
    * per card, which is what keeps the placeholder count honest as the batch lands.
    *
    * The delay was 150ms, which over a 16-item page meant 2.4s of drip with the

@@ -225,7 +225,7 @@ body {
  * Applied as a class on the layout wrapper, so a new theme is a block here
  * rather than conditionals threaded through the markup.
  *
- * Scoped to the chrome — sidebar and mobile header — on purpose. Cards, modals
+ * Scoped to the chrome (sidebar and mobile header) on purpose. Cards, modals
  * and form controls keep full opacity: translucent inputs over a moving
  * background are the usual accessibility complaint, and content needs its
  * contrast more than it needs the effect.
@@ -237,7 +237,7 @@ body {
   background-color: rgb(45 55 72 / 0.55);
   /* A single filter function on purpose. The CSS minifier strips the space
      between functions, so `blur(16px) saturate(140%)` ships as
-     `blur(16px)saturate(140%)` — an invalid filter list that browsers discard
+     `blur(16px)saturate(140%)`, an invalid filter list that browsers discard
      entirely, leaving a translucent sidebar with no blur. The @supports
      fallback below cannot catch that, because support is not the problem.
 
@@ -250,7 +250,7 @@ body {
 
 .theme-glass .mobile-header {
   background-color: rgb(26 32 44 / 0.55);
-  /* Single function — see the note on .sidebar above. */
+  /* Single function; see the note on .sidebar above. */
   backdrop-filter: blur(16px);
   border-bottom: 1px solid rgb(255 255 255 / 0.08);
 }

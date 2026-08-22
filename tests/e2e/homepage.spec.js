@@ -5,14 +5,14 @@ import { signIn, ensureAdmin } from "./helpers.js";
  * `/` is never the application for an unauthenticated visitor: it redirects to
  * /setup on a blank instance and /login on a seeded one. These tests used to
  * assume anything that was not /setup was the signed-in app, so their
- * navigation assertions had never actually run — and once they did, none of the
+ * navigation assertions had never actually run, and once they did, none of the
  * selectors matched. The login page renders the shell server-side and then
  * drops it on hydration, so those elements really are absent.
  *
  * Anything asserting on the shell now signs in first.
  */
 // The admin these tests sign in as must exist before any of them run. See
-// ensureAdmin() in helpers.js — locally this is a no-op, in CI it creates it.
+// ensureAdmin() in helpers.js; locally this is a no-op, in CI it creates it.
 test.beforeAll(async ({ playwright, baseURL }) => {
   const context = await playwright.request.newContext({ baseURL });
   try {
@@ -114,7 +114,7 @@ test.describe("Performance", () => {
     await page.goto("/");
 
     // Settle first. Unauthenticated, "/" redirects to /login, which has no
-    // search field — and isVisible() can win a race against that redirect,
+    // search field, and isVisible() can win a race against that redirect,
     // leaving hover() waiting on a detached element until the test times out.
     // That is what happened on the touch profiles once this test stopped being
     // skipped.

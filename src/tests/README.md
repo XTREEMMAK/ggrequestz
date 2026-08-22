@@ -1,7 +1,7 @@
 # Unit tests
 
 The jsdom half of the Vitest setup. See [`docs/setup/TESTING.md`](../../docs/setup/TESTING.md)
-for the whole picture — the four layers, and how to bring up an instance to
+for the whole picture: the four layers, and how to bring up an instance to
 test against.
 
 ## Layout
@@ -32,15 +32,15 @@ tests/                              # everything outside src/
 
 ## Which project to add a test to
 
-**`src/tests/unit/`** — pure functions and Svelte components. Runs under jsdom,
+**`src/tests/unit/`**: pure functions and Svelte components. Runs under jsdom,
 so browser globals exist.
 
-**`tests/integration/`** — anything under `src/lib/*.server.js` or otherwise
+**`tests/integration/`**: anything under `src/lib/*.server.js` or otherwise
 server-only. Runs under node, because that code branches on `browser` and takes
 the wrong path when a DOM is present. Mock `fetch`; these must not reach the
 network.
 
-**`tests/e2e/`** — real browser against a real installation. Needs
+**`tests/e2e/`**: real browser against a real installation. Needs
 `make test-seeded` first. Anything asserting on the application shell has to
 call `signIn()` from `helpers.js`: an unauthenticated visitor is redirected to
 `/login`, which drops the shell on hydration.
@@ -71,7 +71,7 @@ runtime environment.
 - Reset module state between tests when the module under test holds any. The
   ROMM client caches a token at module scope, so its tests re-import through
   `vi.resetModules()` rather than sharing an instance.
-- Never reach the network, including in e2e — those run against the local stack,
+- Never reach the network, including in e2e; those run against the local stack,
   never a remote one.
 - When a test needs a fixture user or game, use the seeded ones rather than
   creating new state.
