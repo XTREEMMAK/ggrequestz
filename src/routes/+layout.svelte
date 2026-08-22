@@ -830,13 +830,32 @@
 						</div>
 						<Icon icon="heroicons:arrow-top-right-on-square" class="w-4 h-4 opacity-50 group-hover:opacity-100" />
 					</a>
+
+					<!--
+						Deliberately a link rather than a list of names. Contributors are
+						recorded in the README and on the graph this points at, both of
+						which stay correct on their own; names rendered here would need a
+						code change and a release every time that list grew.
+					-->
+					<a
+						href="https://github.com/XTREEMMAK/ggrequestz/graphs/contributors"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="w-full flex items-center space-x-4 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors group"
+					>
+						<Icon icon="heroicons:user-group" class="w-5 h-5" />
+						<div class="flex-1">
+							<span class="text-sm font-medium">Contributors</span>
+							<p class="text-xs text-gray-500">Everyone who helped build this</p>
+						</div>
+						<Icon icon="heroicons:arrow-top-right-on-square" class="w-4 h-4 opacity-50 group-hover:opacity-100" />
+					</a>
 				</div>
 
 				<!-- Future extensibility placeholder -->
 				<!-- Additional sections can be added here:
 				     - Documentation links
 				     - License information
-				     - Contributors
 				     - System information
 				     - Statistics
 				-->

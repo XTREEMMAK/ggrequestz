@@ -160,11 +160,24 @@ docker pull ghcr.io/xtreemmak/ggrequestz:latest
 docker pull ghcr.io/xtreemmak/ggrequestz:v1.5.0
 ```
 
-> **📋 v1.4.0 Release Notes:** Selectable backgrounds and a glass theme for the sidebar, a restructured profile Settings area, and the outbound webhook renamed to `REQUEST_WEBHOOK_URL` (`N8N_WEBHOOK_URL` still works). **Breaking:** API key scopes are now enforced: keys created with less than full access will start returning `403` on endpoints outside their scopes. See the [changelog](CHANGELOG.md) before upgrading.
+> **📋 v1.5.0 Release Notes:** The library integration is no longer ROMM-specific: `LIBRARY_KIND` selects between ROMM, Gaseous and Retrom, and an optional local index answers listing, search and in-library queries from Postgres instead of the backend. **Breaking:** approval now gates fulfillment, so submitting a request no longer dispatches the outbound webhook. Enable `request.auto_approve` to keep the old behaviour, or nothing is sent downstream until an administrator approves. See the [changelog](CHANGELOG.md) before upgrading.
 
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+
+## 🙏 Credits
+
+Built and maintained by [@XTREEMMAK](https://github.com/XTREEMMAK).
+
+[@BlizzHacker](https://github.com/BlizzHacker) contributed the backend-agnostic
+library layer and all three of its backends (ROMM, Gaseous and Retrom), the
+local library index that replaced the 2,000-ROM cross-reference window, the
+request approval workflow and its duplicate guard, the outbound request webhook,
+and the migration statement-splitter fix, across ten pull requests.
+
+See the [contributors graph](https://github.com/XTREEMMAK/ggrequestz/graphs/contributors)
+for everyone who has worked on this.
 
 ## 📝 License
 

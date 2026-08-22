@@ -145,6 +145,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `probeRommAvailability()`, which records what it finds so the breaker and the UI
   both learn from the result.
 
+### 📚 Documentation
+
+- **The project has a credits section.** `README.md` now records who built what,
+  and the About popup links to the contributors graph. Contributions had only
+  ever been acknowledged inside individual changelog entries, which is not
+  somewhere anyone looks.
+- The configuration reference gained the `LIBRARY_*` and `LIBRARY_SYNC_*`
+  settings, and `docs/API.md` and the OpenAPI document gained the `409` returned
+  by the duplicate guard and the `history` and `update` fields on
+  `GET /api/version`. All were shipped behaviour that nothing described.
+
 ## [1.4.0] - 2026-07-29
 
 ### ⚠️ Breaking Changes
