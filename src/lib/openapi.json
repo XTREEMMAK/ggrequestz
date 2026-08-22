@@ -301,7 +301,7 @@
                   "properties": {
                     "version": {
                       "type": "string",
-                      "example": "1.3.0"
+                      "example": "1.5.0"
                     },
                     "name": {
                       "type": "string",
@@ -336,7 +336,7 @@
                         "properties": {
                           "version": {
                             "type": "string",
-                            "example": "1.4.0"
+                            "example": "1.5.0"
                           },
                           "date": {
                             "type": "string",

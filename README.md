@@ -6,7 +6,7 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
@@ -157,7 +157,7 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:v1.4.0
+docker pull ghcr.io/xtreemmak/ggrequestz:v1.5.0
 ```
 
 > **📋 v1.4.0 Release Notes:** Selectable backgrounds and a glass theme for the sidebar, a restructured profile Settings area, and the outbound webhook renamed to `REQUEST_WEBHOOK_URL` (`N8N_WEBHOOK_URL` still works). **Breaking:** API key scopes are now enforced: keys created with less than full access will start returning `403` on endpoints outside their scopes. See the [changelog](CHANGELOG.md) before upgrading.

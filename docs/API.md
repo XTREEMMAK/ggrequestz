@@ -132,7 +132,7 @@ Returns application version and feature information.
 
 ```json
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "name": "gg-requestz",
   "environment": "production",
   "buildTime": "2026-07-26T12:00:00Z",
@@ -167,7 +167,7 @@ Health check endpoint for monitoring.
   "status": "ok",
   "timestamp": "2026-07-26T12:00:00Z",
   "uptime": 3600,
-  "version": "1.4.0"
+  "version": "1.5.0"
 }
 ```
 
