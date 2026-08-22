@@ -157,7 +157,7 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:v1.5.0
+docker pull ghcr.io/xtreemmak/ggrequestz:1.5.0
 ```
 
 > **📋 v1.5.0 Release Notes:** The library integration is no longer ROMM-specific: `LIBRARY_KIND` selects between ROMM, Gaseous and Retrom, and an optional local index answers listing, search and in-library queries from Postgres instead of the backend. **Breaking:** approval now gates fulfillment, so submitting a request no longer dispatches the outbound webhook. Enable `request.auto_approve` to keep the old behaviour, or nothing is sent downstream until an administrator approves. See the [changelog](CHANGELOG.md) before upgrading.
