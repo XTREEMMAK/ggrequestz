@@ -601,6 +601,31 @@ Submit a new game request.
 }
 ```
 
+**`status` is not always `pending`.** A request is created `approved` when the
+submitter holds the `request.auto_approve` permission, or when the global
+`request.auto_approve` setting is on. Administrators always auto-approve,
+because `is_admin` bypasses permission checks. This matters to a caller because
+the outbound webhook fires when a request enters `approved`, so an
+auto-approved submission dispatches immediately and a `pending` one does not
+dispatch at all until an administrator approves it.
+
+**409 Conflict:** an open request already covers this game.
+
+```json
+{
+  "success": false,
+  "error": "\"Chrono Trigger\" has already been requested and is pending.",
+  "existing_request_id": "1f5fc8ab-0000-0000-0000-000000000000"
+}
+```
+
+Deduplication is global rather than per user, so two people asking for one game
+produce one request and the second caller is told which one is already open.
+It covers requests in `pending` or `approved` only, so a rejected, cancelled or
+fulfilled request never blocks a retry. `existing_request_id` is present when
+the conflicting row could be identified and absent otherwise, so treat it as
+optional.
+
 #### POST /api/request/rescind
 
 Remove/rescind a game request.

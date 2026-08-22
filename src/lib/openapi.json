@@ -327,6 +327,51 @@
                           "type": "boolean"
                         }
                       }
+                    },
+                    "history": {
+                      "type": "array",
+                      "description": "Released versions, newest first, parsed from CHANGELOG.md at build time",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "version": {
+                            "type": "string",
+                            "example": "1.4.0"
+                          },
+                          "date": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-07-29"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        }
+                      }
+                    },
+                    "update": {
+                      "type": "object",
+                      "description": "Update availability. Read from a background-refreshed snapshot; never blocks the request",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "False when UPDATE_CHECK_ENABLED opts out"
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "latest": {
+                          "type": "string",
+                          "nullable": true,
+                          "example": "1.5.0"
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "uri"
+                        }
+                      }
                     }
                   }
                 }
@@ -1313,6 +1358,30 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An open request already covers this game. Requests are deduplicated globally while they are pending or approved, so a second submission is refused rather than producing a second download.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "existing_request_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "The open request already covering this game, when it could be identified"
+                    }
+                  }
                 }
               }
             }
@@ -2603,6 +2672,30 @@
           },
           "404": {
             "description": "Request not found"
+          },
+          "409": {
+            "description": "The status change would re-open a request into a game that already has an open one. The body names the conflicting request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "existing_request_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "The open request already covering this game, when it could be identified"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2694,6 +2787,30 @@
           },
           "403": {
             "description": "Insufficient permissions"
+          },
+          "409": {
+            "description": "The status change would re-open a request into a game that already has an open one. The body names the conflicting request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "existing_request_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "The open request already covering this game, when it could be identified"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
