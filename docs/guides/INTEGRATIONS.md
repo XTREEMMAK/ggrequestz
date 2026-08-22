@@ -240,6 +240,14 @@ than a login.
 Put Retrom behind a reverse proxy if it needs protecting. `LIBRARY_URL` may
 carry `user:pass@` for a proxy that wants basic auth.
 
+**If you do that, set `LIBRARY_PUBLIC_URL` explicitly as well.** It defaults to
+`LIBRARY_URL`, and it is the base a relative cover path is resolved against
+before that URL is stored in the index and rendered as an `<img src>`. Leaving
+it to default would put the proxy credentials in front of every user and into
+the database. Retrom returned absolute cover URLs on the instance this was built
+against, which never reach that code path, but `cover_url` is an `optional
+string` with no format constraint and a relative one is allowed.
+
 ### Turn the library index on
 
 `LIBRARY_SYNC_ENABLED=true` is effectively required for Retrom, which is not

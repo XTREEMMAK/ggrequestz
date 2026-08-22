@@ -27,6 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ROMM_*` names keep working as fallbacks, so an existing install upgrades
   without touching its configuration, and the `LIBRARY_*` value wins when both
   are set. Thanks to [@BlizzHacker](https://github.com/BlizzHacker).
+- **Retrom is supported as a third library backend**, with
+  `LIBRARY_KIND=retrom`. Retrom has no authentication, so there is no credential
+  to configure; put it behind a reverse proxy if it needs protecting. It speaks
+  gRPC-Web rather than REST, and the codec for that is written into this project
+  rather than pulled in as a dependency, so installs that never select it carry
+  nothing extra. **Enabling the local index is effectively required here**: its
+  `GetGames` request has no limit, offset, ordering or search term, so the
+  recently-added shelf and library search cannot be answered by the backend at
+  all and are served from the index or not at all. Cross-referencing a requested
+  game by IGDB id works either way. Thanks to
+  [@BlizzHacker](https://github.com/BlizzHacker).
 - **Gaseous is supported as a second library backend**, with
   `LIBRARY_KIND=gaseous`. It authenticates with the account e-mail and password
   rather than an API token, so `LIBRARY_USERNAME` must be the e-mail address and
