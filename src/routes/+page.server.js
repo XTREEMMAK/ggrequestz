@@ -36,7 +36,7 @@ import {
   mergeFiltersWithGlobal,
 } from "$lib/globalFilters.js";
 
-export async function load({ parent, cookies, url, depends }) {
+export async function load({ parent, url, depends }) {
   const { user, needsSetup, authMethod } = await parent();
 
   // Establish dependencies for cache invalidation
@@ -57,11 +57,6 @@ export async function load({ parent, cookies, url, depends }) {
     // Detect Docker environment
     const isDocker = process.env.NODE_ENV === "production";
     const timeoutMultiplier = isDocker ? 1.5 : 1; // Increase timeouts by 50% in Docker
-
-    // Get cookies for ROMM authentication
-    const cookieHeader = cookies.get("session")
-      ? `session=${cookies.get("session")}`
-      : null;
 
     // Get user ID for preferences with caching to avoid repeated database lookups
     let userId = user.id;
@@ -250,7 +245,7 @@ export async function load({ parent, cookies, url, depends }) {
       ? (async () => {
           try {
             const games = await cacheRommGames(
-              () => getRecentlyAddedROMs(20, 0, cookieHeader),
+              () => getRecentlyAddedROMs(20, 0),
               "0-v20",
             );
             return { games, error: null };
@@ -286,7 +281,12 @@ export async function load({ parent, cookies, url, depends }) {
       // Flag to indicate ROMM cross-reference should be done client-side
       needsRommCrossReference:
         rommAvailable && (newReleases.length > 0 || popularGames.length > 0),
-      cookieHeader, // Pass for client-side ROMM operations
+      // There used to be a `cookieHeader` here carrying `session=<JWT>`.
+      // Everything a load returns is serialized into the page HTML and into
+      // __data.json, so that put the HttpOnly session token where any script
+      // on the page could read it (GHSA-p5rp-p8jc-w4p4). Nothing used it:
+      // ROMM never receives the browser's cookies (romm.server.js). Never
+      // return a cookie, token or secret from a load.
       resolvedUserId: userId, // Pass the resolved database user ID for client-side API calls
       // PERFORMANCE OPTIMIZATION: Enhanced caching and navigation optimizations applied
       hasUserPreferences: !!userPreferences, // Whether user has filtering preferences
