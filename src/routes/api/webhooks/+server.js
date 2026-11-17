@@ -5,9 +5,20 @@
 import { json, error } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { requestWebhookUrl, sendRequestWebhook } from "$lib/webhooks.server.js";
+import { requireAdministrator } from "$lib/server/requireAdministrator.js";
 
-export async function POST({ request }) {
+// Gotify is an operator's own service; a slow one must not hold the request.
+const GOTIFY_TIMEOUT_MS = 10000;
+
+export async function POST({ request, cookies }) {
   try {
+    // Administrators only. This relays a caller-chosen type, title, message
+    // and data to the request webhook and to Gotify, and the payload is the
+    // same shape an approval sends, so a receiver cannot tell them apart. Any
+    // signed-in user could trigger download automation without an approval
+    // (GHSA-pm7x-8vh4-crv2). Nothing in the app calls this route.
+    await requireAdministrator({ cookies, request });
+
     const {
       type,
       title,
@@ -105,6 +116,7 @@ async function sendGotifyNotification({ title, message, priority, extras }) {
         priority,
         extras,
       }),
+      signal: AbortSignal.timeout(GOTIFY_TIMEOUT_MS),
     },
   );
 
