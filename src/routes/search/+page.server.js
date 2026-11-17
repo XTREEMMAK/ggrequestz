@@ -9,6 +9,7 @@ import { getUserPreferences } from "$lib/userPreferences.js";
 import { mergeFiltersWithGlobal } from "$lib/globalFilters.js";
 import { assessContentSafety } from "$lib/contentRating.js";
 import { filterGamesByGenre } from "$lib/genreFiltering.js";
+import { markLibraryGames } from "$lib/romm.server.js";
 
 import { redirect } from "@sveltejs/kit";
 
@@ -147,6 +148,10 @@ export async function load({ url, parent }) {
             );
           }
         }
+
+        // Index only, so a card can say whether the library holds the game
+        // without a library request per search (issue #31).
+        cachedResults = await markLibraryGames(cachedResults);
 
         searchResults = {
           hits: cachedResults.map((game) => ({ document: game })),

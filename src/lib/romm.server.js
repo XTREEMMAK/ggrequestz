@@ -1332,3 +1332,44 @@ export async function crossReferenceWithROMM(igdbGames, cookies = null) {
 
   return crossReferenceFromWindow(igdbGames, cookies);
 }
+
+/**
+ * Mark which of these games are in the library, from the local index only.
+ *
+ * For grids: search results and the profile watchlist. Each renders dozens of
+ * games per request, and before issue #31 neither was looked up at all, so
+ * their cards could not say anything true about the library. (The genre and
+ * publisher browse pages still serve placeholder data, so they are not wired.)
+ *
+ * crossReferenceWithROMM is not used here because, until the index has
+ * completed a sync, it falls back to fetching the 2000 most recently added
+ * roms from the library: an outbound request per page view, on a render path
+ * (engineering rules 1 and 5). Here an index that cannot answer means the
+ * answer is unknown, and the games come back unmarked, so a card shows no badge
+ * rather than a wrong one. The game detail page still checks live.
+ *
+ * Never throws. A failure leaves the games unmarked, logged by
+ * readLibraryIndex or below.
+ *
+ * @param {Array} games - Games with `igdb_id`
+ * @returns {Promise<Array>} - The same games, marked when the index can answer
+ */
+export async function markLibraryGames(games) {
+  if (browser) throw new Error("markLibraryGames is server-only");
+  if (!Array.isArray(games) || games.length === 0) return games;
+
+  try {
+    if (!(await isRommConfigured())) return games;
+    // annotateFromIndex builds library_url from the browser-facing base.
+    await loadEnvironmentVariables();
+
+    const entries = await readLibraryIndex(games);
+    return entries ? annotateFromIndex(games, entries) : games;
+  } catch (error) {
+    console.warn(
+      "Could not mark library games from the index:",
+      error?.message || error,
+    );
+    return games;
+  }
+}

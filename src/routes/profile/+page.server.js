@@ -7,6 +7,7 @@ import { query } from "$lib/database.js";
 import { getUserWatchlist, getUserRequests } from "$lib/userProfile.js";
 import { getUserPreferences } from "$lib/userPreferences.js";
 import { getAvailableGenres } from "$lib/genreFiltering.js";
+import { markLibraryGames } from "$lib/romm.server.js";
 
 export async function load({ parent, depends }) {
   // Add dependency for watchlist data invalidation
@@ -67,7 +68,8 @@ export async function load({ parent, depends }) {
       ]);
 
     return {
-      userWatchlist,
+      // Index only, never a library request per page (issue #31).
+      userWatchlist: await markLibraryGames(userWatchlist),
       userRequests,
       userPreferences,
       availableGenres,
