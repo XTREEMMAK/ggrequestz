@@ -3,6 +3,7 @@
  */
 
 import { query } from "./database.js";
+import { needsInitialSetup } from "./basicAuth.js";
 
 /**
  * Find user by Authentik subject ID
@@ -31,14 +32,37 @@ export async function findUserByAuthentikSub(authentikSub) {
 }
 
 /**
+ * Whether no account of any kind exists yet.
+ *
+ * Fails closed: when the database cannot say, the answer is "not empty", so an
+ * outage can never turn a sign-in into an administrator.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function isEmptyInstance() {
+  try {
+    return await needsInitialSetup();
+  } catch (error) {
+    console.error(
+      "❌ Could not check for existing accounts; this sign-in will not be made an administrator:",
+      error?.message || error,
+    );
+    return false;
+  }
+}
+
+/**
  * Create new user profile from Authentik user info
  * @param {Object} userInfo - User info from Authentik
  * @returns {Promise<Object|null>} - Created user profile or null
  */
 export async function createUserFromAuthentik(userInfo) {
   try {
-    // Check if this is the first user (no admins exist yet)
-    const isFirstUser = !(await hasAdminUsers());
+    // The first account on an empty instance is made an administrator, and
+    // only that one. This used to be "no admin exists yet", so on an install
+    // whose admin had been demoted by group sync, the next person to sign in
+    // through the provider became an administrator (GHSA-xm2w-327g-3fxg).
+    const isFirstUser = await isEmptyInstance();
 
     const result = await query(
       `
@@ -211,6 +235,19 @@ async function assignRolesFromAuthentikGroups(
         "UPDATE ggr_users SET is_admin = $1, updated_at = NOW() WHERE id = $2",
         [hasAdminGroup, userId],
       );
+
+      // Group membership is authoritative whenever the claim is present, so a
+      // first administrator who is not in an admin group loses the flag on
+      // their next sign-in. Nothing re-grants it automatically any more (that
+      // path was GHSA-xm2w-327g-3fxg), so say plainly how to recover.
+      if (!hasAdminGroup && !(await hasAdminUsers())) {
+        console.warn(
+          `⚠️ No active administrator remains: user ${userId} signed in without membership in an admin group ` +
+            `(${adminGroups.join(", ") || "none configured"}), so they do not hold the admin flag. ` +
+            "Add your administrators to one of those groups and sign in again, or set OIDC_ROLE_MAP / " +
+            'OIDC_ADMIN_GROUP to the group you use. See docs/setup/OIDC_SETUP.md, "Granting admin access".',
+        );
+      }
     }
 
     // Without a groups claim there is nothing to synchronise; leave whatever
@@ -354,31 +391,6 @@ export async function userHasPermission(userId, permissionName) {
     return result.rows.length > 0;
   } catch (error) {
     console.error("❌ Failed to check user permission:", error);
-    return false;
-  }
-}
-
-/**
- * Assign admin role to a user (for initial setup)
- * @param {number} userId - Local user ID
- * @returns {Promise<boolean>} - Success status
- */
-export async function assignAdminRole(userId) {
-  try {
-    await query(
-      `
-      INSERT INTO ggr_user_roles (user_id, role_id, assigned_at)
-      SELECT $1, r.id, NOW()
-      FROM ggr_roles r
-      WHERE r.name = 'admin' AND r.is_active = TRUE
-      ON CONFLICT (user_id, role_id) DO UPDATE SET is_active = TRUE
-    `,
-      [userId],
-    );
-
-    return true;
-  } catch (error) {
-    console.error("❌ Failed to assign admin role:", error);
     return false;
   }
 }

@@ -3,12 +3,7 @@
  */
 
 import { redirect } from "@sveltejs/kit";
-import {
-  getUserPermissions,
-  userHasPermission,
-  hasAdminUsers,
-  assignAdminRole,
-} from "$lib/userProfile.js";
+import { getUserPermissions, userHasPermission } from "$lib/userProfile.js";
 import { query } from "$lib/database.js";
 
 export async function load({ parent }) {
@@ -140,21 +135,14 @@ export async function load({ parent }) {
       }
     }
 
-    let hasAdminAccess = await userHasPermission(localUserId, "admin.panel");
+    const hasAdminAccess = await userHasPermission(localUserId, "admin.panel");
 
-    // If no admin access, check if any admin users exist in the system
-    if (!hasAdminAccess) {
-      const adminExists = await hasAdminUsers();
-
-      // If no admin users exist, make the first user an admin (initial setup)
-      if (!adminExists) {
-        const adminAssigned = await assignAdminRole(localUserId);
-        if (adminAssigned) {
-          hasAdminAccess = true;
-        }
-      }
-    }
-
+    // There used to be a fallback here: whenever no user had the admin flag,
+    // whoever opened /admin was given the admin role. The role did not set the
+    // flag, so the condition stayed true and every later visitor qualified as
+    // well (GHSA-xm2w-327g-3fxg). The first account is made an
+    // administrator when it is created (createInitialAdmin,
+    // createUserFromAuthentik) and nowhere else.
     if (!hasAdminAccess) {
       throw redirect(302, "/?error=unauthorized");
     }

@@ -1,28 +1,46 @@
 /**
  * Basic Authentication Setup API Endpoint
- * Creates the initial admin user when no admin exists
+ * Creates the first account, as an administrator, on an instance that has no
+ * account at all
  */
 
 import { json } from "@sveltejs/kit";
-import { createInitialAdmin, needsInitialSetup } from "$lib/basicAuth.js";
+import {
+  createInitialAdmin,
+  needsInitialSetup,
+  SetupClosedError,
+} from "$lib/basicAuth.js";
+
+const SETUP_CLOSED = { error: "Initial setup has already been completed" };
 
 export async function POST({ request }) {
   try {
     process.stdout.write("🔧 ADMIN SETUP: API endpoint reached\n");
 
-    // Check if setup is actually needed
-    process.stdout.write("🔧 ADMIN SETUP: Checking if setup is needed\n");
-    const setupNeeded = await needsInitialSetup();
-    process.stdout.write(`🔧 ADMIN SETUP: Setup needed = ${setupNeeded}\n`);
+    // Public by necessity: there is no account to sign in with yet. So it must
+    // refuse on any instance that has one, and refuse when it cannot tell.
+    // Answering "setup needed" on a database error, or on "no admin" rather
+    // than "no account", is what let an anonymous caller create an admin
+    // (GHSA-xm2w-327g-3fxg).
+    let setupNeeded;
+    try {
+      setupNeeded = await needsInitialSetup();
+    } catch (statusError) {
+      console.error(
+        "🔧 ADMIN SETUP: could not read setup status, refusing:",
+        statusError?.message || statusError,
+      );
+      return json(
+        { error: "Setup status could not be determined" },
+        { status: 503 },
+      );
+    }
 
     if (!setupNeeded) {
       process.stdout.write(
-        "🔧 ADMIN SETUP: Setup already completed, returning 400\n",
+        "🔧 ADMIN SETUP: Setup already completed, returning 403\n",
       );
-      return json(
-        { error: "Initial setup has already been completed" },
-        { status: 400 },
-      );
+      return json(SETUP_CLOSED, { status: 403 });
     }
 
     const formData = await request.formData();
@@ -69,6 +87,12 @@ export async function POST({ request }) {
       },
     });
   } catch (error) {
+    // Another request created the first account between the check above and
+    // the insert. createInitialAdmin re-checks under a lock.
+    if (error instanceof SetupClosedError) {
+      return json(SETUP_CLOSED, { status: 403 });
+    }
+
     console.error("❌ Initial setup error:", error);
 
     // Return specific error message if it's a known error

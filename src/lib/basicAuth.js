@@ -5,9 +5,8 @@
 
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import { query } from "$lib/database.js";
+import { query, withTransaction } from "$lib/database.js";
 import { generateId } from "$lib/utils.js";
-import { assignAdminRole } from "$lib/userProfile.js";
 
 const SALT_ROUNDS = 12;
 
@@ -39,43 +38,59 @@ export async function verifyPassword(password, hash) {
 }
 
 /**
- * Create the initial admin user if none exists
+ * Thrown when initial setup is asked for on an instance that already has an
+ * account. The setup endpoint answers it with 403.
+ */
+export class SetupClosedError extends Error {
+  constructor() {
+    super("Initial setup has already been completed");
+    this.name = "SetupClosedError";
+  }
+}
+
+/**
+ * Create the first account on an empty instance, as an administrator.
+ *
+ * The emptiness check, the insert and the role assignment are one
+ * transaction under an advisory lock. Checked separately, two concurrent
+ * first-run requests could both see an empty table and both create an admin.
+ * It used to check for an admin rather than for any account, which is what let
+ * an anonymous caller create one on an OIDC install whose only admin had been
+ * demoted (GHSA-xm2w-327g-3fxg).
+ *
+ * @throws {SetupClosedError} when any account already exists
  */
 export async function createInitialAdmin(username, email, password) {
-  try {
-    // Ensure table exists
-    await ensureBasicAuthTable();
+  if (!username || username.length < 3) {
+    throw new Error("Username must be at least 3 characters long");
+  }
 
-    // Check if any admin users exist in unified table
-    const existingAdmins = await query(
-      "SELECT COUNT(*) as count FROM ggr_users WHERE is_admin = TRUE",
+  if (!email || !email.includes("@")) {
+    throw new Error("Valid email address required");
+  }
+
+  if (!password || password.length < 8) {
+    throw new Error("Password must be at least 8 characters long");
+  }
+
+  // Hashed before the transaction opens, so the lock is not held for the
+  // bcrypt rounds.
+  const passwordHash = await hashPassword(password);
+
+  return withTransaction(async (tx) => {
+    await tx("SELECT pg_advisory_xact_lock(hashtext('ggr_initial_setup'))");
+
+    const existing = await tx(
+      "SELECT EXISTS (SELECT 1 FROM ggr_users) AS has_users",
     );
-
-    if (existingAdmins.rows[0].count > 0) {
-      throw new Error("Admin user already exists");
+    if (existing.rows[0].has_users) {
+      throw new SetupClosedError();
     }
 
-    // Validate inputs
-    if (!username || username.length < 3) {
-      throw new Error("Username must be at least 3 characters long");
-    }
-
-    if (!email || !email.includes("@")) {
-      throw new Error("Valid email address required");
-    }
-
-    if (!password || password.length < 8) {
-      throw new Error("Password must be at least 8 characters long");
-    }
-
-    // Hash password
-    const passwordHash = await hashPassword(password);
-
-    // Create admin user in unified table
-    const result = await query(
+    const result = await tx(
       `
       INSERT INTO ggr_users (
-        username, email, name, preferred_username, password_hash, 
+        username, email, name, preferred_username, password_hash,
         is_admin, is_active, created_at
       ) VALUES ($1, $2, $3, $4, $5, TRUE, TRUE, NOW())
       RETURNING id, username, email, created_at
@@ -85,21 +100,21 @@ export async function createInitialAdmin(username, email, password) {
 
     const admin = result.rows[0];
 
-    // Assign the Administrator role to the new admin user
-    const roleAssigned = await assignAdminRole(admin.id);
-    if (!roleAssigned) {
-      console.warn(
-        "⚠️ Failed to assign Administrator role to initial admin user",
-      );
-    } else {
-      console.log("✅ Administrator role assigned to initial admin user");
-    }
+    // Inside the transaction, so there is never an admin without the role.
+    await tx(
+      `
+      INSERT INTO ggr_user_roles (user_id, role_id, assigned_at)
+      SELECT $1, r.id, NOW()
+      FROM ggr_roles r
+      WHERE r.name = 'admin' AND r.is_active = TRUE
+      ON CONFLICT (user_id, role_id) DO UPDATE SET is_active = TRUE
+    `,
+      [admin.id],
+    );
 
+    console.log(`✅ Initial admin account created: ${admin.username}`);
     return admin;
-  } catch (error) {
-    console.error("❌ Failed to create initial admin:", error);
-    throw error;
-  }
+  });
 }
 
 /**
@@ -175,25 +190,29 @@ export async function isBasicAuthEnabled() {
 }
 
 /**
- * Check if system needs initial setup (no admin users exist)
+ * Whether the instance is still in initial setup: no account of any kind
+ * exists yet.
+ *
+ * This used to mean "no active user has the admin flag". An OIDC install
+ * reaches that state in ordinary use: when the provider sends a groups claim,
+ * the first administrator's flag follows group membership on their next login.
+ * That reopened POST /api/auth/basic/setup to anyone (GHSA-xm2w-327g-3fxg).
+ *
+ * Setup exists to create the first account. Once any account exists,
+ * restoring an administrator is the operator's job (docs/setup/OIDC_SETUP.md,
+ * "Granting admin access"), never an anonymous caller's.
+ *
+ * Throws when the database cannot answer. It used to return true, which made
+ * an outage open setup. Each caller now decides what an unknown answer means;
+ * the setup endpoint refuses.
+ *
+ * @returns {Promise<boolean>}
  */
 export async function needsInitialSetup() {
-  try {
-    // First ensure the basic auth table exists
-    await ensureBasicAuthTable();
-
-    // Check for any admin users in unified table
-    const adminResult = await query(
-      "SELECT COUNT(*) as count FROM ggr_users WHERE is_admin = TRUE AND is_active = TRUE",
-    );
-
-    const totalAdmins = parseInt(adminResult.rows[0].count);
-    return totalAdmins === 0;
-  } catch (error) {
-    console.error("❌ Error checking initial setup status:", error);
-    // If we can't determine, assume setup is needed
-    return true;
-  }
+  const result = await query(
+    "SELECT EXISTS (SELECT 1 FROM ggr_users) AS has_users",
+  );
+  return !result.rows[0].has_users;
 }
 
 /**

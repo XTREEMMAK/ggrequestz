@@ -116,7 +116,10 @@ OIDC_GROUPS_CLAIM=groups
 OIDC_ROLE_MAP=platform-admins:admin,platform-staff:manager,platform-users:viewer
 ```
 
-The first user to log in always becomes an admin.
+The first account created on an empty instance becomes an admin. If your
+provider sends a groups claim, that account's admin flag follows group
+membership from its next sign-in, so put it in an admin group (below) before
+then.
 
 Default mapping when `OIDC_ROLE_MAP` is unset (unchanged from earlier
 versions): `gg-requestz-admins` → admin, `gg-requestz-managers` → manager,
@@ -124,15 +127,16 @@ versions): `gg-requestz-admins` → admin, `gg-requestz-managers` → manager,
 
 ### Granting admin access
 
-Two routes, and they compose: a locally-set `is_admin` flag is not cleared by
-group membership, so a database admin stays an admin even if the provider sends
-no groups at all.
+When the provider sends **no** groups claim, the admin flag is left exactly as
+it was set locally. When it **does** send one, the flag follows membership on
+every sign-in: a flag set in the database is cleared at that user's next
+sign-in unless they are also in an admin group.
 
 **Via the provider.** Create the group, add the user, and have them log in
 again. With the default mapping that group is `gg-requestz-admins`; with
 `OIDC_ROLE_MAP` set it is whichever group you mapped to `admin`. Membership is
-re-read from the token on every login and on every admin page load, so removing
-someone from the group revokes their access immediately.
+re-read on every sign-in, so removing someone from the group revokes their
+access at their next sign-in. A session already open lasts up to 24 hours.
 
 In Authentik specifically: **Directory → Groups → Create Group**, named
 `gg-requestz-admins`, then add users under **Directory → Users → Groups**. The
@@ -148,8 +152,13 @@ admin:
 UPDATE ggr_users SET is_admin = TRUE WHERE email = 'you@example.com';
 ```
 
-The first user to log in is made an admin automatically, so this is usually
-only needed after that user is gone.
+If your provider sends a groups claim, add the user to an admin group as well,
+or the flag is cleared again at their next sign-in.
+
+There is no automatic recovery. An instance that has accounts but no
+administrator stays that way until you restore one here, and the log says so
+on each sign-in (`No active administrator remains`). Before 1.5.1 that state
+reopened first-run setup, which let anyone create an administrator.
 
 Verify which one is in effect:
 
