@@ -1,5 +1,13 @@
 # Multi-stage build for GameRequest application
-FROM node:22-alpine AS builder
+#
+# Node is pinned to an exact release, in both stages. The floating
+# `node:22-alpine` tag is resolved once and then reused from any build cache,
+# which is how the published 1.5.0 image, built in August, missed the October
+# and November 2026 Node security releases, and how a local build in November
+# still ran 22.22.0. Bump this deliberately when Node publishes a security
+# release (https://nodejs.org/en/blog/vulnerability). The tag itself is
+# re-published when Alpine is patched, so a rebuild still picks those up.
+FROM node:22.23.5-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -25,14 +33,16 @@ COPY .env.docker-build .env
 RUN npm run build
 
 # Production stage
-FROM node:22-alpine AS production
+FROM node:22.23.5-alpine AS production
 
 # Build arguments for user/group IDs
 ARG PUID=1000
 ARG PGID=1000
 
-# Install PM2 globally
-RUN npm install -g pm2
+# Install PM2 globally, at an exact version. It is installed outside the
+# lockfile, so without a pin every build pulled whatever pm2 and its
+# dependencies were newest that day, which no review or audit had seen.
+RUN npm install -g pm2@7.1.1
 
 # Create app directory
 WORKDIR /app
