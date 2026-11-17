@@ -10,6 +10,7 @@
   
   function getStatusClass(status) {
     const statusMap = {
+      'available': 'status-available',
       'new': 'status-new',
       'requested': 'status-requested', 
       'popular': 'status-popular',

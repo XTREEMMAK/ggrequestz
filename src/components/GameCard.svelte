@@ -14,6 +14,7 @@
   // Performance features re-enabled with enhanced mobile support
   // import { lazyLoader } from '$lib/performance.js';
   import { observeGameCard } from '$lib/performance/viewportObserver.js';
+  import { isInLibrary } from '$lib/libraryStatus.js';
   
   let { game = {}, showActions = true, showWatchlist = true, isInWatchlist = false, user = null, preserveState = false, enablePreloading = false } = $props();
   
@@ -24,7 +25,8 @@
   
   let truncatedTitle = $derived(truncateText(game.title || 'Unknown Game', 40));
   let releaseDate = $derived(game.release_date ? formatDate(game.release_date) : null);
-  let gameStatus = $derived(getGameStatus(game));
+  // Only a game the library is known to hold gets a badge (issue #31).
+  let inLibrary = $derived(isInLibrary(game));
   
   // Ghost click effect state
   let isClicked = $state(false);
@@ -37,15 +39,6 @@
 
   // Card element reference for viewport observation
   let cardElement;
-  
-  function getGameStatus(game) {
-    if (game.status) return game.status;
-    if (game.popularity > 80) return 'popular';
-    if (game.release_date && Date.now() - new Date(game.release_date).getTime() < 30 * 24 * 60 * 60 * 1000) {
-      return 'new';
-    }
-    return 'available';
-  }
   
   function handleRequest() {
     dispatch('request', { game });
@@ -329,10 +322,12 @@
       </div>
     {/if}
     
-    <!-- Status Badge -->
-    <div class="absolute top-2 left-2 opacity-90">
-      <StatusBadge status={gameStatus} size="xs" />
-    </div>
+    <!-- Library badge: only on games the library is known to hold -->
+    {#if inLibrary}
+      <div class="absolute top-2 left-2 opacity-90">
+        <StatusBadge status="available" size="xs" />
+      </div>
+    {/if}
     
     <!-- Top-right indicators -->
     <div class="absolute top-2 right-2 flex flex-col gap-2">
