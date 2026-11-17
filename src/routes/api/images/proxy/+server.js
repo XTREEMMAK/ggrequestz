@@ -1,111 +1,111 @@
 /**
- * Image proxy endpoint for caching external images
- * Caches IGDB and other external images using Redis for better performance and persistence
+ * Image proxy endpoint for caching external images.
+ *
+ * Public: cover art appears on pages a signed-out visitor can load. What it
+ * may fetch and what it may serve are decided in $lib/server/imageProxy.js;
+ * read that file before loosening anything here.
  */
 
 import { error } from "@sveltejs/kit";
 import { createHash } from "crypto";
 import cache from "$lib/cache.js";
+import {
+  fetchProxiedImage,
+  rasterType,
+  resolveProxyTarget,
+} from "$lib/server/imageProxy.js";
+import { isTimeoutOrNetworkError } from "$lib/utils.js";
 
 const CACHE_TTL = 7 * 24 * 60 * 60; // 7 days in seconds (for Redis TTL)
 
-export async function GET({ url, setHeaders }) {
-  const imageUrl = url.searchParams.get("url");
+/**
+ * Headers on every image this endpoint serves.
+ *
+ * The CSP sandbox is the backstop: even if a non-image ever got through, a
+ * browser opening it directly would run no script and get no origin.
+ */
+const IMAGE_HEADERS = {
+  "Cache-Control": "public, max-age=604800, immutable",
+  "Content-Security-Policy": "default-src 'none'; sandbox",
+  "X-Content-Type-Options": "nosniff",
+};
 
-  if (!imageUrl) {
+function imageResponse(data, contentType, cacheState) {
+  return new Response(data, {
+    headers: {
+      ...IMAGE_HEADERS,
+      "Content-Type": contentType,
+      "X-Image-Cache": cacheState,
+    },
+  });
+}
+
+export async function GET({ url }) {
+  const raw = url.searchParams.get("url");
+  if (!raw) {
     throw error(400, "Missing image URL parameter");
   }
 
-  // Validate that it's from allowed domains
-  const allowedDomains = [
-    "images.igdb.com",
-    "media.rawg.io",
-    "steamcdn-a.akamaihd.net",
-  ];
-
-  const urlObj = new URL(imageUrl);
-  if (!allowedDomains.some((domain) => urlObj.hostname.includes(domain))) {
-    throw error(403, "Domain not allowed for proxying");
+  const target = resolveProxyTarget(raw);
+  if (!target) {
+    throw error(403, "Image URL not allowed");
   }
 
-  // Create cache key from image URL hash
-  const cacheKey = `img:${createHash("md5").update(imageUrl).digest("hex")}`;
+  // Keyed on the normalised URL, so an http or protocol-relative spelling of
+  // the same image shares one entry.
+  const cacheKey = `img:${createHash("md5").update(target.href).digest("hex")}`;
 
-  // Check Redis cache first
   try {
     const cached = await cache.get(cacheKey);
     if (cached) {
       const imageData = JSON.parse(cached);
-
-      setHeaders({
-        "Content-Type": imageData.contentType,
-        "Cache-Control": "public, max-age=604800, immutable", // 7 days
-        "X-Image-Cache": "redis-hit",
-      });
-
-      // Convert base64 back to buffer
-      const buffer = Buffer.from(imageData.data, "base64");
-
-      return new Response(buffer, {
-        headers: {
-          "Content-Type": imageData.contentType,
-          "Cache-Control": "public, max-age=604800, immutable",
-          "X-Image-Cache": "redis-hit",
-        },
-      });
+      // Re-checked on the way out: an entry written before this endpoint
+      // validated types must not be served just because it is cached.
+      const contentType = rasterType(imageData.contentType);
+      if (contentType) {
+        return imageResponse(
+          Buffer.from(imageData.data, "base64"),
+          contentType,
+          "redis-hit",
+        );
+      }
     }
   } catch (cacheError) {
-    console.warn("Redis cache read failed:", cacheError.message);
-    // Continue to fetch from source
+    console.warn("Image proxy cache read failed:", cacheError.message);
+  }
+
+  let result;
+  try {
+    result = await fetchProxiedImage(target);
+  } catch (fetchError) {
+    if (isTimeoutOrNetworkError(fetchError)) {
+      console.warn(
+        `Image proxy ${fetchError.name} fetching ${target.href}: ${fetchError.message}`,
+      );
+      throw error(504, "Image fetch timed out");
+    }
+    console.error("Image proxy error:", fetchError);
+    throw error(502, "Failed to proxy image");
+  }
+
+  if (!result.ok) {
+    console.warn(`Image proxy refused ${target.href}: ${result.reason}`);
+    throw error(result.status, "Failed to proxy image");
   }
 
   try {
-    // Fetch the image from the original source
-    const response = await fetch(imageUrl, {
-      headers: {
-        "User-Agent": "GGRequestz/1.0 (Image Proxy)",
-      },
-    });
-
-    if (!response.ok) {
-      throw error(
-        response.status,
-        `Failed to fetch image: ${response.statusText}`,
-      );
-    }
-
-    const contentType = response.headers.get("content-type") || "image/jpeg";
-    const data = await response.arrayBuffer();
-
-    // Cache the image in Redis
-    try {
-      const imageData = {
-        data: Buffer.from(data).toString("base64"),
-        contentType,
+    await cache.set(
+      cacheKey,
+      JSON.stringify({
+        data: result.data.toString("base64"),
+        contentType: result.contentType,
         timestamp: Date.now(),
-      };
-
-      await cache.set(cacheKey, JSON.stringify(imageData), CACHE_TTL);
-    } catch (cacheError) {
-      console.warn("Redis cache write failed:", cacheError.message);
-      // Continue serving the image even if cache fails
-    }
-
-    setHeaders({
-      "Content-Type": contentType,
-      "Cache-Control": "public, max-age=604800, immutable", // 7 days
-      "X-Image-Cache": "redis-miss",
-    });
-
-    return new Response(data, {
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=604800, immutable",
-        "X-Image-Cache": "redis-miss",
-      },
-    });
-  } catch (err) {
-    console.error("Image proxy error:", err);
-    throw error(500, "Failed to proxy image");
+      }),
+      CACHE_TTL,
+    );
+  } catch (cacheError) {
+    console.warn("Image proxy cache write failed:", cacheError.message);
   }
+
+  return imageResponse(result.data, result.contentType, "redis-miss");
 }
