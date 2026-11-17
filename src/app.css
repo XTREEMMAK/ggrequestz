@@ -29,6 +29,12 @@ body {
 }
 
 /* Custom status color scheme - Overseerr style */
+/* In the linked library. Distinct from every request status: it used to fall
+   through to the yellow "pending" style, which read as a request state. */
+.status-available {
+  @apply bg-emerald-600 text-white border-emerald-500;
+}
+
 .status-new {
   @apply bg-green-600 text-white border-green-500;
 }
