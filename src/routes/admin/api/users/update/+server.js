@@ -7,6 +7,7 @@ import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
+import { refuseUserManagementAction } from "$lib/server/userManagementGuard.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -105,9 +106,26 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    // Prevent users from modifying themselves in certain ways
+    // Self-assignment, admin-level roles, and administrators' accounts are
+    // decided in one place for every user-management entry point
+    // (GHSA-9j76-3g65-pr26).
+    const refusal = await refuseUserManagementAction({
+      actorId: localUserId,
+      targetIds: [user_id],
+      action,
+      roleId: value,
+    });
+    if (refusal) {
+      return json(
+        { success: false, error: refusal.error },
+        { status: refusal.status },
+      );
+    }
+
+    // Prevent users from modifying themselves in certain ways. Compared as
+    // numbers: a body sending the id as a string used to slip past `===`.
     if (
-      user_id === localUserId &&
+      Number(user_id) === Number(localUserId) &&
       ["toggle_active", "ban", "delete", "remove_role"].includes(action)
     ) {
       return json(

@@ -7,6 +7,7 @@ import { query } from "$lib/database.js";
 import { verifySessionToken } from "$lib/auth.server.js";
 import { userHasPermission } from "$lib/userProfile.js";
 import { getBasicAuthUser } from "$lib/basicAuth.js";
+import { refuseUserManagementAction } from "$lib/server/userManagementGuard.js";
 
 export async function POST({ request, cookies }) {
   try {
@@ -127,9 +128,26 @@ export async function POST({ request, cookies }) {
       );
     }
 
-    // Prevent users from modifying themselves in bulk operations
+    // Self-assignment, admin-level roles, and administrators' accounts are
+    // decided in one place for every user-management entry point
+    // (GHSA-9j76-3g65-pr26).
+    const refusal = await refuseUserManagementAction({
+      actorId: localUserId,
+      targetIds: user_ids,
+      action,
+      roleId: value,
+    });
+    if (refusal) {
+      return json(
+        { success: false, error: refusal.error },
+        { status: refusal.status },
+      );
+    }
+
+    // Prevent users from modifying themselves in bulk operations. Compared as
+    // numbers: a body sending ids as strings used to slip past `includes`.
     if (
-      user_ids.includes(localUserId) &&
+      user_ids.map(Number).includes(Number(localUserId)) &&
       ["deactivate", "ban", "delete"].includes(action)
     ) {
       return json(
