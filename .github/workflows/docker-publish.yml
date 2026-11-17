@@ -9,6 +9,13 @@ on:
   pull_request:
     branches:
       - main
+  # Weekly rebuild of main. Node is pinned to an exact release in the
+  # Dockerfile, but the official image re-publishes that tag when Alpine is
+  # patched, and without a commit nothing would rebuild to pick that up. A
+  # scheduled run produces only `latest` (see the metadata tags below);
+  # version tags such as 1.5.1 move on the next release.
+  schedule:
+    - cron: "23 5 * * 1"
   workflow_dispatch:
 
 env:
