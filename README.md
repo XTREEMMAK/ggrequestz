@@ -6,7 +6,7 @@
 
 A modern game discovery and request management platform with IGDB integration, ROMM library support, and powerful search capabilities.
 
-![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.5.1-blue.svg)
 ![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic)
 
 ## ✨ Features
@@ -157,10 +157,10 @@ Pre-built Docker images are available:
 docker pull ghcr.io/xtreemmak/ggrequestz:latest
 
 # Pull specific version
-docker pull ghcr.io/xtreemmak/ggrequestz:1.5.0
+docker pull ghcr.io/xtreemmak/ggrequestz:1.5.1
 ```
 
-> **📋 v1.5.0 Release Notes:** The library integration is no longer ROMM-specific: `LIBRARY_KIND` selects between ROMM, Gaseous and Retrom, and an optional local index answers listing, search and in-library queries from Postgres instead of the backend. **Breaking:** approval now gates fulfillment, so submitting a request no longer dispatches the outbound webhook. Enable `request.auto_approve` to keep the old behaviour, or nothing is sent downstream until an administrator approves. See the [changelog](CHANGELOG.md) before upgrading.
+> **📋 v1.5.1 Release Notes:** A security release. **Upgrade now:** it fixes six vulnerabilities, two of them critical (see the [security advisories](https://github.com/XTREEMMAK/ggrequestz/security/advisories)). First-run setup now opens only on an instance with no account at all, so an install with accounts but no administrator stays that way until you restore one (see `docs/setup/OIDC_SETUP.md`). Also fixes every game card showing "Available" (#31). See the [changelog](CHANGELOG.md).
 
 ## 🤝 Contributing
 

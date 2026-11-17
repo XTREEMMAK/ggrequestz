@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-17
+
 ### 🔒 Security
 
 Every item below affects 1.5.0 and earlier. Upgrade, and see the linked
@@ -55,6 +57,39 @@ advisory for workarounds if you cannot yet.
   public setup check stayed public after setup, letting anyone make the server
   sign in to RomM and IGDB. The cache endpoints now require an administrator,
   and the setup check answers nobody once an account exists.
+
+### 🐛 Bug Fixes
+
+- **Every game card claimed the game was in your library**
+  ([#31](https://github.com/XTREEMMAK/ggrequestz/issues/31)). Cards fell back
+  to a yellow "Available" badge for any game that was neither popular nor new,
+  whether or not your library held it. The badge now appears only on games a
+  library lookup found, in its own green, and nothing else gets one. Search
+  results and your profile watchlist are now checked against the local library
+  index; they show no badge until a sync has completed, so turn on
+  `LIBRARY_SYNC_ENABLED` if you want badges there.
+
+### 🔧 Technical Changes
+
+- **The Docker image runs Node 22.23.5, pinned.** The floating `node:22-alpine`
+  tag had left the 1.5.0 image without the October and November 2026 Node
+  security releases. pm2 is pinned to 7.1.1, and the image is rebuilt weekly so
+  Alpine patches still arrive.
+- **Dependencies updated for published advisories**, within their current
+  majors: SvelteKit 2.70.4, Svelte 5.57.3, Vite 7.3.7, bcrypt 6 (existing
+  password hashes keep working), cookie 0.7.2. `npm audit --omit=dev` now
+  reports nothing.
+- The API reference viewer is a build-time dependency only, pinned to 1.43.17:
+  later releases bundle an AI chat agent this app does not use.
+- CI tests on Node 22, the version the image ships.
+
+### 📚 Documentation
+
+- `docs/setup/OIDC_SETUP.md` no longer claims an admin flag set in the database
+  survives a groups claim; it does not. It now explains how to restore an
+  administrator.
+- `docs/guides/INTEGRATIONS.md` says where the Available badge comes from on
+  each page.
 
 ## [1.5.0] - 2026-08-22
 

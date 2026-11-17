@@ -301,7 +301,7 @@
                   "properties": {
                     "version": {
                       "type": "string",
-                      "example": "1.5.0"
+                      "example": "1.5.1"
                     },
                     "name": {
                       "type": "string",
@@ -336,7 +336,7 @@
                         "properties": {
                           "version": {
                             "type": "string",
-                            "example": "1.5.0"
+                            "example": "1.5.1"
                           },
                           "date": {
                             "type": "string",
@@ -364,7 +364,7 @@
                         "latest": {
                           "type": "string",
                           "nullable": true,
-                          "example": "1.5.0"
+                          "example": "1.5.1"
                         },
                         "url": {
                           "type": "string",
