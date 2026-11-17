@@ -8,8 +8,16 @@ import {
   getCacheStats as getMemoryCacheStats,
   clearAllCache,
 } from "$lib/cache.js";
+import { requireAdministrator } from "$lib/server/requireAdministrator.js";
 
-export async function GET() {
+// Both handlers are administrators only: one exposes process memory and cache
+// internals, the other empties the in-memory cache. Each needed nothing but a
+// signed-in session (GHSA-rrjq-wcr3-vjqf). The check sits outside each try,
+// whose catch would otherwise turn the refusal into a 500.
+
+export async function GET({ request, cookies }) {
+  await requireAdministrator({ cookies, request });
+
   try {
     // Get stats from both cache systems
     const [gameCacheStats, memoryCacheStats] = await Promise.all([
@@ -43,7 +51,9 @@ export async function GET() {
   }
 }
 
-export async function DELETE() {
+export async function DELETE({ request, cookies }) {
+  await requireAdministrator({ cookies, request });
+
   try {
     clearAllCache();
 
