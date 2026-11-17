@@ -118,11 +118,18 @@ jobs:
       # stopped, so Playwright can start its own on the same port.
       - name: Create the admin through first-run setup
         run: |
-          npx vite preview --port 4173 --strictPort > preview.log 2>&1 &
+          # Its own process group: npx starts Vite as a child, so killing only
+          # the npx process leaves Vite holding the port Playwright needs.
+          setsid npx vite preview --port 4173 --strictPort > preview.log 2>&1 &
           PREVIEW_PID=$!
           ./scripts/testing/seed-app.sh http://localhost:4173 || { cat preview.log; exit 1; }
-          kill "$PREVIEW_PID"
-          wait "$PREVIEW_PID" 2>/dev/null || true
+          kill -- -"$PREVIEW_PID"
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null http://localhost:4173 || exit 0
+            sleep 1
+          done
+          echo "port 4173 still in use after stopping the preview server"
+          exit 1
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
