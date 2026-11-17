@@ -90,10 +90,17 @@ const cookies = {
   get: (name) => (name === "session" ? "session-token" : undefined),
 };
 
+// Two literal imports, not one built from `route`. A template-string import
+// makes Vite inject a virtual helper module whose id starts with a null byte,
+// and the coverage HTML reporter then fails trying to write it as a file.
+const ENDPOINTS = {
+  update: () => import("../../src/routes/admin/api/users/update/+server.js"),
+  "bulk-update": () =>
+    import("../../src/routes/admin/api/users/bulk-update/+server.js"),
+};
+
 async function post(route, body) {
-  const { POST } = await import(
-    `../../src/routes/admin/api/users/${route}/+server.js`
-  );
+  const { POST } = await ENDPOINTS[route]();
   const request = new Request(`http://localhost/admin/api/users/${route}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
