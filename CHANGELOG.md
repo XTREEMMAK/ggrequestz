@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔒 Security
+
+Every item below affects 1.5.0 and earlier. Upgrade, and see the linked
+advisory for workarounds if you cannot yet.
+
+- **The image proxy could be made to fetch internal addresses and serve
+  attacker-controlled pages from your instance**
+  ([GHSA-x924-4wmw-r73c](https://github.com/XTREEMMAK/ggrequestz/security/advisories/GHSA-x924-4wmw-r73c),
+  critical). `/api/images/proxy` needs no sign-in, and it accepted any host
+  whose name merely contained an allowed one, followed redirects anywhere, and
+  served whatever content type the remote side chose. It now fetches only from
+  `images.igdb.com`, exactly, over https; re-checks every redirect; serves only
+  raster images, under a sandbox CSP; and has a timeout and a 5 MB limit. The
+  unused RAWG and Steam hosts are no longer accepted.
+- **An anonymous caller could create an administrator on an OIDC install with
+  no admin flag set**
+  ([GHSA-xm2w-327g-3fxg](https://github.com/XTREEMMAK/ggrequestz/security/advisories/GHSA-xm2w-327g-3fxg),
+  critical). That state is reached in ordinary use: when the provider sends a
+  groups claim, the first admin loses the flag on their next sign-in unless they
+  are in an admin group. First-run setup now opens only on an instance with no
+  account at all, and the next new OIDC account and the next visitor to `/admin`
+  are no longer made administrators either. **An instance with accounts but no
+  administrator now stays that way until you restore one**; the log says so on
+  each sign-in, and `docs/setup/OIDC_SETUP.md` ("Granting admin access") shows
+  how.
+- **Any signed-in user could send the request-approval webhook**
+  ([GHSA-pm7x-8vh4-crv2](https://github.com/XTREEMMAK/ggrequestz/security/advisories/GHSA-pm7x-8vh4-crv2),
+  high). `POST /api/webhooks` relayed a caller's own payload, in the same shape
+  an approval sends, to the request webhook and to Gotify, so download
+  automation could be triggered without an approval. It now requires an
+  administrator. Nothing in the app calls it.
+- **A role holding `user.edit` could make itself an administrator**
+  ([GHSA-9j76-3g65-pr26](https://github.com/XTREEMMAK/ggrequestz/security/advisories/GHSA-9j76-3g65-pr26),
+  high). The user management API now refuses role changes on your own account,
+  admin-level role changes by non-administrators, and any change to an
+  administrator's account by a non-administrator. Default installs, where only
+  `admin` holds `user.edit`, were not exposed.
+- **The homepage wrote the OIDC session token into the page**
+  ([GHSA-p5rp-p8jc-w4p4](https://github.com/XTREEMMAK/ggrequestz/security/advisories/GHSA-p5rp-p8jc-w4p4),
+  medium). Its page data carried the `session` cookie, so the HttpOnly token
+  was readable by any script on the page. Nothing used it, and it is gone.
+- **Cache maintenance and the setup check answered more callers than they
+  should**
+  ([GHSA-rrjq-wcr3-vjqf](https://github.com/XTREEMMAK/ggrequestz/security/advisories/GHSA-rrjq-wcr3-vjqf),
+  medium). Any signed-in user could empty the game and memory caches, and the
+  public setup check stayed public after setup, letting anyone make the server
+  sign in to RomM and IGDB. The cache endpoints now require an administrator,
+  and the setup check answers nobody once an account exists.
+
 ## [1.5.0] - 2026-08-22
 
 ### ⚠️ Breaking Changes
