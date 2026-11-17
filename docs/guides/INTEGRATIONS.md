@@ -125,6 +125,27 @@ both a username and password (`LIBRARY_USERNAME`/`LIBRARY_PASSWORD` or
 `ROMM_USERNAME`/`ROMM_PASSWORD`). A partial configuration disables it
 silently.
 
+### Where the "Available" badge appears
+
+A game card shows **Available** only when the game is known to be in your
+library, and nothing otherwise. Before 1.5.1 every card fell back to Available,
+so it said nothing about the library at all (issue #31).
+
+Where that knowledge comes from depends on the page:
+
+| Page                                      | Checked against                                                                                     |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Homepage New in Library shelf             | The library itself: those games come from it                                                        |
+| A game's own page                         | The index once a sync has completed; before that, the 2000 games most recently added to the library |
+| Homepage new releases and popular rows    | The same as a game's own page, in batches after the page loads                                      |
+| Search results and your profile watchlist | The index only                                                                                      |
+
+Search results and the watchlist read only the index, so they never send a
+library request per page view. **Until a sync has completed, they show no
+badge at all**, and with the index off (the default) they never will. Turning
+the index on also makes the game page and the homepage rows accurate for a
+library larger than 2000 games, which the fallback cannot see past.
+
 ### Library fields on a game
 
 A cross-referenced game carries `in_library`, and when it is in the library
