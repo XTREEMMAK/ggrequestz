@@ -107,12 +107,39 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test_password
 
+      - name: Build application
+        run: npm run build
+
+      # The admin first, then the fixtures: the order `make test-seeded` uses.
+      # First-run setup only opens on an instance with no account at all
+      # (GHSA-xm2w-327g-3fxg), so seeding the demo accounts first would close it
+      # and leave the suite without the admin it signs in as. The built app is
+      # started just long enough for seed-app.sh to use that endpoint, then
+      # stopped, so Playwright can start its own on the same port.
+      - name: Create the admin through first-run setup
+        run: |
+          npx vite preview --port 4173 --strictPort > preview.log 2>&1 &
+          PREVIEW_PID=$!
+          ./scripts/testing/seed-app.sh http://localhost:4173 || { cat preview.log; exit 1; }
+          kill "$PREVIEW_PID"
+          wait "$PREVIEW_PID" 2>/dev/null || true
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: ggrequestz_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+          SESSION_SECRET: test_session_secret_for_github_actions_32_chars
+          IGDB_CLIENT_ID: test_client_id
+          IGDB_CLIENT_SECRET: test_client_secret
+          AUTH_METHOD: basic
+          NODE_ENV: test
+
       # The e2e suite asserts on the seeded library (30 games, requests,
       # watchlist). Migrations create the schema and nothing else, so without
       # this those assertions have no data to find. seed-data.js is offline and
       # idempotent by design: no IGDB, ROMM or OIDC credentials needed. The
-      # admin is not created here; the suite does that through the app's own
-      # first-run endpoint (see ensureAdmin in tests/e2e/helpers.js).
+      # admin comes from the step above.
       - name: Seed test fixtures
         run: node scripts/testing/seed-data.js
         env:
@@ -121,9 +148,6 @@ jobs:
           POSTGRES_DB: ggrequestz_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test_password
-
-      - name: Build application
-        run: npm run build
 
       - name: Run E2E tests
         run: npm run test:e2e
