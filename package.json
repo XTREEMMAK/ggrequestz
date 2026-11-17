@@ -33,7 +33,7 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.2",
+    "@playwright/test": "^1.65.0",
     "@scalar/api-reference": "^1.77.0",
     "@sveltejs/adapter-node": "^5.5.8",
     "@sveltejs/kit": "^2.70.4",
