@@ -8,13 +8,59 @@ import { query } from "$lib/database.js";
 import { getRedisClient } from "$lib/cache.js";
 import { fetchWithTimeout } from "$lib/utils.js";
 import { resolveLibraryConfig } from "$lib/library/config.js";
+import { needsInitialSetup } from "$lib/basicAuth.js";
 
-// The setup wizard waits on this check, so it cannot block unbounded.
+// The setup wizard waits on these checks, so none can block unbounded.
 const ROMM_CHECK_TIMEOUT_MS = 10000;
+const IGDB_CHECK_TIMEOUT_MS = 10000;
+
+// Checks that reach an outside service with the server's own credentials.
+const CREDENTIALED_CHECKS = new Set(["igdb_api", "romm_library"]);
+
+/**
+ * Where first-run setup stands: "open" on an instance with no account,
+ * "closed" once one exists, "unknown" when the database cannot say.
+ */
+async function setupState() {
+  try {
+    return (await needsInitialSetup()) ? "open" : "closed";
+  } catch (error) {
+    console.warn(
+      "Setup check: could not read setup status:",
+      error?.message || error,
+    );
+    return "unknown";
+  }
+}
 
 export async function POST({ request }) {
   try {
     const { service } = await request.json();
+
+    // Public by necessity: the first-run wizard calls this before any account
+    // exists. It stayed public afterwards, so anyone could make the server sign
+    // in to RomM, mint IGDB tokens, and report database and Redis errors
+    // (GHSA-rrjq-wcr3-vjqf). Once setup is complete it answers nobody.
+    //
+    // When the database cannot say, the wizard is most likely being used to
+    // diagnose exactly that, so the local database and Redis checks still run.
+    // The credentialed ones wait until the database answers.
+    const state = await setupState();
+    if (state === "closed") {
+      return json(
+        { success: false, error: "Setup is already complete" },
+        { status: 403 },
+      );
+    }
+    if (state === "unknown" && CREDENTIALED_CHECKS.has(service)) {
+      return json(
+        {
+          success: false,
+          error: "Fix the database connection before checking this service",
+        },
+        { status: 503 },
+      );
+    }
 
     let result = { success: false, error: null };
 
@@ -97,11 +143,15 @@ async function testIGDB() {
     }
 
     // Get access token
-    const tokenResponse = await fetch("https://id.twitch.tv/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`,
-    });
+    const tokenResponse = await fetchWithTimeout(
+      "https://id.twitch.tv/oauth2/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`,
+      },
+      IGDB_CHECK_TIMEOUT_MS,
+    );
 
     if (!tokenResponse.ok) {
       return { success: false, error: "Failed to authenticate with IGDB API" };
@@ -110,15 +160,19 @@ async function testIGDB() {
     const tokenData = await tokenResponse.json();
 
     // Test API access with a simple games query
-    const apiResponse = await fetch("https://api.igdb.com/v4/games", {
-      method: "POST",
-      headers: {
-        "Client-ID": clientId,
-        Authorization: `Bearer ${tokenData.access_token}`,
-        "Content-Type": "application/json",
+    const apiResponse = await fetchWithTimeout(
+      "https://api.igdb.com/v4/games",
+      {
+        method: "POST",
+        headers: {
+          "Client-ID": clientId,
+          Authorization: `Bearer ${tokenData.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: "fields id,name; limit 1;",
       },
-      body: "fields id,name; limit 1;",
-    });
+      IGDB_CHECK_TIMEOUT_MS,
+    );
 
     if (apiResponse.ok) {
       return { success: true };
