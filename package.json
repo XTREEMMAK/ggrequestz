@@ -59,7 +59,7 @@
     "@scalar/api-reference": "^1.36.2",
     "bcrypt": "^5.1.1",
     "canvas-confetti": "^1.9.3",
-    "cookie": "^0.6.0",
+    "cookie": "^0.7.2",
     "dotenv": "^17.2.1",
     "jose": "^5.10.0",
     "pg": "^8.16.3",
