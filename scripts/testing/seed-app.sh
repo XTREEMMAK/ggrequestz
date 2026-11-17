@@ -54,9 +54,10 @@ done
 say "App is up, database healthy."
 
 # --------------------------------------------------------------------------
-# POST /api/auth/basic/setup is unauthenticated but guarded by
-# needsInitialSetup(), so it succeeds exactly once per volume. A 400 on the
-# second run is the expected already-seeded response, not a failure.
+# POST /api/auth/basic/setup is unauthenticated, so it only opens while the
+# instance has no account of any kind. It must run before seed-data.js, whose
+# demo accounts close it. A 403 on a second run is the expected already-seeded
+# response, not a failure.
 say "Creating initial admin '${ADMIN_USER}' ..."
 SETUP_RESULT="$(curl -s -X POST "${GGR_URL}/api/auth/basic/setup" \
   -H "Origin: ${GGR_URL}" \

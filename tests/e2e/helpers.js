@@ -12,16 +12,15 @@ export const USER = { identifier: "player", password: "ggr-test-user" };
 /**
  * Make sure the instance has the admin these tests sign in as.
  *
- * Locally the seeded stack already created it and this is a no-op. In CI there
- * is no seeding step for the admin (the workflow only migrates), so without
- * this every sign-in assertion fails against an account that does not exist.
- * That is exactly what happened the first time this suite ran on main: the
- * suite had only ever run against `make test-seeded`.
+ * Both locally and in CI the admin is created before anything else, through
+ * scripts/testing/seed-app.sh, so this is normally a no-op that confirms the
+ * account can sign in. It still tries first-run setup, for a database that
+ * has no account at all.
  *
- * POST /api/auth/basic/setup is unauthenticated but guarded by
- * needsInitialSetup(), so it succeeds exactly once per database. A 400 on later
- * calls is the expected already-seeded response, not a failure; the same
- * contract scripts/testing/seed-app.sh relies on.
+ * POST /api/auth/basic/setup is unauthenticated, so it only opens while the
+ * instance has no account of any kind (GHSA-xm2w-327g-3fxg). Once the seeded
+ * demo accounts exist it answers 403, which is the expected response here,
+ * not a failure; the same contract scripts/testing/seed-app.sh relies on.
  *
  * @param {import("@playwright/test").APIRequestContext} request
  * @param {string} baseURL - required; the endpoint is origin-checked
