@@ -73,6 +73,7 @@ docker compose up -d
 - [Database Setup](docs/setup/DATABASE_SETUP.md) - PostgreSQL settings, migrations, backups
 - [OIDC / SSO Setup](docs/setup/OIDC_SETUP.md) - any OIDC provider, plus roles and admin access
 - [Production Deployment](docs/setup/DEPLOYMENT.md) - reverse proxy, TLS, scaling, upgrades
+- [Unraid](docs/setup/UNRAID.md) - install the Docker template and connect PostgreSQL
 - [Testing](docs/setup/TESTING.md) - the test layers, and the disposable local stack
 
 ### Guides

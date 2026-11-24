@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Container version="2">
+  <Name>GG Requestz</Name>
+  <Repository>ghcr.io/xtreemmak/ggrequestz:latest</Repository>
+  <Registry>https://github.com/XTREEMMAK/ggrequestz/pkgs/container/ggrequestz</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Project>https://github.com/XTREEMMAK/ggrequestz</Project>
+  <Support>https://github.com/XTREEMMAK/ggrequestz/issues</Support>
+  <ReadMe>https://raw.githubusercontent.com/XTREEMMAK/ggrequestz/main/docs/setup/UNRAID.md</ReadMe>
+  <Icon>https://raw.githubusercontent.com/XTREEMMAK/ggrequestz/main/static/icon-512.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/XTREEMMAK/ggrequestz/main/templates/ggrequestz.xml</TemplateURL>
+  <Category>MediaApp:Other</Category>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <Overview>Discover games, manage requests, and connect your game library. Requires a reachable PostgreSQL database and IGDB credentials. Redis is optional.</Overview>
+  <Config Name="Web UI Port" Target="3000" Default="3000" Mode="tcp" Description="Unraid port for the GG Requestz web interface." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Application Origin" Target="ORIGIN" Default="" Mode="" Description="Browser URL, including scheme and non-default port. Enter the same value in Public Site URL." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Public Site URL" Target="PUBLIC_SITE_URL" Default="" Mode="" Description="Browser URL GG Requestz uses for external links." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="PostgreSQL Host" Target="POSTGRES_HOST" Default="" Mode="" Description="Host or container name reachable from this container." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="PostgreSQL Port" Target="POSTGRES_PORT" Default="5432" Mode="" Description="Port reachable at the PostgreSQL host." Type="Variable" Display="always" Required="true" Mask="false">5432</Config>
+  <Config Name="PostgreSQL Database" Target="POSTGRES_DB" Default="ggrequestz" Mode="" Description="Create this database and grant its owner migration access before first start." Type="Variable" Display="always" Required="true" Mask="false">ggrequestz</Config>
+  <Config Name="PostgreSQL User" Target="POSTGRES_USER" Default="ggrequestz" Mode="" Description="Database role used by GG Requestz." Type="Variable" Display="always" Required="true" Mask="false">ggrequestz</Config>
+  <Config Name="PostgreSQL Password" Target="POSTGRES_PASSWORD" Default="" Mode="" Description="Password for the GG Requestz database role." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Session Secret" Target="SESSION_SECRET" Default="" Mode="" Description="Generate a new value with openssl rand -hex 32. Keep it across upgrades." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="IGDB Client ID" Target="IGDB_CLIENT_ID" Default="" Mode="" Description="Client ID from the Twitch developer console." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="IGDB Client Secret" Target="IGDB_CLIENT_SECRET" Default="" Mode="" Description="Client secret from the Twitch developer console." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Redis URL" Target="REDIS_URL" Default="" Mode="" Description="Optional Redis URL reachable from this container." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="Authentication Method" Target="AUTH_METHOD" Default="basic" Mode="" Description="Basic opens the first-run administrator setup. See the setup guide for OIDC." Type="Variable" Display="advanced" Required="true" Mask="false">basic</Config>
+  <Config Name="App Workers" Target="PM2_INSTANCES" Default="1" Mode="" Description="A single worker suits smaller servers. Set up Redis before scaling workers." Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
+  <Config Name="Automatic Migrations" Target="AUTO_MIGRATE" Default="true" Mode="" Description="Initialize and upgrade the configured database at startup." Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+</Container>
